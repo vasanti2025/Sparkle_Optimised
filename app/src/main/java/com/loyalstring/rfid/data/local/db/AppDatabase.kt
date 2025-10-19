@@ -11,6 +11,7 @@ import com.loyalstring.rfid.data.local.dao.BulkItemDao
 import com.loyalstring.rfid.data.local.dao.CustomerEmailDao
 import com.loyalstring.rfid.data.local.dao.DropdownDao
 import com.loyalstring.rfid.data.local.dao.EpcDao
+import com.loyalstring.rfid.data.local.dao.LocationDao
 import com.loyalstring.rfid.data.local.dao.OrderItemDao
 import com.loyalstring.rfid.data.local.dao.TransferTypeDao
 import com.loyalstring.rfid.data.local.dao.UHFTAGDao
@@ -30,6 +31,7 @@ import com.loyalstring.rfid.data.model.order.CustomOrderRequest
 import com.loyalstring.rfid.data.model.order.CustomOrderResponse
 import com.loyalstring.rfid.data.model.order.ItemCodeResponse
 import com.loyalstring.rfid.data.model.order.LastOrderNoResponse
+import com.loyalstring.rfid.data.model.setting.LocationItem
 
 @TypeConverters(UHFTAGInfoConverter::class)
 @Database(
@@ -49,7 +51,9 @@ import com.loyalstring.rfid.data.model.order.LastOrderNoResponse
         CustomOrderRequest::class,
         TransferTypeEntity::class,
         EpcDto::class,
-        CustomerEmailEntity::class
+        CustomerEmailEntity::class,
+        LocationItem::class
+
     ],
     version = 1
 )
@@ -61,6 +65,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun stockTransferDao(): TransferTypeDao
     abstract fun epcDao(): EpcDao
     abstract fun customerEmailDao(): CustomerEmailDao
+    abstract fun locationDao(): LocationDao
 
 
     companion object {
@@ -79,5 +84,11 @@ abstract class AppDatabase : RoomDatabase() {
                     //        .fallbackToDestructiveMigration(false)
                     .build().also { INSTANCE = it }
             }
+
+
+        fun closeInstance() {
+            INSTANCE?.close()
+            INSTANCE = null
+        }
     }
 }

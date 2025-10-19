@@ -32,7 +32,9 @@ enum class Screens(val route: String) {
     OrderScreen("order"),
     InvoiceScreen("invoiceScreen"),
     StockTransferScreen("stock_transfer"),
-    OrderListScreen("order_list")
+    OrderListScreen("order_list"),
+    DailyRatesEditorScreen("daily_rates_editor"),
+    LocationListScreen("location_list")
 
 
 }

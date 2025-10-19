@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
+
+    <!--<external-path name="downloads" path="Download/" />-->
     <external-path
         name="downloads"
-        path="Download/" />
+        path="Download/DatabaseBackup/" />
     <cache-path
         name="cache"
         path="." />
@@ -11,3 +13,20 @@
         path="." />
 </paths>
 
+
+
+    <!--
+    <?xml version="1.0" encoding="utf-8"?>
+    <paths>
+        <external-path
+            name="downloads"
+            path="Download/" />
+        <cache-path
+            name="cache"
+            path="." />
+        <external-files-path
+            name="external_files"
+            path="." />
+    </paths>
+
+    -->

@@ -62,12 +62,14 @@ import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.BulkViewModel
 import com.loyalstring.rfid.viewmodel.LoginViewModel
+import com.loyalstring.rfid.viewmodel.ScanDisplayViewModel
 import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltViewModel()) {
     val context = LocalContext.current
     val bulkviewmodel: BulkViewModel = hiltViewModel()
+    val scanDisplayViewModel: ScanDisplayViewModel = hiltViewModel()
     val userPrefs = remember { UserPreferences(context) }
 
     var username by remember { mutableStateOf("") }
@@ -97,7 +99,7 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
                 userPrefs.setLoggedIn(true)
                 userPrefs.saveClient(response.employee?.clients!!)
 
-                //response.employee.empEmail?.let { scanDisplayViewModel.saveEmail(it) }
+                response.employee.empEmail?.let { scanDisplayViewModel.saveEmail(it) }
 
                 userPrefs.saveLoginCredentials(username, password, rememberMe,response.employee.clients.rfidType.toString(),response.employee.id,response.employee.defaultBranchId)
 

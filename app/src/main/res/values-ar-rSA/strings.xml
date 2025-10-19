@@ -1,13 +1,17 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <string name="app_name">Sparkle RFID</string>
-    <string name="menu_rates_title">Rates</string>
-    <string name="menu_rates_subtitle">Add/Update rates</string>
+    <string name="app_name">سباركل RFID</string>
+    <string name="menu_rates_title">الأسعار</string>
+    <string name="menu_rates_subtitle">إضافة/تحديث الأسعار</string>
+
     <!-- Daily Rates Editor Dialog -->
-    <string name="dialog_edit_daily_rates_title">Edit Daily Rates</string>
-    <string name="label_rate">Rate</string>
+    <string name="dialog_edit_daily_rates_title">تعديل الأسعار اليومية</string>
+    <string name="label_rate">السعر</string>
     <string name="daily_rate_category_purity">%1$s (%2$s)</string>
-    <string name="menu_apis_title">Custom APIs</string>
-    <string name="menu_apis_subtitle">Custom APIs</string>
+
+    <string name="menu_apis_title">واجهات برمجة التطبيقات المخصصة</string>
+    <string name="menu_apis_subtitle">واجهات برمجة التطبيقات المخصصة</string>
+
+
     <string name="title_edit_daily_rates">Edit Daily Rates</string>
     <string name="label_category">Category</string>
     <string name="label_purity">Purity</string>

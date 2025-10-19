@@ -3,6 +3,7 @@ package com.loyalstring.rfid.data.model.login
 import com.google.gson.annotations.SerializedName
 
 data class Employee(
+    @SerializedName("Id") val id: Int,
     @SerializedName("EmployeeId") val employeeId: Int,
     @SerializedName("ClientCode") val clientCode: String?,
     @SerializedName("CompanyNo") val companyNo: String?,
@@ -12,7 +13,7 @@ data class Employee(
     @SerializedName("EmployeeCode") val employeeCode: String?,
     @SerializedName("FirstName") val firstName: String?,
     @SerializedName("LastName") val lastName: String?,
-    @SerializedName("EmpEmail") val empEmail: String?,
+    @SerializedName("Email") val empEmail: String?,
     @SerializedName("MobileNumber") val mobileNumber: String?,
     @SerializedName("Town") val town: String?,
     @SerializedName("StreetAddress") val streetAddress: String?,
@@ -46,9 +47,9 @@ data class Employee(
     @SerializedName("DefaultCompany") val defaultCompany: String?,
     @SerializedName("DefaultCompanyId") val defaultCompanyId: Int?,
     @SerializedName("DefaultBranch") val defaultBranch: String?,
-    @SerializedName("DefaultBranchId") val defaultBranchId: Int?,
+    @SerializedName("DefaultBranchId") val defaultBranchId: Int,
     @SerializedName("DefaultCounter") val defaultCounter: String?,
     @SerializedName("DefaultCounterId") val defaultCounterId: Int?,
     @SerializedName("Username") val username: String?,
 
-)
+    )

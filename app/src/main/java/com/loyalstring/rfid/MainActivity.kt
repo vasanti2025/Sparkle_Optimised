@@ -194,7 +194,11 @@ private fun SetupNavigation(
     userPreferences: UserPreferences,
     startDestination: String,
 
+
 ) {
+    val orderViewModel1: OrderViewModel=hiltViewModel()
+   val  viewModel: BulkViewModel = hiltViewModel()
+    val singleProductViewModel: SingleProductViewModel = hiltViewModel()
     val setupT0 = System.nanoTime()
     android.util.Log.d("StartupTrace", "SetupNavigation start")
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -212,6 +216,26 @@ private fun SetupNavigation(
             userPreferences.getEmployee(Employee::class.java)
         }
     }
+
+    val employee = UserPreferences.getInstance(context).getEmployee(Employee::class.java)
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            viewModel.syncRFIDDataIfNeeded(context)
+        }
+    }
+
+    LaunchedEffect(employee?.clientCode) {
+        employee?.clientCode?.let { clientCode ->
+            withContext(Dispatchers.IO) {
+                orderViewModel1.getAllEmpList(clientCode)
+                orderViewModel1.getAllItemCodeList(ClientCodeRequest(clientCode))
+                singleProductViewModel.getAllBranches(ClientCodeRequest(clientCode))
+                singleProductViewModel.getAllPurity(ClientCodeRequest(clientCode))
+                singleProductViewModel.getAllSKU(ClientCodeRequest(clientCode))
+            }
+        }
+    }
+
 
     var drawerReady by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -258,7 +282,7 @@ private fun SetupNavigation(
                                 )
                                 Spacer(modifier = Modifier.width(16.dp))
                                 Text(
-                                    text = employeeState.value?.username.orEmpty(),
+                                    text = employee?.username.toString(),
                                     style = MaterialTheme.typography.bodyLarge.copy(
                                         fontWeight = FontWeight.Normal,
                                         color = Color.White

@@ -36,16 +36,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.sparklepos.models.loginclasses.customerBill.EmployeeList
 import com.loyalstring.rfid.R
 import com.loyalstring.rfid.data.local.entity.OrderItem
+import com.loyalstring.rfid.data.model.ClientCodeRequest
 import com.loyalstring.rfid.data.model.addSingleItem.BranchModel
 import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.data.model.order.ItemCodeResponse
@@ -54,6 +60,8 @@ import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.OrderViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -157,6 +165,12 @@ fun OrderDetailsDialog(
               orderViewModel.getAllBranchList(ClientCodeRequest(it))
           }
       }*/
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            singleProductViewModel.getAllBranches(ClientCodeRequest(employee?.clientCode.toString()))
+        }
+    }
 
 
     Dialog(onDismissRequest = { onDismiss() }) {
@@ -832,7 +846,7 @@ fun OrderDetailsDialog(
 }
 
 
-
+/*
 @Composable
 fun <T> DropdownMenuField(
     label: String,
@@ -903,6 +917,84 @@ fun <T> DropdownMenuField(
             }
         }
     }
+}*/
+
+@Composable
+fun <T> DropdownMenuField(
+    label: String,
+    options: List<T>,
+    selectedValue: String,
+    expanded: Boolean,
+    onValueChange: (String) -> Unit,
+    onExpandedChange: (Boolean) -> Unit,
+    labelColor: Color = Color.Black,
+    getOptionLabel: (T) -> String
+) {
+    val density = LocalDensity.current
+    var fieldSize by remember { mutableStateOf(IntSize.Zero) }
+
+    Row(Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(0.4f),
+            fontSize = 12.sp,
+            color = labelColor,
+            fontFamily = poppins
+        )
+
+        // Wrapper that owns both the field and the popup
+        Box(modifier = Modifier.weight(1f)) {
+
+            // Anchor (white clickable field)
+            Box(
+                modifier = Modifier
+                    .padding(start = 12.dp, top = 1.dp, end = 2.dp, bottom = 1.dp)
+                    .height(45.dp)
+                    .fillMaxWidth()
+                    .background(Color.White, RoundedCornerShape(4.dp))
+                    .onGloballyPositioned { coords -> fieldSize = coords.size }
+                    .clickable { onExpandedChange(true) },
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Row(
+                    Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (selectedValue.isEmpty()) "Select $label" else selectedValue,
+                        style = TextStyle(fontSize = 12.sp, color = Color.Black),
+                        modifier = Modifier.weight(1f),
+                        fontFamily = poppins
+                    )
+                    Icon(imageVector = Icons.Filled.ArrowDropDown, contentDescription = null)
+                }
+            }
+
+            // Popup as sibling (not inside the field)
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { onExpandedChange(false) },
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .width(with(density) { fieldSize.width.toDp() }) // match field width
+                    .zIndex(10f), // draw above others
+                offset = with(density) {
+                    DpOffset(x = 0.dp, y = fieldSize.height.toDp()) // directly below the field
+                }
+            ) {
+                options.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(getOptionLabel(option), fontFamily = poppins) },
+                        onClick = {
+                            onValueChange(getOptionLabel(option))
+                            onExpandedChange(false)
+                        }
+                    )
+                }
+            }
+        }
+    }
 }
+
 
 

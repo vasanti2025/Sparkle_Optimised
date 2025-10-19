@@ -91,14 +91,6 @@ fun OrderLisrScreen(
     val isLoading by orderViewModel.isLoading.collectAsState(false)
     var visibleItems by remember { mutableStateOf(7000) }
     var searchQuery by remember { mutableStateOf("") }
-    var shouldNavigateBack by remember { mutableStateOf(false) }
-
-    LaunchedEffect(shouldNavigateBack) {
-        if (shouldNavigateBack) {
-            kotlinx.coroutines.delay(50)
-            onBack()
-        }
-    }
 
     LaunchedEffect(Unit) {
         employee?.clientCode?.let {
@@ -165,7 +157,7 @@ fun OrderLisrScreen(
         GradientTopBar(
             title = "OrderList",
             navigationIcon = {
-                IconButton(onClick = { shouldNavigateBack = true }) {
+                IconButton(onClick = onBack) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",

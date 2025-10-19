@@ -418,7 +418,7 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
                         }
                     },
                     onEmail = {
-
+                        showEmailDialog = true
 
                     },
                     onReset = {

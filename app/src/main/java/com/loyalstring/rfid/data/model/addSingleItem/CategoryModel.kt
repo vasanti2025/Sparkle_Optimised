@@ -1,0 +1,36 @@
+package com.loyalstring.rfid.data.model.addSingleItem
+
+data class CategoryModel(
+    val CategoryName: String,
+    val Description: String?,
+    val ShortName: String?,
+    val ParentCategory: String?,
+    val Slug: String?,
+    val Status: String?,
+    val ClientCode: String,
+    val HSNCode: String?,
+    val EmployeeCode: String?,
+    val DeclaredOpeningNetWt: String,
+    val DeclaredOpeningAmount: String,
+    val OpeningGrossWt: String,
+    val OpeningNetWt: String,
+    val OpeningFineWt: String,
+    val PurchaseGrossWt: String,
+    val PurchaseNetWt: String,
+    val PurchaseFineWt: String,
+    val SaleGrossWt: String,
+    val SaleNetWt: String,
+    val SaleFineWt: String,
+    val ClosingGrossWt: String,
+    val ClosingNetWt: String,
+    val ClosingFineWt: String,
+    val DeclaredClosingNetWt: String,
+    val DeclaredClosingAmount: String,
+    val FinancialYear: String,
+    val SequenceId: Int,
+    val Id: Int,
+    val CreatedOn: String,
+    val LastUpdated: String,
+    val StatusType: Boolean
+)
+

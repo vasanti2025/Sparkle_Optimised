@@ -1,0 +1,70 @@
+```
+# Built application files
+*.apk
+*.ap_
+*.aab
+
+# ART/Dalvik VM files
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+build/
+.kotlin/
+app/build/
+# Gradle files
+.gradle/
+gradlew
+gradlew.bat
+gradle-wrapper.jar
+gradle-wrapper.properties
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Proguard / R8
+proguard/
+*.log
+
+# Android Studio
+.idea/
+*.iml
+*.ipr
+*.iws
+*.swp
+
+# Keystore files
+*.jks
+*.keystore
+
+# Google Services (use your own secure method instead)
+google-services.json
+app/google-services.json
+
+# Firebase Crashlytics / Analytics
+crashlytics-build.properties
+
+# NDK
+obj/
+
+# Logs
+*.log
+
+# MacOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Jetpack Compose preview cache
+.compose-cache/
+
+# Misc
+.cxx/
+``
+```

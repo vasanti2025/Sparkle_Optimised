@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.RFID_GUN" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.RFID_GUN_NO_ACTION" parent="android:Theme.Light.NoTitleBar.Fullscreen" />
+    <style name="Theme_Sparkle_Splash" parent="Theme.RFID_GUN_NO_ACTION">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+    </style>
+</resources>

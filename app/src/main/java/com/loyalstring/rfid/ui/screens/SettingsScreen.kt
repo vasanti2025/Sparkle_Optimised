@@ -143,7 +143,7 @@ fun SettingsScreen(
     var showRatesEditor by remember { mutableStateOf(false) }
 
 
-     val LOCATION_SYNC_DATA_WORKER = "loaction_sync_data_worker"
+    val LOCATION_SYNC_DATA_WORKER = "loaction_sync_data_worker"
 
 
     val updateState = viewModel.updateDailyRatesState.collectAsState()
@@ -204,12 +204,12 @@ fun SettingsScreen(
                 .putString("address", address)
                 .build()
 
-          /*  schedulePeriodicSync(
-                context,
-                SyncDataWorker.LOCATION_SYNC_DATA_WORKER,
-                2,
-                locationData
-            )*/
+            /*  schedulePeriodicSync(
+                  context,
+                  SyncDataWorker.LOCATION_SYNC_DATA_WORKER,
+                  2,
+                  locationData
+              )*/
 
             val request = OneTimeWorkRequestBuilder<SyncDataWorker>()
                 .setInputData(locationData)
@@ -262,8 +262,8 @@ fun SettingsScreen(
             SettingType.Action,
             subtitle = stringResource(id = R.string.menu_rates_subtitle)
         ) {
-          ///  showRatesEditor  = true
-          //  navController.navigate(Screens.DailyRatesEditorScreen.route)
+            ///  showRatesEditor  = true
+            //  navController.navigate(Screens.DailyRatesEditorScreen.route)
         },
         SettingsMenuItem(
             "account",
@@ -298,7 +298,7 @@ fun SettingsScreen(
             subtitle = "Data Backup"
         ) {
 
-           // showBackupDialog = true
+            // showBackupDialog = true
             /*  scope.launch {
                 try {
                     val dbFile = context.getDatabasePath("app_db")
@@ -459,7 +459,7 @@ fun SettingsScreen(
         BackupDialogExample(
             onDismiss = { showBackupDialog = false },
             scope = scope,
-             userPreferences=userPreferences
+            userPreferences=userPreferences
         )
     }
 
@@ -877,7 +877,7 @@ fun restoreBackupFromDb(context: Context, backupFile: File) {
         ToastUtils.showToast(context, "❌ Restore failed: ${e.message}")
     }
 }
-    
+
 
 
 

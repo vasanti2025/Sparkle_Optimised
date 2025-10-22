@@ -31,6 +31,8 @@ import com.loyalstring.rfid.data.model.setting.LocationSyncRequest
 import com.loyalstring.rfid.data.model.setting.LocationSyncResponse
 import com.loyalstring.rfid.data.model.setting.UpdateDailyRatesReq
 import com.loyalstring.rfid.data.model.setting.UpdateDailyRatesResponse
+import com.loyalstring.rfid.data.model.stockTransfer.StockInOutRequest
+import com.loyalstring.rfid.data.model.stockTransfer.StockTransferInOutResponse
 import com.loyalstring.rfid.data.remote.data.DeleteOrderRequest
 import com.loyalstring.rfid.data.remote.data.DeleteOrderResponse
 import com.loyalstring.rfid.data.remote.data.ProductDeleteModelReq
@@ -209,6 +211,9 @@ interface RetrofitInterface {
 
     @POST("/api/ClientOnboarding/GetClientLocations")
     suspend fun getLocation(@Body request: LocationGetRequest): Response<List<LocationItem>>
+
+    @POST("/api/ProductMaster/GetAllStockTransfers")
+    suspend fun getAllStockTransfer(@Body request: StockInOutRequest): Response<List<StockTransferInOutResponse>>
 
 
 }

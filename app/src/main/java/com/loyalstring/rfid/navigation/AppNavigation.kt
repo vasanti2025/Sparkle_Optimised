@@ -9,6 +9,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.data.model.order.CustomOrderResponse
+import com.loyalstring.rfid.data.model.stockTransfer.StockInOutRequest
 import com.loyalstring.rfid.ui.screens.AddProductScreen
 import com.loyalstring.rfid.ui.screens.BulkProductScreen
 import com.loyalstring.rfid.ui.screens.DailyRatesEditorScreen
@@ -28,6 +29,7 @@ import com.loyalstring.rfid.ui.screens.ScanToDesktopScreen
 import com.loyalstring.rfid.ui.screens.SearchScreen
 import com.loyalstring.rfid.ui.screens.SettingsScreen
 import com.loyalstring.rfid.ui.screens.SplashScreen
+import com.loyalstring.rfid.ui.screens.StockInScreen
 import com.loyalstring.rfid.ui.screens.StockTransferScreen
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.viewmodel.OrderViewModel
@@ -188,6 +190,13 @@ fun AppNavigation(
 
         composable(Screens.LocationListScreen.route) {
             LocationListScreen(
+                onBack = { navController.popBackStack() },
+                navController = navController
+            )
+        }
+
+        composable(Screens.StockInScreen.route) {
+            StockInScreen(
                 onBack = { navController.popBackStack() },
                 navController = navController
             )

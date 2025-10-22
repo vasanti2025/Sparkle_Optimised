@@ -63,6 +63,7 @@ import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.data.model.ClientCodeRequest
 import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.navigation.GradientTopBar
+import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.ui.utils.BackgroundGradient
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
@@ -184,7 +185,7 @@ fun StockTransferScreen(
         },
         bottomBar = {
             if (showBottomBar) {
-                BottomActionBar()
+                BottomActionBar(navController)
             }
         }
     ) { padding ->
@@ -924,46 +925,66 @@ fun SelectionDialog(
     }
 }
 
+
 @Composable
-fun BottomActionBar() {
+fun BottomActionBar(navController: NavHostController) {
     var showDialog by remember { mutableStateOf(false) }
+    var showStockIn by remember { mutableStateOf(false) }
+    var showStockOut by remember { mutableStateOf(false) }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.White)
-            .padding(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        ActionButton(
-            text = "Transfer",
-            icon = painterResource(R.drawable.stock_transfer_svg)
-        )
-        ActionButton(
-            text = "InRequest",
-            icon = painterResource(R.drawable.ic_in_request)
-        )
-        ActionButton(
-            text = "OutRequest",
-            icon = painterResource(R.drawable.ic_out_request)
-        )
-        if (showDialog) {
-            TransferDetailsDialog(
-                employees = listOf("John", "Alice", "Mike"), // replace with API data
-                onDismiss = { showDialog = false },
-                onConfirm = { transferredBy, transferredTo, remark ->
-                    // ✅ handle confirm
+    when {
+       /* showStockIn -> StockInScreen(  transferTypes = listOf("Internal", "External"),
+            selectedTransferType = "Internal",
+            onTransferTypeSelected = {},
+            stockTransfers = listOf(),
+            onApprove = {},
+            onReject = {},
+            onLost = {},
+            onBack = { showStockIn = false }) */// ✅ works fine)
+     ///   showStockOut -> StockOutScreen(onBack = { showStockOut = false })
+        else -> {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.White)
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ActionButton(
+                    text = "Transfer",
+                    icon = painterResource(R.drawable.stock_transfer_svg),
+                    onClick = { showDialog = true }
+                )
+                ActionButton(
+                    text = "InRequest",
+                    icon = painterResource(R.drawable.ic_in_request),
+                    onClick = { navController.navigate(Screens.StockInScreen.route)} // ✅ open StockInScreen
+                )
+                ActionButton(
+                    text = "OutRequest",
+                    icon = painterResource(R.drawable.ic_out_request),
+                    onClick = { showStockOut = true } // ✅ open StockOutScreen
+                )
+
+                if (showDialog) {
+                    TransferDetailsDialog(
+                        employees = listOf("John", "Alice", "Mike"),
+                        onDismiss = { showDialog = false },
+                        onConfirm = { transferredBy, transferredTo, remark ->
+                            // handle confirm logic
+                        }
+                    )
                 }
-            )
+            }
         }
-
     }
 }
 
+
 @Composable
-fun ActionButton(text: String, icon: Painter) {
+fun ActionButton(text: String, icon: Painter,  onClick: () -> Unit) {
     Button(
-        onClick = { /* TODO */ },
+        onClick = onClick,
         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3C3C3C)),
         shape = RoundedCornerShape(10.dp),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)

@@ -231,23 +231,23 @@ fun SettingsScreen(
     val menuItems = listOf(
         // Counters (first 5)
         SettingsMenuItem(
-            "product_count",
+            UserPreferences.KEY_PRODUCT_COUNT,
             "Product",
             Icons.Default.Settings,
             SettingType.Counter,
             5
         ),
         SettingsMenuItem(
-            "inventory_count",
+            UserPreferences.KEY_INVENTORY_COUNT,
             "Inventory",
             Icons.Default.Settings,
             SettingType.Counter,
             30
         ),
-        SettingsMenuItem("search_count", "Search", Icons.Default.Settings, SettingType.Counter, 30),
-        SettingsMenuItem("orders_count", "Orders", Icons.Default.Settings, SettingType.Counter, 10),
+        SettingsMenuItem(UserPreferences.KEY_SEARCH_COUNT, "Search", Icons.Default.Settings, SettingType.Counter, 30),
+        SettingsMenuItem(UserPreferences.KEY_ORDER_COUNT, "Orders", Icons.Default.Settings, SettingType.Counter, 10),
         SettingsMenuItem(
-            "stock_transfer_count",
+            UserPreferences.KEY_STOCK_TRANSFER_COUNT,
             "Stock transfer",
             Icons.Default.Settings,
             SettingType.Counter,

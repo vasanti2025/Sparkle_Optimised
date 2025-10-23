@@ -150,9 +150,9 @@ fun LocationListScreen(
 @Composable
 fun LocationListScreen(
     onBack: () -> Unit,
-    navController: NavHostController,
-    viewModel: SettingsViewModel = hiltViewModel()
-) {
+    navController: NavHostController, )
+{
+    val viewModel: SettingsViewModel = hiltViewModel()
     val scope = rememberCoroutineScope()
     val locations by viewModel.localLocations.collectAsState()
     var isLoading by remember { mutableStateOf(true) }

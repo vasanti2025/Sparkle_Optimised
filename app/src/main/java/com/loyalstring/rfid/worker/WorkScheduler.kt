@@ -33,7 +33,7 @@ fun schedulePeriodicSync(
         SyncDataWorker.SYNC_DATA_WORKER -> workDataOf(
             "task_type" to taskType,
 
-        )
+            )
         else -> workDataOf("task_type" to taskType) // fallback
     }
 

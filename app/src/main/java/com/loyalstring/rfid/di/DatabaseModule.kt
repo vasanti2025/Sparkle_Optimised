@@ -5,6 +5,7 @@ import com.loyalstring.rfid.data.local.dao.BulkItemDao
 import com.loyalstring.rfid.data.local.dao.CustomerEmailDao
 import com.loyalstring.rfid.data.local.dao.DropdownDao
 import com.loyalstring.rfid.data.local.dao.EpcDao
+import com.loyalstring.rfid.data.local.dao.LocationDao
 import com.loyalstring.rfid.data.local.dao.OrderItemDao
 import com.loyalstring.rfid.data.local.dao.TransferTypeDao
 import com.loyalstring.rfid.data.local.db.AppDatabase
@@ -53,5 +54,10 @@ object DatabaseModule {
     @Provides
     fun provideCustomerEmailDao(db: AppDatabase): CustomerEmailDao {
         return db.customerEmailDao()
+    }
+
+    @Provides
+    fun provideSettingDao(db: AppDatabase): LocationDao {
+        return db.locationDao()
     }
 }

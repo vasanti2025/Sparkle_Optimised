@@ -203,7 +203,7 @@ private fun SetupNavigation(
                                 )
                                 Spacer(modifier = Modifier.width(16.dp))
                                 Text(
-                                    text = employee?.username.toString(),
+                                    text = employee?.username ?: "User",
                                     style = MaterialTheme.typography.bodyLarge.copy(
                                         fontWeight = FontWeight.Normal,
                                         color = Color.White
@@ -267,7 +267,11 @@ private fun SetupNavigation(
                                     },
                                     colors = NavigationDrawerItemDefaults.colors(
                                         selectedContainerColor = Color.Transparent,
-                                        unselectedContainerColor = Color.Transparent
+                                        unselectedContainerColor = Color.Transparent,
+                                        selectedIconColor = Color.DarkGray,
+                                        unselectedIconColor = Color.DarkGray,
+                                        selectedTextColor = Color.DarkGray,
+                                        unselectedTextColor = Color.DarkGray
                                     )
                                 )
                             }

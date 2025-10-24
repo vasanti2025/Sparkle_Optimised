@@ -185,7 +185,16 @@ fun AppNavigation(
             composable(Screens.StockInScreen.route) {
                 StockInScreen(
                     onBack = { navController.popBackStack() },
-                    navController = navController
+                    navController = navController,
+                    requestType = "In Request"   // ✅ pass the actual value here
+                )
+            }
+
+            composable(Screens.StockOutScreen.route) {
+                StockInScreen(
+                    onBack = { navController.popBackStack() },
+                    navController = navController,
+                    requestType = "Out Request"
                 )
             }
         }

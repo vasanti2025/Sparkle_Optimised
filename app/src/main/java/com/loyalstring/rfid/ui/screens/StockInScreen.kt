@@ -86,7 +86,8 @@ import androidx.compose.ui.res.stringResource
 @Composable
 fun StockInScreen(
     onBack: () -> Unit,
-    navController: NavHostController
+    navController: NavHostController,
+    requestType: String
 ) {
     var shouldNavigateBack by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
@@ -133,7 +134,7 @@ fun StockInScreen(
                 TransferType = 0,
                 BranchId = employee?.branchNo ?: 0,
                 UserID = employee?.id ?: 0,
-                RequestType = "In Request"
+                RequestType = requestType
             )
             viewModel.getAllStockTransfers(request) { result ->
                 isLoading.value = false

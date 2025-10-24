@@ -963,7 +963,7 @@ fun BottomActionBar(navController: NavHostController) {
                 ActionButton(
                     text = "OutRequest",
                     icon = painterResource(R.drawable.ic_out_request),
-                    onClick = { showStockOut = true } // ✅ open StockOutScreen
+                    onClick = { navController.navigate(Screens.StockOutScreen.route)} // ✅ open StockOutScreen
                 )
 
                 if (showDialog) {

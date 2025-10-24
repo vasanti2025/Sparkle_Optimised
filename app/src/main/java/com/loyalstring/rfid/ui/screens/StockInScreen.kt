@@ -145,18 +145,24 @@ fun StockInScreen(
         approveResult?.onSuccess {
             approvedCount = selectedIds.size
             showSuccessDialog = true
-            //Toast.makeText(context, it.Message, Toast.LENGTH_SHORT).show()
+
+            // ✅ Reset selections for next action
+            selectedIds.clear()
+            selectAll = false
+            selectionMode = false
+            viewModel.clearApproveResult()
+
         }?.onFailure {
             Toast.makeText(context, "Failed: ${it.localizedMessage}", Toast.LENGTH_SHORT).show()
         }
     }
 
-    LaunchedEffect(errorMessage) {
+   /* LaunchedEffect(errorMessage) {
         errorMessage?.let {
             Toast.makeText(context, "Error: $it", Toast.LENGTH_SHORT).show()
         }
     }
-
+*/
     val filteredTransfers = remember(selectedTransferType, selectedStatus, stockTransfers) {
         stockTransfers.filter {
             (selectedTransferType == "Transfer Type" || it.type.equals(selectedTransferType, true)) &&
@@ -178,6 +184,9 @@ fun StockInScreen(
             onDismiss = { showSuccessDialog = false },
             onContinue = {
                 showSuccessDialog = false
+                selectedIds.clear()
+                selectAll = false
+                selectionMode = false
                 fetchStockTransfers()
             }
         )

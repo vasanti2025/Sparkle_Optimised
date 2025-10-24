@@ -3,6 +3,8 @@ package com.loyalstring.rfid.repository
 import com.loyalstring.rfid.data.local.dao.TransferTypeDao
 import com.loyalstring.rfid.data.local.entity.TransferTypeEntity
 import com.loyalstring.rfid.data.model.ClientCodeRequest
+import com.loyalstring.rfid.data.model.stockTransfer.STApproveRejectRequest
+import com.loyalstring.rfid.data.model.stockTransfer.STApproveRejectResponse
 import com.loyalstring.rfid.data.model.stockTransfer.StockInOutRequest
 import com.loyalstring.rfid.data.model.stockTransfer.StockTransferInOutResponse
 import com.loyalstring.rfid.data.remote.api.RetrofitInterface
@@ -48,4 +50,18 @@ class TransferRepositoryImpl @Inject constructor(
             Result.failure(e)
         }
     }
+
+    override suspend fun stApproveReject(request: STApproveRejectRequest): Result<STApproveRejectResponse> {
+        return try {
+            val response = apiService.approveStockTransfer(request)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(Exception("API Error: ${response.code()} - ${response.message()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
 }

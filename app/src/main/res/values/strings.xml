@@ -72,4 +72,7 @@
     <string name="filter_approved">Approved</string>
     <string name="filter_rejected">Rejected</string>
     <string name="filter_lost">Lost</string>
+
+
+
 </resources>

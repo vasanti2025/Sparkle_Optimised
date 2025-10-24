@@ -79,6 +79,8 @@ import com.loyalstring.rfid.ui.utils.GradientButtonIcon
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.StockTransferViewModel
+import androidx.compose.ui.res.stringResource
+
 
 
 @Composable
@@ -229,7 +231,7 @@ fun StockInScreen(
     Scaffold(
         topBar = {
             GradientTopBar(
-                title = "Stock Transfer",
+                title = stringResource(R.string.stock_transfer_title),
                 navigationIcon = {
                     IconButton(onClick = { shouldNavigateBack = true }) {
                         Icon(
@@ -251,7 +253,7 @@ fun StockInScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 GradientButtonIcon(
-                    text = "Approve",
+                    text = stringResource(R.string.approve_button),
                     onClick = {
                         currentActionType = 1
                         handleStockTransferAction(1, context, selectedIds, employee, viewModel)
@@ -268,7 +270,7 @@ fun StockInScreen(
                 Spacer(Modifier.width(8.dp))
 
                 GradientButtonIcon(
-                    text = "Reject",
+                    text = stringResource(R.string.reject_button),
                     onClick = {
                         currentActionType = 2
                         handleStockTransferAction(2, context, selectedIds, employee, viewModel)
@@ -285,7 +287,7 @@ fun StockInScreen(
                 Spacer(Modifier.width(8.dp))
 
                 GradientButtonIcon(
-                    text = "Lost",
+                    text = stringResource(R.string.lost_button),
                     onClick = {
                         currentActionType = 3
                         handleStockTransferAction(3, context, selectedIds, employee, viewModel)
@@ -383,7 +385,13 @@ fun StockInScreen(
                         Row(modifier = Modifier
                             .horizontalScroll(horizontalScrollState)
                             .weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                            listOf("From", "To", "G Wt", "N Wt", "Transfer By", "Transfer To", "Transfer Type").forEach { header ->
+                            listOf(stringResource(R.string.header_from),
+                                stringResource(R.string.header_to),
+                                stringResource(R.string.header_gwt),
+                                stringResource(R.string.header_nwt),
+                                stringResource(R.string.header_transfer_by),
+                                stringResource(R.string.header_transfer_to),
+                                stringResource(R.string.header_transfer_type)).forEach { header ->
                                 Text(header, color = Color.White, fontFamily = poppins, fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center, modifier = Modifier
                                         .width(80.dp)
@@ -548,7 +556,7 @@ fun StockInScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "Stock Transfer Status",
+                                    text = stringResource(R.string.stock_transfer_status_title),
                                     color = Color.White,
                                     fontFamily = poppins,
                                     fontWeight = FontWeight.Bold
@@ -557,19 +565,19 @@ fun StockInScreen(
 
                             Spacer(modifier = Modifier.height(8.dp))
                             Divider(color = Color(0xFFE0E0E0), thickness = 0.5.dp)
-                            FilterRow("Pending", R.drawable.schedule, selectedStatus) {
+                            FilterRow(stringResource(R.string.filter_pending), R.drawable.schedule, selectedStatus) {
                                 selectedStatus = it; showFilterDialog = false
                             }
                             Divider(color = Color(0xFFE0E0E0), thickness = 0.5.dp)
-                            FilterRow("Approved", R.drawable.check_circle_gray, selectedStatus) {
+                            FilterRow(stringResource(R.string.filter_approved), R.drawable.check_circle_gray, selectedStatus) {
                                 selectedStatus = it; showFilterDialog = false
                             }
                             Divider(color = Color(0xFFE0E0E0), thickness = 0.5.dp)
-                            FilterRow("Rejected", R.drawable.cancel_gray, selectedStatus) {
+                            FilterRow(stringResource(R.string.filter_rejected), R.drawable.cancel_gray, selectedStatus) {
                                 selectedStatus = it; showFilterDialog = false
                             }
                             Divider(color = Color(0xFFE0E0E0), thickness = 0.5.dp)
-                            FilterRow("Lost", R.drawable.ic_lost, selectedStatus) {
+                            FilterRow(stringResource(R.string.filter_lost), R.drawable.ic_lost, selectedStatus) {
                                 selectedStatus = it; showFilterDialog = false
                             }
                         }
@@ -591,7 +599,7 @@ fun handleStockTransferAction(
     viewModel: StockTransferViewModel
 ) {
     if (selectedIds.isEmpty()) {
-        Toast.makeText(context, "Please select at least one transfer", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context,context.getString(R.string.select_transfer_warning), Toast.LENGTH_SHORT).show()
         return
     }
 
@@ -658,10 +666,10 @@ fun ApproveSuccessDialog(
 ) {
     if (!visible) return
     val actionText = when (actionType) {
-        1 -> "Approved"
-        2 -> "Rejected"
-        3 -> "Marked as Lost"
-        else -> "Processed"
+        1 -> stringResource(R.string.approve_action)
+        2 -> stringResource(R.string.reject_action)
+        3 -> stringResource(R.string.lost_action)
+        else -> stringResource(R.string.processed_action)
     }
 
     AlertDialog(
@@ -723,7 +731,7 @@ fun ApproveSuccessDialog(
                 Spacer(Modifier.height(16.dp))
 
                 Text(
-                    text = apiMessage,
+                    text = apiMessage.ifBlank { stringResource(R.string.api_default_message) },
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black,
@@ -733,7 +741,7 @@ fun ApproveSuccessDialog(
                 Spacer(Modifier.height(6.dp))
 
                 Text(
-                    text = "$approvedCount Items Request " + actionText,
+                    text = stringResource(R.string.approve_count_text, approvedCount, actionText),
                     fontSize = 13.sp,
                     color = Color.Gray,
                     textAlign = TextAlign.Center
@@ -742,7 +750,7 @@ fun ApproveSuccessDialog(
                 Spacer(Modifier.height(10.dp))
 
                 Text(
-                    text = transferType,
+                    text = stringResource(R.string.approve_transfer_type_label, transferType),
                     color = Color(0xFF5231A7),
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 14.sp,
@@ -771,7 +779,7 @@ fun ApproveSuccessDialog(
                         .height(42.dp)
                 ) {
                     Text(
-                        text = "Continue",
+                        text = stringResource(R.string.continue_text),
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
                     )

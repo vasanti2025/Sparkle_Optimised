@@ -1,27 +1,76 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">سباركل RFID</string>
     <string name="menu_rates_title">الأسعار</string>
-    <string name="menu_rates_subtitle">إضافة/تحديث الأسعار</string>
+    <string name="menu_rates_subtitle">إضافة / تحديث الأسعار</string>
 
     <!-- Daily Rates Editor Dialog -->
     <string name="dialog_edit_daily_rates_title">تعديل الأسعار اليومية</string>
     <string name="label_rate">السعر</string>
     <string name="daily_rate_category_purity">%1$s (%2$s)</string>
-
     <string name="menu_apis_title">واجهات برمجة التطبيقات المخصصة</string>
     <string name="menu_apis_subtitle">واجهات برمجة التطبيقات المخصصة</string>
+    <string name="title_edit_daily_rates">تعديل الأسعار اليومية</string>
+    <string name="label_category">الفئة</string>
+    <string name="label_purity">النقاء</string>
+    <string name="label_todays_rate">سعر اليوم / غرام</string>
+    <string name="button_cancel">إلغاء</string>
+    <string name="button_update">تحديث</string>
+    <string name="toast_rate_updated">تم تحديث الأسعار بنجاح</string>
+    <string name="error_rate_update_failed">فشل تحديث الأسعار</string>
 
+    <string name="dialog_custom_api_title">تعيين واجهة برمجة التطبيقات المخصصة</string>
+    <string name="hint_custom_api">أدخل واجهة برمجة التطبيقات</string>
+    <string name="button_save">حفظ</string>
 
-    <string name="title_edit_daily_rates">Edit Daily Rates</string>
-    <string name="label_category">Category</string>
-    <string name="label_purity">Purity</string>
-    <string name="label_todays_rate">Today\'s Rate / Gm</string>
-    <string name="button_cancel">Cancel</string>
-    <string name="button_update">Update</string>
-    <string name="toast_rate_updated">Rates updated successfully</string>
-    <string name="error_rate_update_failed">Failed to update rates</string>
+    <!-- Stock Transfer -->
+    <string name="continue_text">متابعة</string>
+    <string name="transfer_type_default">نوع النقل</string>
+    <string name="loading_error">خطأ في تحميل البيانات.</string>
 
-    <string name="dialog_custom_api_title">Set Custom API</string>
-    <string name="hint_custom_api">Enter Custom API</string>
-    <string name="button_save">Save</string>
+    <!-- Screen titles -->
+    <string name="stock_transfer_title">نقل المخزون</string>
+    <string name="stock_transfer_status_title">حالة نقل المخزون</string>
+
+    <!-- Buttons -->
+    <string name="approve_button">موافقة</string>
+    <string name="reject_button">رفض</string>
+    <string name="lost_button">مفقود</string>
+    <string name="filter_button">تصفية</string>
+
+    <!-- Dialogs -->
+    <string name="approve_success_message">تمت الموافقة بنجاح!</string>
+    <string name="approve_count_text">%1$d عناصر تمت %2$s</string>
+    <string name="approve_transfer_type_label">%1$s</string>
+
+    <!-- Action Messages -->
+    <string name="approve_action">تمت الموافقة</string>
+    <string name="reject_action">تم الرفض</string>
+    <string name="lost_action">تم وضع علامة كمفقود</string>
+    <string name="processed_action">تمت المعالجة</string>
+    <string name="api_default_message">تم تنفيذ العملية بنجاح!</string>
+    <string name="select_transfer_warning">الرجاء تحديد عملية نقل واحدة على الأقل</string>
+
+    <!-- Table Headers -->
+    <string name="header_sr">تسلسل</string>
+    <string name="header_from">من</string>
+    <string name="header_to">إلى</string>
+    <string name="header_gwt">الوزن الإجمالي</string>
+    <string name="header_nwt">الوزن الصافي</string>
+    <string name="header_transfer_by">تم النقل بواسطة</string>
+    <string name="header_transfer_to">النقل إلى</string>
+    <string name="header_transfer_type">نوع النقل</string>
+    <string name="header_status">الحالة</string>
+    <string name="header_select">تحديد</string>
+
+    <!-- Status -->
+    <string name="status_pending">قيد الانتظار</string>
+    <string name="status_approved">تمت الموافقة</string>
+    <string name="status_rejected">تم الرفض</string>
+    <string name="status_lost">مفقود</string>
+
+    <!-- Filter Dialog -->
+    <string name="filter_pending">قيد الانتظار</string>
+    <string name="filter_approved">تمت الموافقة</string>
+    <string name="filter_rejected">تم الرفض</string>
+    <string name="filter_lost">مفقود</string>
 </resources>

@@ -1,26 +1,76 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <string name="app_name">स्पार्कल RFID</string>
-    <string name="menu_rates_title">दरें</string>
-    <string name="menu_rates_subtitle">दरें जोड़ें/अपडेट करें</string>
+    <string name="app_name">स्पार्कल आरएफआईडी</string>
+    <string name="menu_rates_title">रेट्स</string>
+    <string name="menu_rates_subtitle">रेट जोड़ें / अपडेट करें</string>
 
     <!-- Daily Rates Editor Dialog -->
-    <string name="dialog_edit_daily_rates_title">दैनिक दरें संपादित करें</string>
-    <string name="label_rate">दर</string>
+    <string name="dialog_edit_daily_rates_title">दैनिक रेट संपादित करें</string>
+    <string name="label_rate">रेट</string>
     <string name="daily_rate_category_purity">%1$s (%2$s)</string>
-
     <string name="menu_apis_title">कस्टम एपीआई</string>
     <string name="menu_apis_subtitle">कस्टम एपीआई</string>
+    <string name="title_edit_daily_rates">दैनिक रेट संपादित करें</string>
+    <string name="label_category">श्रेणी</string>
+    <string name="label_purity">शुद्धता</string>
+    <string name="label_todays_rate">आज का रेट / ग्राम</string>
+    <string name="button_cancel">रद्द करें</string>
+    <string name="button_update">अपडेट करें</string>
+    <string name="toast_rate_updated">रेट सफलतापूर्वक अपडेट किए गए</string>
+    <string name="error_rate_update_failed">रेट अपडेट असफल हुआ</string>
 
-    <string name="title_edit_daily_rates">Edit Daily Rates</string>
-    <string name="label_category">Category</string>
-    <string name="label_purity">Purity</string>
-    <string name="label_todays_rate">Today\'s Rate / Gm</string>
-    <string name="button_cancel">Cancel</string>
-    <string name="button_update">Update</string>
-    <string name="toast_rate_updated">Rates updated successfully</string>
-    <string name="error_rate_update_failed">Failed to update rates</string>
+    <string name="dialog_custom_api_title">कस्टम एपीआई सेट करें</string>
+    <string name="hint_custom_api">कस्टम एपीआई दर्ज करें</string>
+    <string name="button_save">सेव करें</string>
 
-    <string name="dialog_custom_api_title">Set Custom API</string>
-    <string name="hint_custom_api">Enter Custom API</string>
-    <string name="button_save">Save</string>
+    <!-- Stock Transfer -->
+    <string name="continue_text">जारी रखें</string>
+    <string name="transfer_type_default">ट्रांसफर प्रकार</string>
+    <string name="loading_error">डेटा लोड करने में त्रुटि।</string>
+
+    <!-- Screen titles -->
+    <string name="stock_transfer_title">स्टॉक ट्रांसफर</string>
+    <string name="stock_transfer_status_title">स्टॉक ट्रांसफर स्थिति</string>
+
+    <!-- Buttons -->
+    <string name="approve_button">स्वीकृत करें</string>
+    <string name="reject_button">अस्वीकृत करें</string>
+    <string name="lost_button">खो गया</string>
+    <string name="filter_button">फ़िल्टर</string>
+
+    <!-- Dialogs -->
+    <string name="approve_success_message">सफलतापूर्वक स्वीकृत!</string>
+    <string name="approve_count_text">%1$d आइटम का अनुरोध %2$s</string>
+    <string name="approve_transfer_type_label">%1$s</string>
+
+    <!-- Action Messages -->
+    <string name="approve_action">स्वीकृत</string>
+    <string name="reject_action">अस्वीकृत</string>
+    <string name="lost_action">खोया हुआ चिह्नित किया गया</string>
+    <string name="processed_action">प्रक्रिया की गई</string>
+    <string name="api_default_message">कार्रवाई सफलतापूर्वक पूरी हुई!</string>
+    <string name="select_transfer_warning">कृपया कम से कम एक ट्रांसफर चुनें</string>
+
+    <!-- Table Headers -->
+    <string name="header_sr">क्रम</string>
+    <string name="header_from">से</string>
+    <string name="header_to">तक</string>
+    <string name="header_gwt">सकल वज़न</string>
+    <string name="header_nwt">शुद्ध वज़न</string>
+    <string name="header_transfer_by">ट्रांसफर द्वारा</string>
+    <string name="header_transfer_to">ट्रांसफर को</string>
+    <string name="header_transfer_type">ट्रांसफर प्रकार</string>
+    <string name="header_status">स्थिति</string>
+    <string name="header_select">चयन करें</string>
+
+    <!-- Status -->
+    <string name="status_pending">लंबित</string>
+    <string name="status_approved">स्वीकृत</string>
+    <string name="status_rejected">अस्वीकृत</string>
+    <string name="status_lost">खो गया</string>
+
+    <!-- Filter Dialog -->
+    <string name="filter_pending">लंबित</string>
+    <string name="filter_approved">स्वीकृत</string>
+    <string name="filter_rejected">अस्वीकृत</string>
+    <string name="filter_lost">खो गया</string>
 </resources>

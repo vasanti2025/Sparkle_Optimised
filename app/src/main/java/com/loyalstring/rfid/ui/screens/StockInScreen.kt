@@ -1,25 +1,65 @@
 package com.loyalstring.rfid.ui.screens
 
+import android.content.Context
 import android.util.Log
 import android.widget.Toast
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.AlertDialog
+import androidx.compose.material.Button
+import androidx.compose.material.ButtonDefaults
+import androidx.compose.material.Checkbox
+import androidx.compose.material.CheckboxDefaults
+import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.Divider
+import androidx.compose.material.DropdownMenu
+import androidx.compose.material.DropdownMenuItem
+import androidx.compose.material.Icon
+import androidx.compose.material.IconButton
+import androidx.compose.material.Scaffold
+import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -39,24 +79,15 @@ import com.loyalstring.rfid.ui.utils.GradientButtonIcon
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.StockTransferViewModel
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+
 
 
 @Composable
 fun StockInScreen(
     onBack: () -> Unit,
-    navController: NavHostController
+    navController: NavHostController,
+    requestType: String
 ) {
     var shouldNavigateBack by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
@@ -83,6 +114,8 @@ fun StockInScreen(
 
     var showSuccessDialog by remember { mutableStateOf(false) }
     var approvedCount by remember { mutableStateOf(0) }
+    var apiMessage by remember { mutableStateOf("") }
+    var currentActionType by remember { mutableStateOf(0) }
 
     // 🔹 Fetch Transfer Types
     LaunchedEffect(Unit) {
@@ -101,7 +134,7 @@ fun StockInScreen(
                 TransferType = 0,
                 BranchId = employee?.branchNo ?: 0,
                 UserID = employee?.id ?: 0,
-                RequestType = "In Request"
+                RequestType = requestType
             )
             viewModel.getAllStockTransfers(request) { result ->
                 isLoading.value = false
@@ -142,8 +175,9 @@ fun StockInScreen(
     }
 
     LaunchedEffect(approveResult) {
-        approveResult?.onSuccess {
+        approveResult?.onSuccess { response ->
             approvedCount = selectedIds.size
+            apiMessage = response.Message ?: "Action completed successfully!"
             showSuccessDialog = true
 
             // ✅ Reset selections for next action
@@ -188,7 +222,9 @@ fun StockInScreen(
                 selectAll = false
                 selectionMode = false
                 fetchStockTransfers()
-            }
+            },
+            apiMessage = apiMessage,
+            actionType = currentActionType
         )
     }
 
@@ -196,7 +232,7 @@ fun StockInScreen(
     Scaffold(
         topBar = {
             GradientTopBar(
-                title = "Stock Transfer",
+                title = stringResource(R.string.stock_transfer_title),
                 navigationIcon = {
                     IconButton(onClick = { shouldNavigateBack = true }) {
                         Icon(
@@ -218,22 +254,15 @@ fun StockInScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 GradientButtonIcon(
-                    text = "Approve",
+                    text = stringResource(R.string.approve_button),
                     onClick = {
-                        if (selectedIds.isEmpty()) {
-                            Toast.makeText(context, "Please select at least one transfer", Toast.LENGTH_SHORT).show()
-                        } else {
-                            val items = selectedIds.map { id ->
-                                StockTransferItem(Id = id, Approved = true, Status = 1)
-                            }
-                            val request = STApproveRejectRequest(
-                                StockTransferItems = items,
-                                ClientCode = employee?.clientCode.orEmpty()
-                            )
-                            viewModel.stApproveReject(request)
-                        }
+                        currentActionType = 1
+                        handleStockTransferAction(1, context, selectedIds, employee, viewModel)
                     },
-                    modifier = Modifier.weight(1f).height(36.dp).padding(horizontal = 4.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(36.dp)
+                        .padding(horizontal = 4.dp),
                     icon = painterResource(id = R.drawable.check_circle),
                     iconDescription = "Approve",
                     fontSize = 12
@@ -242,9 +271,15 @@ fun StockInScreen(
                 Spacer(Modifier.width(8.dp))
 
                 GradientButtonIcon(
-                    text = "Reject",
-                    onClick = { /* TODO */ },
-                    modifier = Modifier.weight(1f).height(36.dp).padding(horizontal = 4.dp),
+                    text = stringResource(R.string.reject_button),
+                    onClick = {
+                        currentActionType = 2
+                        handleStockTransferAction(2, context, selectedIds, employee, viewModel)
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(36.dp)
+                        .padding(horizontal = 4.dp),
                     icon = painterResource(id = R.drawable.ic_cancel),
                     iconDescription = "Reject",
                     fontSize = 12
@@ -253,9 +288,15 @@ fun StockInScreen(
                 Spacer(Modifier.width(8.dp))
 
                 GradientButtonIcon(
-                    text = "Lost",
-                    onClick = { /* TODO */ },
-                    modifier = Modifier.weight(1f).height(36.dp).padding(horizontal = 4.dp),
+                    text = stringResource(R.string.lost_button),
+                    onClick = {
+                        currentActionType = 3
+                        handleStockTransferAction(3, context, selectedIds, employee, viewModel)
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(36.dp)
+                        .padding(horizontal = 4.dp),
                     icon = painterResource(id = R.drawable.ic_lost),
                     iconDescription = "Lost",
                     fontSize = 12
@@ -266,11 +307,16 @@ fun StockInScreen(
     ) { padding ->
 
         Column(
-            modifier = Modifier.padding(padding).fillMaxSize().background(Color.White)
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .background(Color.White)
         ) {
             // 🔹 Filter Header Row
             Row(
-                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -282,7 +328,9 @@ fun StockInScreen(
                             contentColor = Color.Black
                         ),
                         elevation = null,
-                        modifier = Modifier.height(40.dp).width(200.dp)
+                        modifier = Modifier
+                            .height(40.dp)
+                            .width(200.dp)
                     ) {
                         Text(selectedTransferType)
                         Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.padding(start = 4.dp))
@@ -324,21 +372,39 @@ fun StockInScreen(
                 else -> {
                     // 🔹 Table Header
                     Row(
-                        modifier = Modifier.fillMaxWidth().background(Color(0xFF3C3C3C)).padding(vertical = 6.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF3C3C3C))
+                            .padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("Sr", color = Color.White, fontFamily = poppins, fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center, modifier = Modifier.width(50.dp).padding(horizontal = 4.dp))
+                            textAlign = TextAlign.Center, modifier = Modifier
+                                .width(50.dp)
+                                .padding(horizontal = 4.dp))
 
-                        Row(modifier = Modifier.horizontalScroll(horizontalScrollState).weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                            listOf("From", "To", "G Wt", "N Wt", "Transfer By", "Transfer To", "Transfer Type").forEach { header ->
+                        Row(modifier = Modifier
+                            .horizontalScroll(horizontalScrollState)
+                            .weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                            listOf(stringResource(R.string.header_from),
+                                stringResource(R.string.header_to),
+                                stringResource(R.string.header_gwt),
+                                stringResource(R.string.header_nwt),
+                                stringResource(R.string.header_transfer_by),
+                                stringResource(R.string.header_transfer_to),
+                                stringResource(R.string.header_transfer_type)).forEach { header ->
                                 Text(header, color = Color.White, fontFamily = poppins, fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center, modifier = Modifier.width(80.dp).padding(horizontal = 4.dp))
+                                    textAlign = TextAlign.Center, modifier = Modifier
+                                        .width(80.dp)
+                                        .padding(horizontal = 4.dp))
                             }
                         }
 
                         Row(
-                            modifier = Modifier.width(80.dp).padding(horizontal = 0.dp).clickable { selectionMode = !selectionMode },
+                            modifier = Modifier
+                                .width(80.dp)
+                                .padding(horizontal = 0.dp)
+                                .clickable { selectionMode = !selectionMode },
                             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
                         ) {
                             Text(
@@ -363,26 +429,44 @@ fun StockInScreen(
                                         uncheckedColor = Color.White,
                                         checkmarkColor = Color(0xFF3C3C3C)
                                     ),
-                                    modifier = Modifier.scale(0.8f).align(Alignment.CenterVertically)
+                                    modifier = Modifier
+                                        .scale(0.8f)
+                                        .align(Alignment.CenterVertically)
                                 )
                             }
                         }
                     }
 
                     // 🔹 Table Data Rows
-                    LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    LazyColumn(modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)) {
                         itemsIndexed(filteredTransfers) { index, item ->
                             Row(
-                                modifier = Modifier.fillMaxWidth().background(if (index % 2 == 0) Color.White else Color(0xFFF7F7F7)).padding(vertical = 6.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        if (index % 2 == 0) Color.White else Color(
+                                            0xFFF7F7F7
+                                        )
+                                    )
+                                    .padding(vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text("${index + 1}", color = Color.Black, fontFamily = poppins,
-                                    textAlign = TextAlign.Center, modifier = Modifier.width(50.dp).padding(horizontal = 4.dp))
+                                    textAlign = TextAlign.Center, modifier = Modifier
+                                        .width(50.dp)
+                                        .padding(horizontal = 4.dp))
 
-                                Row(modifier = Modifier.horizontalScroll(horizontalScrollState).weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                Row(modifier = Modifier
+                                    .horizontalScroll(horizontalScrollState)
+                                    .weight(1f), verticalAlignment = Alignment.CenterVertically) {
                                     listOf(item.from, item.to, item.gWt, item.nWt, item.transferBy, item.transferTo, item.transferType).forEach { text ->
                                         Text(text, color = Color.Black, fontFamily = poppins,
-                                            textAlign = TextAlign.Center, modifier = Modifier.width(80.dp).padding(horizontal = 4.dp).align(Alignment.CenterVertically))
+                                            textAlign = TextAlign.Center, modifier = Modifier
+                                                .width(80.dp)
+                                                .padding(horizontal = 4.dp)
+                                                .align(Alignment.CenterVertically))
                                     }
                                 }
 
@@ -414,7 +498,11 @@ fun StockInScreen(
                                             uncheckedColor = Color.Gray,
                                             checkmarkColor = Color.White
                                         ),
-                                        modifier = Modifier.width(80.dp).padding(horizontal = 4.dp).scale(0.8f).align(Alignment.CenterVertically)
+                                        modifier = Modifier
+                                            .width(80.dp)
+                                            .padding(horizontal = 4.dp)
+                                            .scale(0.8f)
+                                            .align(Alignment.CenterVertically)
                                     )
                                 } else {
                                     Text(
@@ -422,7 +510,11 @@ fun StockInScreen(
                                         color = Color(0xFF1976D2),
                                         fontFamily = poppins,
                                         textAlign = TextAlign.Center,
-                                        modifier = Modifier.width(80.dp).padding(horizontal = 4.dp).clickable { selectionMode = true }.align(Alignment.CenterVertically)
+                                        modifier = Modifier
+                                            .width(80.dp)
+                                            .padding(horizontal = 4.dp)
+                                            .clickable { selectionMode = true }
+                                            .align(Alignment.CenterVertically)
                                     )
                                 }
                             }
@@ -465,7 +557,7 @@ fun StockInScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "Stock Transfer Status",
+                                    text = stringResource(R.string.stock_transfer_status_title),
                                     color = Color.White,
                                     fontFamily = poppins,
                                     fontWeight = FontWeight.Bold
@@ -474,19 +566,19 @@ fun StockInScreen(
 
                             Spacer(modifier = Modifier.height(8.dp))
                             Divider(color = Color(0xFFE0E0E0), thickness = 0.5.dp)
-                            FilterRow("Pending", R.drawable.schedule, selectedStatus) {
+                            FilterRow(stringResource(R.string.filter_pending), R.drawable.schedule, selectedStatus) {
                                 selectedStatus = it; showFilterDialog = false
                             }
                             Divider(color = Color(0xFFE0E0E0), thickness = 0.5.dp)
-                            FilterRow("Approved", R.drawable.check_circle_gray, selectedStatus) {
+                            FilterRow(stringResource(R.string.filter_approved), R.drawable.check_circle_gray, selectedStatus) {
                                 selectedStatus = it; showFilterDialog = false
                             }
                             Divider(color = Color(0xFFE0E0E0), thickness = 0.5.dp)
-                            FilterRow("Rejected", R.drawable.cancel_gray, selectedStatus) {
+                            FilterRow(stringResource(R.string.filter_rejected), R.drawable.cancel_gray, selectedStatus) {
                                 selectedStatus = it; showFilterDialog = false
                             }
                             Divider(color = Color(0xFFE0E0E0), thickness = 0.5.dp)
-                            FilterRow("Lost", R.drawable.ic_lost, selectedStatus) {
+                            FilterRow(stringResource(R.string.filter_lost), R.drawable.ic_lost, selectedStatus) {
                                 selectedStatus = it; showFilterDialog = false
                             }
                         }
@@ -498,6 +590,36 @@ fun StockInScreen(
         if (shouldNavigateBack) onBack()
     }
 }
+
+// 🔹 Common API Call Function
+fun handleStockTransferAction(
+    statusType: Int,
+    context: Context,
+    selectedIds: SnapshotStateList<Int>,
+    employee: Employee?,
+    viewModel: StockTransferViewModel
+) {
+    if (selectedIds.isEmpty()) {
+        Toast.makeText(context,context.getString(R.string.select_transfer_warning), Toast.LENGTH_SHORT).show()
+        return
+    }
+
+    val items = selectedIds.map { id ->
+        StockTransferItem(
+            Id = id,
+            Approved = true,
+            Status = statusType
+        )
+    }
+
+    val request = STApproveRejectRequest(
+        StockTransferItems = items,
+        ClientCode = employee?.clientCode.orEmpty()
+    )
+
+    viewModel.stApproveReject(request)
+}
+
 
 
 // 🔹 Filter Row Composable
@@ -539,9 +661,17 @@ fun ApproveSuccessDialog(
     approvedCount: Int,
     transferType: String,
     onDismiss: () -> Unit,
-    onContinue: () -> Unit
+    onContinue: () -> Unit,
+    apiMessage: String,
+    actionType: Int
 ) {
     if (!visible) return
+    val actionText = when (actionType) {
+        1 -> stringResource(R.string.approve_action)
+        2 -> stringResource(R.string.reject_action)
+        3 -> stringResource(R.string.lost_action)
+        else -> stringResource(R.string.processed_action)
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -602,7 +732,7 @@ fun ApproveSuccessDialog(
                 Spacer(Modifier.height(16.dp))
 
                 Text(
-                    text = "Approve Successfully!",
+                    text = apiMessage.ifBlank { stringResource(R.string.api_default_message) },
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black,
@@ -612,7 +742,7 @@ fun ApproveSuccessDialog(
                 Spacer(Modifier.height(6.dp))
 
                 Text(
-                    text = "$approvedCount Items Request Approved",
+                    text = stringResource(R.string.approve_count_text, approvedCount, actionText),
                     fontSize = 13.sp,
                     color = Color.Gray,
                     textAlign = TextAlign.Center
@@ -621,7 +751,7 @@ fun ApproveSuccessDialog(
                 Spacer(Modifier.height(10.dp))
 
                 Text(
-                    text = transferType,
+                    text = stringResource(R.string.approve_transfer_type_label, transferType),
                     color = Color(0xFF5231A7),
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 14.sp,
@@ -650,7 +780,7 @@ fun ApproveSuccessDialog(
                         .height(42.dp)
                 ) {
                     Text(
-                        text = "Continue",
+                        text = stringResource(R.string.continue_text),
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
                     )

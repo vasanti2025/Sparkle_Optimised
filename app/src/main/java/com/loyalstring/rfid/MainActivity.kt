@@ -141,8 +141,19 @@ private fun SetupNavigation(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    val employee = remember {
-        UserPreferences.getInstance(context).getEmployee(Employee::class.java)
+    // Reactive state for employee (same variable name)
+    var employee by remember { mutableStateOf<Employee?>(null) }
+
+// Load employee on first composition
+    LaunchedEffect(Unit) {
+        employee = UserPreferences.getInstance(context).getEmployee(Employee::class.java)
+    }
+
+// Refresh when drawer opens (always show latest info)
+    LaunchedEffect(drawerState.isOpen) {
+        if (drawerState.isOpen) {
+            employee = UserPreferences.getInstance(context).getEmployee(Employee::class.java)
+        }
     }
 
     // Sync Data on Load
@@ -237,6 +248,7 @@ private fun SetupNavigation(
                                         when (navigationItem.route) {
                                             "login" -> {
                                                 userPreferences.logout()
+                                                UserPreferences.getInstance(context).clearAll()
                                                 scope.launch { drawerState.close() }
                                                 navController.navigate("login") {
                                                     popUpTo(0) { inclusive = true }

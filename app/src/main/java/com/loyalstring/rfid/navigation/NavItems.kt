@@ -36,7 +36,8 @@ enum class Screens(val route: String) {
     DailyRatesEditorScreen("daily_rates_editor"),
     LocationListScreen("location_list"),
     StockInScreen("stock_in"),
-    StockOutScreen("stock_out")
+    StockOutScreen("stock_out"),
+    DeliveryChalan("delivery_chalan")
 
 
 }
@@ -96,10 +97,10 @@ val listOfNavItems = listOf<NavItems>(
         route = ""
 
     ),NavItems(
-        title = "Estimate",
+        title = "Delivery Challan",
         unselectedIcon= Icons.Outlined.FavoriteBorder,
-        selectedIcon = ( R.drawable.estimate_gr_svg),
-        route = ""
+        selectedIcon = ( R.drawable.delivery_challan_icon),
+        route = Screens.DeliveryChalan.route
 
     ),NavItems(
         title = "Invoice",

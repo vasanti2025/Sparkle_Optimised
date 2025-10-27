@@ -2,6 +2,7 @@ package com.loyalstring.rfid.ui.screens
 
 import android.annotation.SuppressLint
 import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -19,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -32,6 +34,7 @@ import androidx.navigation.NavHostController
 import com.example.sparklepos.models.loginclasses.customerBill.EmployeeList
 import com.google.gson.Gson
 import com.loyalstring.rfid.data.model.login.Employee
+import com.loyalstring.rfid.data.remote.resource.Resource
 import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.ui.utils.UserPreferences
@@ -96,6 +99,20 @@ fun DeliveryChalanScreen(
             Log.d("CustomerList", Gson().toJson(data))
 
 
+        }
+    }
+
+    val addCustomerState by orderViewModel.addEmpReposnes.observeAsState()
+
+    LaunchedEffect(addCustomerState) {
+        when (addCustomerState) {
+            is Resource.Success -> {
+                Toast.makeText(context, "✅ Customer added successfully!", Toast.LENGTH_SHORT).show()
+            }
+            is Resource.Error -> {
+                Toast.makeText(context, "❌ Failed to add customer!", Toast.LENGTH_SHORT).show()
+            }
+            else -> { /* Loading or Idle */ }
         }
     }
 

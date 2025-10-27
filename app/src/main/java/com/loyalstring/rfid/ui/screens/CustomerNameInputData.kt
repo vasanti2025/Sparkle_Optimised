@@ -9,27 +9,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ArrowDropUp
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,9 +24,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
@@ -105,24 +90,16 @@ fun CustomerNameInputData(
                 modifier = Modifier.fillMaxSize(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                BasicTextField(
+                CenteredTextField(
                     value = customerName,
                     onValueChange = {
                         onCustomerNameChange(it)
                         expandedState = it.isNotEmpty()
                         coroutineScope.launch { fetchSuggestions() }
                     },
-                    textStyle = TextStyle(fontSize = 15.sp, color = Color.Black),
-                    singleLine = true,
-                    decorationBox = { inner ->
-                        if (customerName.isEmpty()) {
-                            Text("Enter customer name", color = Color.Gray, fontSize = 12.sp)
-                        }
-                        inner()
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(vertical = 6.dp)
+                    placeholder = stringResource(R.string.hint_enter_customer_name),
+                    textSize = 15.sp,
+                    modifier = Modifier.weight(1f)
                 )
 
                 if (customerName.isEmpty()) {
@@ -160,7 +137,6 @@ fun CustomerNameInputData(
             }
         }
 
-        // Dropdown list for existing customers
         ExposedDropdownMenu(
             expanded = expandedState && filteredCustomers.isNotEmpty(),
             onDismissRequest = { expandedState = false },
@@ -176,7 +152,7 @@ fun CustomerNameInputData(
                                 color = Color(0xFF5231A7)
                             )
                             Spacer(Modifier.width(6.dp))
-                            Text("Loading...", fontSize = 12.sp)
+                            Text(stringResource(R.string.label_loading), fontSize = 12.sp)
                         }
                     },
                     onClick = {}
@@ -215,9 +191,8 @@ fun CustomerNameInputData(
     }
 }
 
-
 /*----------------------------------------------------------
-   ADD CUSTOMER POPUP DIALOG
+   ADD CUSTOMER DIALOG (Localized)
 -----------------------------------------------------------*/
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -230,7 +205,6 @@ fun AddCustomerDialog(
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
-    // Form States
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -241,16 +215,12 @@ fun AddCustomerDialog(
     var state by remember { mutableStateOf("") }
     var country by remember { mutableStateOf("") }
 
-    // Dropdown flags
     var expandedCountry by remember { mutableStateOf(false) }
     var expandedState by remember { mutableStateOf(false) }
 
-    // Error states
-    var panError by remember { mutableStateOf<String?>(null) }
-    var gstError by remember { mutableStateOf<String?>(null) }
-
-    val countryOptions = listOf("India", "USA", "UAE", "UK")
-    val stateOptions = listOf("Maharashtra", "Gujarat", "Karnataka", "Delhi")
+    val stateOptions = listOf("Andhra Pradesh", "Bihar", "Goa", "Gujarat", "Karnataka",
+        "Kerala", "Maharashtra", "Rajasthan", "Tamil Nadu", "Telangana")
+    val countryOptions = listOf("India", "USA", "UK", "Canada")
 
     Popup(alignment = Alignment.Center, properties = PopupProperties(focusable = true)) {
         Box(
@@ -267,260 +237,80 @@ fun AddCustomerDialog(
                     .heightIn(min = 300.dp, max = 600.dp)
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
-
-                    // Header
+                    // 🔹 Header
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp)
-                            .background(
-                                Color.DarkGray,
-                                shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)
-                            )
+                            .background(Color.DarkGray, shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
                             .padding(horizontal = 16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(Icons.Default.PersonAdd, contentDescription = null, tint = Color.White)
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "Customer Profile",
+                            stringResource(R.string.title_customer_profile),
                             color = Color.White,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
 
-                    // Scrollable Form
+                    // 🔹 Form Fields
                     Column(
                         modifier = Modifier
                             .weight(1f)
                             .verticalScroll(scrollState)
                             .padding(16.dp)
                     ) {
-
-                        // Common Modifier
                         fun fieldModifier() = Modifier
                             .fillMaxWidth()
                             .height(42.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .background(Color(0xFFF5F5F5))
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .padding(horizontal = 10.dp)
 
-                        // Common Text Style
-                        val fieldTextStyle = LocalTextStyle.current.copy(
-                            fontSize = 13.sp,
-                            color = Color.Black
-                        )
-
-                        // ----------- NAME -----------
-                        BasicTextField(
-                            value = name,
-                            onValueChange = { name = it },
-                            textStyle = fieldTextStyle,
-                            singleLine = true,
-                            modifier = fieldModifier(),
-                            decorationBox = { innerTextField ->
-                                if (name.isEmpty()) {
-                                    Text("Customer Name", color = Color.Gray, fontSize = 12.sp)
-                                }
-                                innerTextField()
-                            }
-                        )
+                        CenteredTextField(name, { name = it }, stringResource(R.string.hint_customer_name), fieldModifier())
+                        Spacer(Modifier.height(10.dp))
+                        CenteredTextField(phone, { if (it.length <= 10) phone = it.filter(Char::isDigit) }, stringResource(R.string.hint_mobile_number), fieldModifier())
+                        Spacer(Modifier.height(10.dp))
+                        CenteredTextField(email, { email = it }, stringResource(R.string.hint_email), fieldModifier())
+                        Spacer(Modifier.height(10.dp))
+                        CenteredTextField(pan, { pan = it.uppercase().take(10) }, stringResource(R.string.hint_pan_number), fieldModifier())
+                        Spacer(Modifier.height(10.dp))
+                        CenteredTextField(gst, { gst = it.uppercase().take(15) }, stringResource(R.string.hint_gst_number), fieldModifier())
+                        Spacer(Modifier.height(10.dp))
+                        CenteredTextField(street, { street = it }, stringResource(R.string.hint_street_address), fieldModifier())
                         Spacer(Modifier.height(10.dp))
 
-                        // ----------- PHONE -----------
-                        BasicTextField(
-                            value = phone,
-                            onValueChange = {
-                                if (it.length <= 10) phone = it.filter(Char::isDigit)
-                            },
-                            textStyle = fieldTextStyle,
-                            singleLine = true,
-                            modifier = fieldModifier(),
-                            decorationBox = { innerTextField ->
-                                if (phone.isEmpty()) {
-                                    Text("Mobile Number", color = Color.Gray, fontSize = 12.sp)
-                                }
-                                innerTextField()
-                            }
-                        )
-                        Spacer(Modifier.height(10.dp))
-
-                        // ----------- EMAIL -----------
-                        BasicTextField(
-                            value = email,
-                            onValueChange = { email = it },
-                            textStyle = fieldTextStyle,
-                            singleLine = true,
-                            modifier = fieldModifier(),
-                            decorationBox = { innerTextField ->
-                                if (email.isEmpty()) {
-                                    Text("Email", color = Color.Gray, fontSize = 12.sp)
-                                }
-                                innerTextField()
-                            }
-                        )
-                        Spacer(Modifier.height(10.dp))
-
-                        // ----------- PAN -----------
-                        BasicTextField(
-                            value = pan,
-                            onValueChange = {
-                                pan = it.uppercase().take(10)
-                                panError = when {
-                                    pan.isEmpty() -> null
-                                    pan.length != 10 -> "PAN must be exactly 10 characters"
-                                    !pan.matches("^[A-Z]{5}[0-9]{4}[A-Z]$".toRegex()) -> "Invalid PAN format"
-                                    else -> null
-                                }
-                            },
-                            textStyle = fieldTextStyle,
-                            singleLine = true,
-                            modifier = fieldModifier(),
-                            decorationBox = { innerTextField ->
-                                if (pan.isEmpty()) {
-                                    Text("PAN Number", color = Color.Gray, fontSize = 12.sp)
-                                }
-                                innerTextField()
-                            }
-                        )
-                        panError?.let { Text(it, color = Color.Red, fontSize = 12.sp) }
-                        Spacer(Modifier.height(10.dp))
-
-                        // ----------- GST -----------
-                        BasicTextField(
-                            value = gst,
-                            onValueChange = {
-                                gst = it.uppercase().take(15)
-                                gstError = when {
-                                    gst.isEmpty() -> null
-                                    gst.length != 15 -> "GST must be exactly 15 characters"
-                                    !gst.matches("^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][A-Z0-9][A-Z][0-9]$".toRegex()) ->
-                                        "Invalid GST format"
-                                    else -> null
-                                }
-                            },
-                            textStyle = fieldTextStyle,
-                            singleLine = true,
-                            modifier = fieldModifier(),
-                            decorationBox = { innerTextField ->
-                                if (gst.isEmpty()) {
-                                    Text("GST Number", color = Color.Gray, fontSize = 12.sp)
-                                }
-                                innerTextField()
-                            }
-                        )
-                        gstError?.let { Text(it, color = Color.Red, fontSize = 12.sp) }
-                        Spacer(Modifier.height(10.dp))
-
-                        // ----------- ADDRESS -----------
-                        BasicTextField(
-                            value = street,
-                            onValueChange = { street = it },
-                            textStyle = fieldTextStyle,
-                            singleLine = true,
-                            modifier = fieldModifier(),
-                            decorationBox = { innerTextField ->
-                                if (street.isEmpty()) {
-                                    Text("Street / Address", color = Color.Gray, fontSize = 12.sp)
-                                }
-                                innerTextField()
-                            }
-                        )
-                        Spacer(Modifier.height(10.dp))
-
-                        // ----------- COUNTRY & STATE -----------
+                        // 🌍 Dropdown Row
                         Row(Modifier.fillMaxWidth()) {
-                            // Country
-                            Box(
-                                modifier = fieldModifier()
-                                    .weight(1f)
-                                    .clickable { expandedCountry = !expandedCountry }
-                            ) {
-                                Text(
-                                    text = if (country.isEmpty()) "Country" else country,
-                                    fontSize = 12.sp,
-                                    color = if (country.isEmpty()) Color.Gray else Color.Black,
-                                    modifier = Modifier.align(Alignment.CenterStart)
-                                )
-                                Icon(
-                                    imageVector = if (expandedCountry) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
-                                    contentDescription = null,
-                                    modifier = Modifier.align(Alignment.CenterEnd)
-                                )
-
-                                DropdownMenu(
-                                    expanded = expandedCountry,
-                                    onDismissRequest = { expandedCountry = false }
-                                ) {
-                                    countryOptions.forEach {
-                                        DropdownMenuItem(
-                                            text = { Text(it) },
-                                            onClick = {
-                                                country = it
-                                                expandedCountry = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-
+                            DropdownBox(
+                                label = stringResource(R.string.hint_country),
+                                value = country,
+                                options = countryOptions,
+                                expanded = expandedCountry,
+                                onExpandedChange = { expandedCountry = it },
+                                onSelect = { country = it },
+                                modifier = Modifier.weight(1f)
+                            )
                             Spacer(Modifier.width(8.dp))
-
-                            // State
-                            Box(
-                                modifier = fieldModifier()
-                                    .weight(1f)
-                                    .clickable { expandedState = !expandedState }
-                            ) {
-                                Text(
-                                    text = if (state.isEmpty()) "State" else state,
-                                    fontSize = 12.sp,
-                                    color = if (state.isEmpty()) Color.Gray else Color.Black,
-                                    modifier = Modifier.align(Alignment.CenterStart)
-                                )
-                                Icon(
-                                    imageVector = if (expandedState) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
-                                    contentDescription = null,
-                                    modifier = Modifier.align(Alignment.CenterEnd)
-                                )
-
-                                DropdownMenu(
-                                    expanded = expandedState,
-                                    onDismissRequest = { expandedState = false }
-                                ) {
-                                    stateOptions.forEach {
-                                        DropdownMenuItem(
-                                            text = { Text(it) },
-                                            onClick = {
-                                                state = it
-                                                expandedState = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
+                            DropdownBox(
+                                label = stringResource(R.string.hint_state),
+                                value = state,
+                                options = stateOptions,
+                                expanded = expandedState,
+                                onExpandedChange = { expandedState = it },
+                                onSelect = { state = it },
+                                modifier = Modifier.weight(1f)
+                            )
                         }
 
                         Spacer(Modifier.height(10.dp))
-
-                        // ----------- CITY -----------
-                        BasicTextField(
-                            value = city,
-                            onValueChange = { city = it },
-                            textStyle = fieldTextStyle,
-                            singleLine = true,
-                            modifier = fieldModifier(),
-                            decorationBox = { innerTextField ->
-                                if (city.isEmpty()) {
-                                    Text("City", color = Color.Gray, fontSize = 12.sp)
-                                }
-                                innerTextField()
-                            }
-                        )
+                        CenteredTextField(city, { city = it }, stringResource(R.string.hint_city), fieldModifier())
                     }
 
-                    // Buttons
+                    // 🔹 Footer Buttons
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -528,48 +318,57 @@ fun AddCustomerDialog(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         GradientButtonIcon(
-                            text = "Cancel",
+                            text = stringResource(R.string.btn_cancel),
                             onClick = onDismiss,
                             icon = painterResource(id = R.drawable.ic_cancel),
                             iconDescription = "Cancel Icon",
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(end = 4.dp)
+                            modifier = Modifier.weight(1f).padding(end = 4.dp)
                         )
 
                         GradientButtonIcon(
-                            text = "OK",
+                            text = stringResource(R.string.btn_ok),
                             onClick = {
+                                fun isValidEmail(email: String) =
+                                    email.matches("^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$".toRegex())
+
+                                fun isValidPhone(phone: String) =
+                                    phone.matches("^[0-9]{10}$".toRegex())
+
+                                fun isValidPan(pan: String) =
+                                    pan.matches("^[A-Z]{5}[0-9]{4}[A-Z]{1}$".toRegex())
+
+                                fun isValidGst(gst: String) =
+                                    gst.matches("^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[A-Z0-9]{1}[A-Z]{1}[0-9]{1}$".toRegex())
+
                                 when {
-                                    name.isEmpty() -> Toast.makeText(context, "Enter name", Toast.LENGTH_SHORT).show()
-                                    email.isNotEmpty() &&
-                                            !email.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$".toRegex()) ->
-                                        Toast.makeText(context, "Invalid email", Toast.LENGTH_SHORT).show()
-                                    pan.isNotEmpty() &&
-                                            !pan.matches("^[A-Z]{5}[0-9]{4}[A-Z]{1}$".toRegex()) ->
-                                        Toast.makeText(context, "Invalid PAN", Toast.LENGTH_SHORT).show()
-                                    gst.isNotEmpty() &&
-                                            !gst.matches("^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][A-Z0-9][A-Z][0-9]$".toRegex()) ->
-                                        Toast.makeText(context, "Invalid GST", Toast.LENGTH_SHORT).show()
+                                    name.isEmpty() -> showToast(context, context.getString(R.string.msg_enter_name))
+                                    phone.isEmpty() && email.isEmpty() && pan.isEmpty() && gst.isEmpty()
+                                            && street.isEmpty() && city.isEmpty() && state.isEmpty() && country.isEmpty() -> {
+                                        val req = AddEmployeeRequest(name, "", "", "", "", "", "",
+                                            0, 0, 0, "", "Active", "", "0", "0", "", "", "", "", "",
+                                            "", "", "", "", "", "", "", "0", "0", "", "0", "0", "",
+                                            employeeClientCode, 0, "", false, employeeId)
+                                        onSaveCustomer(req); onDismiss()
+                                    }
+                                    phone.isNotEmpty() && !isValidPhone(phone) -> showToast(context, context.getString(R.string.msg_invalid_phone))
+                                    email.isNotEmpty() && !isValidEmail(email) -> showToast(context, context.getString(R.string.msg_invalid_email))
+                                    pan.isNotEmpty() && !isValidPan(pan) -> showToast(context, context.getString(R.string.msg_invalid_pan))
+                                    gst.isNotEmpty() && !isValidGst(gst) -> showToast(context, context.getString(R.string.msg_invalid_gst))
+                                    country.isNotEmpty() && state.isEmpty() -> showToast(context, context.getString(R.string.msg_select_state))
+                                    state.isNotEmpty() && country.isEmpty() -> showToast(context, context.getString(R.string.msg_select_country))
+                                    city.isEmpty() -> showToast(context, context.getString(R.string.msg_enter_city))
                                     else -> {
-                                        val request = AddEmployeeRequest(
-                                            name, "", "", email, "", "", "",
-                                            0, 0, 0, phone, "Active", "",
-                                            "0", "0", street, "", "", city,
-                                            state, "", "", "", "", country, "",
-                                            "", "0", "0", pan, "0", "0", gst,
-                                            employeeClientCode, 0, "", false, employeeId
-                                        )
-                                        onSaveCustomer(request)
-                                        onDismiss()
+                                        val req = AddEmployeeRequest(name, "", "", email, "", "", "",
+                                            0, 0, 0, phone, "Active", "", "0", "0", street, "", "", city,
+                                            state, "", "", "", "", country, "", "", "0", "0", pan, "0", "0", gst,
+                                            employeeClientCode, 0, "", false, employeeId)
+                                        onSaveCustomer(req); onDismiss()
                                     }
                                 }
                             },
                             icon = painterResource(id = R.drawable.check_circle),
                             iconDescription = "OK Icon",
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(start = 4.dp)
+                            modifier = Modifier.weight(1f).padding(start = 4.dp)
                         )
                     }
                 }
@@ -578,25 +377,87 @@ fun AddCustomerDialog(
     }
 }
 
-// Toast Helper
-fun showToast(context: Context, message: String) {
-    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+@Composable
+fun DropdownBox(
+    label: String,
+    value: String,
+    options: List<String>,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .height(42.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFFF5F5F5))
+            .padding(horizontal = 10.dp)
+            .clickable { onExpandedChange(!expanded) }
+    ) {
+        Text(
+            text = if (value.isEmpty()) label else value,
+            fontSize = 12.sp,
+            color = if (value.isEmpty()) Color.Gray else Color.Black,
+            modifier = Modifier.align(Alignment.CenterStart)
+        )
+        Icon(
+            imageVector = if (expanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
+            contentDescription = null,
+            modifier = Modifier.align(Alignment.CenterEnd)
+        )
+
+        if (expanded) {
+            Popup(alignment = Alignment.TopStart, offset = IntOffset(0, 80), properties = PopupProperties(focusable = true)) {
+                Column(
+                    modifier = Modifier
+                        .background(Color.White, RoundedCornerShape(8.dp))
+                        .border(1.dp, Color.LightGray)
+                        .width(140.dp)
+                ) {
+                    options.forEach {
+                        Text(
+                            text = it,
+                            fontSize = 14.sp,
+                            color = Color.Black,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onSelect(it)
+                                    onExpandedChange(false)
+                                }
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
-fun GradientButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(
-                Brush.horizontalGradient(
-                    colors = listOf(Color(0xFF5231A7), Color(0xFFD32940))
-                )
-            )
-            .clickable { onClick() }
-            .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-    }
+fun CenteredTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    textSize: androidx.compose.ui.unit.TextUnit = 13.sp
+) {
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = true,
+        textStyle = TextStyle(fontSize = textSize, color = Color.Black),
+        modifier = modifier,
+        decorationBox = { inner ->
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
+                if (value.isEmpty()) Text(placeholder, color = Color.Gray, fontSize = 12.sp)
+                inner()
+            }
+        }
+    )
+}
+
+fun showToast(context: Context, message: String) {
+    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
 }

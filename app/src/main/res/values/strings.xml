@@ -73,6 +73,38 @@
     <string name="filter_rejected">Rejected</string>
     <string name="filter_lost">Lost</string>
 
+    <!--Delivery Challan-->
+    <!-- Customer Dialog -->
+    <string name="title_customer_profile">Customer Profile</string>
+    <string name="hint_customer_name">Customer Name</string>
+    <string name="hint_mobile_number">Mobile Number</string>
+    <string name="hint_email">Email</string>
+    <string name="hint_pan_number">PAN Number</string>
+    <string name="hint_gst_number">GST Number</string>
+    <string name="hint_street_address">Street / Address</string>
+    <string name="hint_country">Country</string>
+    <string name="hint_state">State</string>
+    <string name="hint_city">City</string>
+
+    <!-- Buttons -->
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_ok">OK</string>
+
+    <!-- Toast / Validation Messages -->
+    <string name="msg_enter_name">Enter customer name</string>
+    <string name="msg_enter_mobile">Enter mobile number</string>
+    <string name="msg_invalid_phone">Invalid phone number</string>
+    <string name="msg_invalid_email">Invalid email address</string>
+    <string name="msg_invalid_pan">Invalid PAN format</string>
+    <string name="msg_invalid_gst">Invalid GST format</string>
+    <string name="msg_select_state">Select state</string>
+    <string name="msg_select_country">Select country</string>
+    <string name="msg_enter_city">Enter city</string>
+
+    <!-- Dropdown -->
+    <string name="label_loading">Loading...</string>
+    <string name="hint_enter_customer_name">Enter customer name</string>
+
 
 
 </resources>

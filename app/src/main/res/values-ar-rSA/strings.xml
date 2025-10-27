@@ -73,4 +73,36 @@
     <string name="filter_approved">تمت الموافقة</string>
     <string name="filter_rejected">تم الرفض</string>
     <string name="filter_lost">مفقود</string>
+
+    <!--Delivery Challan-->
+    <!-- Customer Dialog -->
+    <string name="title_customer_profile">ملف العميل</string>
+    <string name="hint_customer_name">اسم العميل</string>
+    <string name="hint_mobile_number">رقم الجوال</string>
+    <string name="hint_email">البريد الإلكتروني</string>
+    <string name="hint_pan_number">رقم PAN</string>
+    <string name="hint_gst_number">رقم ضريبة GST</string>
+    <string name="hint_street_address">العنوان / الشارع</string>
+    <string name="hint_country">الدولة</string>
+    <string name="hint_state">الولاية</string>
+    <string name="hint_city">المدينة</string>
+
+    <!-- Buttons -->
+    <string name="btn_cancel">إلغاء</string>
+    <string name="btn_ok">موافق</string>
+
+    <!-- Toast / Validation Messages -->
+    <string name="msg_enter_name">أدخل اسم العميل</string>
+    <string name="msg_enter_mobile">أدخل رقم الجوال</string>
+    <string name="msg_invalid_phone">رقم الجوال غير صالح</string>
+    <string name="msg_invalid_email">عنوان البريد الإلكتروني غير صالح</string>
+    <string name="msg_invalid_pan">تنسيق PAN غير صالح</string>
+    <string name="msg_invalid_gst">تنسيق GST غير صالح</string>
+    <string name="msg_select_state">اختر الولاية</string>
+    <string name="msg_select_country">اختر الدولة</string>
+    <string name="msg_enter_city">أدخل المدينة</string>
+
+    <!-- Dropdown -->
+    <string name="label_loading">جارٍ التحميل...</string>
+    <string name="hint_enter_customer_name">أدخل اسم العميل</string>
 </resources>

@@ -73,4 +73,36 @@
     <string name="filter_approved">स्वीकृत</string>
     <string name="filter_rejected">अस्वीकृत</string>
     <string name="filter_lost">खो गया</string>
+
+    <!--Delivery challan-->
+    <!-- Customer Dialog -->
+    <string name="title_customer_profile">ग्राहक प्रोफ़ाइल</string>
+    <string name="hint_customer_name">ग्राहक का नाम</string>
+    <string name="hint_mobile_number">मोबाइल नंबर</string>
+    <string name="hint_email">ईमेल</string>
+    <string name="hint_pan_number">पैन नंबर</string>
+    <string name="hint_gst_number">जीएसटी नंबर</string>
+    <string name="hint_street_address">पता / सड़क</string>
+    <string name="hint_country">देश</string>
+    <string name="hint_state">राज्य</string>
+    <string name="hint_city">शहर</string>
+
+    <!-- Buttons -->
+    <string name="btn_cancel">रद्द करें</string>
+    <string name="btn_ok">ठीक है</string>
+
+    <!-- Toast / Validation Messages -->
+    <string name="msg_enter_name">ग्राहक का नाम दर्ज करें</string>
+    <string name="msg_enter_mobile">मोबाइल नंबर दर्ज करें</string>
+    <string name="msg_invalid_phone">अमान्य मोबाइल नंबर</string>
+    <string name="msg_invalid_email">अमान्य ईमेल पता</string>
+    <string name="msg_invalid_pan">अमान्य पैन प्रारूप</string>
+    <string name="msg_invalid_gst">अमान्य जीएसटी प्रारूप</string>
+    <string name="msg_select_state">राज्य चुनें</string>
+    <string name="msg_select_country">देश चुनें</string>
+    <string name="msg_enter_city">शहर दर्ज करें</string>
+
+    <!-- Dropdown -->
+    <string name="label_loading">लोड हो रहा है...</string>
+    <string name="hint_enter_customer_name">ग्राहक का नाम दर्ज करें</string>
 </resources>

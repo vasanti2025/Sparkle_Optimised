@@ -8,10 +8,12 @@ import androidx.lifecycle.viewModelScope
 import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.data.local.entity.SearchItem
 import com.loyalstring.rfid.data.reader.RFIDReaderManager
+import com.loyalstring.rfid.repository.BulkRepositoryImpl
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -20,11 +22,12 @@ import javax.inject.Inject
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val readerManager: RFIDReaderManager,
+    private val bulkRepositoryImpl: BulkRepositoryImpl,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     /// private val _unmatchedItems = savedStateHandle.get<List<BulkItem>>("unmatchedItems") ?: emptyList()
-    private val _searchItems = mutableStateListOf<SearchItem>()
+    private var _searchItems = mutableStateListOf<SearchItem>()
     val searchItems: List<SearchItem> get() = _searchItems
 
     init {
@@ -39,25 +42,33 @@ class SearchViewModel @Inject constructor(
 
 
 
-    fun startSearch(unmatchedItems: List<BulkItem>) {
+    fun startSearch(unmatchedItems: List<BulkItem>,power: Int) {
         _searchItems.clear()
-        _searchItems.addAll(unmatchedItems.map {
+        _searchItems.addAll(unmatchedItems.map { item ->
+            val epcValue = when {
+                !item.epc.isNullOrBlank() -> item.epc!!
+                !item.rfid.isNullOrBlank() -> item.rfid!!
+                !item.itemCode.isNullOrBlank() -> item.itemCode!!
+                else -> ""
+            }
+
             SearchItem(
-                epc = it.epc ?: "",
-                itemCode = it.itemCode ?: "",
-                productName = it.productName ?: "",
-                rfid = it.rfid ?: ""
+                epc = epcValue,
+                itemCode = item.itemCode ?: "",
+                productName = item.productName ?: "",
+                rfid = item.rfid ?: ""
             )
         })
 
+
         if (readerManager.initReader()) {
-            startTagScanning()
+            startTagScanning(power)
 
         }
     }
 
-    fun startTagScanning() {
-        readerManager.startInventoryTag(30,true)
+    fun startTagScanning(power: Int) {
+        readerManager.startInventoryTag(power,true)
 
         scanJob?.cancel()
         scanJob = viewModelScope.launch(Dispatchers.IO) {
@@ -80,11 +91,11 @@ class SearchViewModel @Inject constructor(
 
 
                     // Update UI list
-
                     val index = _searchItems.indexOfFirst {
-                        it.epc.trim().uppercase() == epc.trim().uppercase()
+                        it.epc.trim().equals(epc.trim(), ignoreCase = true) ||
+                                it.rfid.trim().equals(epc.trim(), ignoreCase = true) ||
+                                it.itemCode.trim().equals(epc.trim(), ignoreCase = true)
                     }
-
                     if (index != -1) {
                         withContext(Dispatchers.Main) {
                             _searchItems[index] = _searchItems[index].copy(
@@ -92,18 +103,14 @@ class SearchViewModel @Inject constructor(
                                 proximityPercent = proximity
                             )
 
-                            // ✅ Play sound only when EPC is actually in search list
                             if (id != -1) {
-                                // stop previous sound first (avoid overlapping)
                                 lastSoundId?.let { readerManager.stopSound(it) }
                                 lastSoundId = id
                                 readerManager.playSound(id)
                             }
                         }
-
                     } else {
-                        // 🚫 Not in search list → skip sound
-                        Log.d("@@", "Scanned EPC $epc not in unmatched list, skipping sound")
+                        Log.d("SEARCH_SCAN", "No match found for tag $epc")
                     }
 
 
@@ -124,6 +131,14 @@ class SearchViewModel @Inject constructor(
             }
         }
     }
+    suspend fun getAllBulkItemsFromDb(): List<BulkItem> {
+        return bulkRepositoryImpl.getAllBulkItems().first()
+    }
+
+    fun clearSearchItems() {
+        _searchItems.clear()
+    }
+
 
     fun stopSearch() {
         scanJob?.cancel()

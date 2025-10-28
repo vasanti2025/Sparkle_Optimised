@@ -100,7 +100,7 @@ fun BulkProductScreen(
 
     var selectedPower by remember { mutableStateOf(UserPreferences.getInstance(context).getInt(
         UserPreferences.KEY_PRODUCT_COUNT)) }
-    remember { mutableStateOf("") }
+    remember { mutableStateOf("5") }
 
 
 

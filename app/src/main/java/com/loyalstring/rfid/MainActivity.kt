@@ -244,9 +244,27 @@ private fun SetupNavigation(
                                                 }
                                             }
 
-                                            Screens.SettingsScreen.route,
+                                            Screens.SettingsScreen.route ->{
+                                                scope.launch {
+                                                    drawerState.close()
+                                                    navController.navigate(navigationItem.route)
+                                                }
+                                            }
                                             Screens.OrderScreen.route -> {
-                                                navController.navigate(navigationItem.route)
+                                                scope.launch {
+                                                    drawerState.close()
+                                                    navController.navigate(navigationItem.route)
+                                                }
+
+                                            }
+                                            Screens.SearchScreen.route -> {
+                                                scope.launch {
+                                                    drawerState.close()
+                                                    navController.navigate("${Screens.SearchScreen.route}/normal") {
+                                                        launchSingleTop = true
+                                                        restoreState = true
+                                                    }                                                }
+
                                             }
 
                                             else -> {

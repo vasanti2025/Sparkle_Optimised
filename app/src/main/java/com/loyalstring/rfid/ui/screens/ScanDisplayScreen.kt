@@ -265,8 +265,10 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
     var selectedItem by remember { mutableStateOf<BulkItem?>(null) }
     var showItemDialog by remember { mutableStateOf(false) }
 
+    var selectedPower by remember { mutableStateOf(UserPreferences.getInstance(context).getInt(
+        UserPreferences.KEY_INVENTORY_COUNT)) }
+    remember { mutableStateOf("30") }
 
-    var selectedPower by remember { mutableIntStateOf(30) }
     var isScanning by remember { mutableStateOf(false) }
     var showEmailDialog by remember { mutableStateOf(false) }
     var savedEmails by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -806,18 +808,11 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
                                     "unmatchedItems",
                                     ArrayList(latestUnmatched)
                                 )
-                            }
-
-                            navController.navigate(Screens.SearchScreen.route) {
-                                launchSingleTop = true
-                                restoreState = true
+                                navController.navigate("search_screen/unmatched")
+                            } else {
+                                navController.navigate("search_screen/normal")
                             }
                         }
-
-
-
-
-
                     }
                     showMenu = false
                 }

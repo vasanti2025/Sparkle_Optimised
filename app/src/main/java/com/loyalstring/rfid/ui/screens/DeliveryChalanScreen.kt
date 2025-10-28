@@ -90,6 +90,65 @@ fun DeliveryChalanScreen(
     val productList = remember { mutableStateListOf<OrderItem>() }
     var selectedItem by remember { mutableStateOf<ItemCodeResponse?>(null) }
     val productListViewModel: ProductListViewModel = hiltViewModel()
+    var showInvoiceDialog by remember { mutableStateOf(false) }
+    // Sample branch/salesman lists (can come from API)
+    val branchList = listOf("Main Branch", "Sub Branch", "Online Branch")
+    val salesmanList = listOf("Rohit", "Priya", "Vikas")
+    val selectedOrderItem = OrderItem(
+        id = 0,
+        branchId = "",
+        branchName = "Main Branch",
+        exhibition = "",
+        remark = "",
+        purity = "22K",
+        size = "",
+        length = "",
+        typeOfColor = "",
+        screwType = "",
+        polishType = "",
+        finePer = "",
+        wastage = "",
+        orderDate = "",
+        deliverDate = "",
+        productName = "",
+        itemCode = "",
+        rfidCode = "",
+        grWt = "",
+        nWt = "",
+        stoneAmt = "",
+        finePlusWt = "",
+        itemAmt = "",
+        packingWt = "",
+        totalWt = "",
+        stoneWt = "",
+        dimondWt = "",
+        sku = "",
+        qty = "",
+        hallmarkAmt = "",
+        mrp = "",
+        image = "",
+        netAmt = "",
+        diamondAmt = "",
+        categoryId = 0,
+        categoryName = "",
+        productId = 0,
+        productCode = "",
+        skuId = 0,
+        designid = 0,
+        designName = "",
+        purityid = 0,
+        counterId = 0,
+        counterName = "",
+        companyId = 0,
+        epc = "",
+        tid = "",
+        todaysRate = "",
+        makingPercentage = "",
+        makingFixedAmt = "",
+        makingFixedWastage = "",
+        makingPerGram = ""
+    )
+
 
 
     var itemCodeList by remember { mutableStateOf<List<ItemCodeResponse>>(emptyList()) }
@@ -315,7 +374,7 @@ fun DeliveryChalanScreen(
                         .gradientBorderBox()
                         .clip(RoundedCornerShape(8.dp))
                         .clickable {
-                            Toast.makeText(context, "Invoice Fields Clicked", Toast.LENGTH_SHORT).show()
+                            showInvoiceDialog = true
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -330,7 +389,7 @@ fun DeliveryChalanScreen(
                             painter = painterResource(id = R.drawable.filter_gary),
                             contentDescription = "Add",
                             modifier = Modifier.size(20.dp),
-                            tint = Color.Unspecified
+                            tint = Color.Gray,
                         )
                     }
                 }
@@ -338,7 +397,31 @@ fun DeliveryChalanScreen(
 
         }
         }
+    // 🔹 Show the dialog when state = true
+    if (showInvoiceDialog) {
+     /*   InvoiceFieldsDialog(
+            onDismiss = { showInvoiceDialog = false },
+            onConfirm = {
+                // ✅ Handle confirm logic here (save or apply data)
+                showInvoiceDialog = false
+            },
+            branchList = branchList,
+            salesmanList = salesmanList
+        )*/
+
+        InvoiceDetailsDialogEditAndDisplay(
+            selectedItem = selectedOrderItem,
+            branchList = branchList,
+            salesmanList = salesmanList,
+            onDismiss = { showInvoiceDialog = false },
+            onSave = { updatedItem ->
+                println("✅ Saved Invoice: ${updatedItem.branchName}")
+                showInvoiceDialog = false
+            }
+        )
     }
+    }
+
 
 fun BulkItem.toItemCodeResponse(): ItemCodeResponse {
     return ItemCodeResponse(

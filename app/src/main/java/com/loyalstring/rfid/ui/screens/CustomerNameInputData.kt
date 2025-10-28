@@ -59,7 +59,7 @@ fun CustomerNameInputData(
     employeeClientCode: String? = null,
     employeeId: String? = null
 ) {
-    var expandedState by remember { mutableStateOf(false) }
+    var showDropdown by remember { mutableStateOf(false) }
     var showAddCustomerDialog by remember { mutableStateOf(false) }
 
     val focusManager = LocalFocusManager.current
@@ -69,115 +69,161 @@ fun CustomerNameInputData(
         listOf(Color(0xFF5231A7), Color(0xFFD32940))
     )
 
-    ExposedDropdownMenuBox(
-        expanded = expandedState && filteredCustomers.isNotEmpty(),
-        onExpandedChange = { expandedState = it },
+    // Filter list locally (case-insensitive)
+    val visibleCustomers = remember(customerName, filteredCustomers) {
+        if (customerName.isEmpty()) emptyList()
+        else filteredCustomers.filter {
+            val query = customerName.trim().lowercase()
+            it.FirstName.orEmpty().lowercase().contains(query) ||
+                    it.LastName.orEmpty().lowercase().contains(query)
+        }
+    }
+
+    // ✅ Added Padding for better spacing in UI
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 10.dp, vertical = 3.dp)
     ) {
-        Box(
+        // 🔹 Input Row
+        Row(
             modifier = Modifier
-                .menuAnchor()
                 .fillMaxWidth()
-                .height(40.dp)
-                .border(1.5.dp, gradientBrush, RoundedCornerShape(10.dp))
+                .height(35.dp)
+                .border(1.dp, gradientBrush, RoundedCornerShape(10.dp))
                 .background(Color.White, RoundedCornerShape(10.dp))
-                .padding(horizontal = 10.dp),
-            contentAlignment = Alignment.CenterStart
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                CenteredTextField(
-                    value = customerName,
-                    onValueChange = {
-                        onCustomerNameChange(it)
-                        expandedState = it.isNotEmpty()
-                        coroutineScope.launch { fetchSuggestions() }
-                    },
-                    placeholder = stringResource(R.string.hint_enter_customer_name),
-                    textSize = 15.sp,
-                    modifier = Modifier.weight(1f)
-                )
+            BasicTextField(
+                value = customerName,
+                onValueChange = {
+                    onCustomerNameChange(it)
+                    showDropdown = it.isNotEmpty()
+                    coroutineScope.launch { fetchSuggestions() }
+                },
+                singleLine = true,
+                textStyle = TextStyle(fontSize = 14.sp, color = Color.Black),
+                modifier = Modifier.weight(1f),
+                decorationBox = { innerTextField ->
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        if (customerName.isEmpty()) {
+                            Text(
+                                text = stringResource(id = R.string.hint_enter_customer_name),
+                                fontSize = 13.sp,
+                                color = Color.Gray
+                            )
+                        }
+                        innerTextField()
+                    }
+                }
+            )
 
-                if (customerName.isEmpty()) {
-                    IconButton(
-                        onClick = {
-                            onAddCustomerClick()
-                            expandedState = false
-                            showAddCustomerDialog = true
-                        },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.vector_add),
-                            contentDescription = "Add",
-                            tint = Color.Unspecified
-                        )
-                    }
-                } else {
-                    IconButton(
-                        onClick = {
-                            onClear()
-                            expandedState = false
-                            focusManager.clearFocus()
-                            keyboardController?.hide()
-                        },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Clear",
-                            tint = Color(0xFF3C3C3C)
-                        )
-                    }
+            // 🔹 Add / Clear Icon
+            if (customerName.isEmpty()) {
+                IconButton(
+                    onClick = {
+                        onAddCustomerClick()
+                        showDropdown = false
+                        showAddCustomerDialog = true
+                    },
+                    modifier = Modifier.size(26.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.vector_add),
+                        contentDescription = "Add Customer",
+                        tint = Color.Gray,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            } else {
+                IconButton(
+                    onClick = {
+                        onClear()
+                        showDropdown = false
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                    },
+                    modifier = Modifier.size(26.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Clear,
+                        contentDescription = "Clear",
+                        tint = Color.Gray,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
         }
 
-        ExposedDropdownMenu(
-            expanded = expandedState && filteredCustomers.isNotEmpty(),
-            onDismissRequest = { expandedState = false },
-            modifier = Modifier.background(Color.White)
+        // 🔽 Dropdown (matching RFID style)
+        DropdownMenu(
+            expanded = showDropdown && (isLoading || visibleCustomers.isNotEmpty()),
+            onDismissRequest = { showDropdown = false },
+            modifier = Modifier
+                .widthIn(min = 220.dp, max = 280.dp)
+                .background(Color.White)
         ) {
-            if (isLoading) {
-                DropdownMenuItem(
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = Color(0xFF5231A7)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(stringResource(R.string.label_loading), fontSize = 12.sp)
-                        }
-                    },
-                    onClick = {}
-                )
-            } else {
-                filteredCustomers.forEach { customer ->
+            when {
+                isLoading -> {
+                    DropdownMenuItem(
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color(0xFF5231A7)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(stringResource(id = R.string.label_loading), fontSize = 12.sp)
+                            }
+                        },
+                        onClick = {}
+                    )
+                }
+
+                visibleCustomers.isEmpty() -> {
                     DropdownMenuItem(
                         text = {
                             Text(
-                                "${customer.FirstName.orEmpty()} ${customer.LastName.orEmpty()}",
-                                fontSize = 14.sp
+                                text = stringResource(id = R.string.no_results_found),
+                                fontSize = 12.sp,
+                                color = Color.Gray
                             )
                         },
-                        onClick = {
-                            onCustomerSelected(customer)
-                            expandedState = false
-                            focusManager.clearFocus()
-                            keyboardController?.hide()
-                        }
+                        onClick = {}
                     )
+                }
+
+                else -> {
+                    visibleCustomers.forEach { customer ->
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(
+                                        text = "${customer.FirstName.orEmpty()} ${customer.LastName.orEmpty()}",
+                                        fontSize = 13.sp,
+                                        color = Color.Black
+                                    )
+                                }
+                            },
+                            onClick = {
+                                onCustomerSelected(customer)
+                                showDropdown = false
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
+                            }
+                        )
+                    }
                 }
             }
         }
     }
 
+    // 🔹 Add Customer Dialog
     if (showAddCustomerDialog) {
         AddCustomerDialog(
             onDismiss = { showAddCustomerDialog = false },
@@ -190,6 +236,9 @@ fun CustomerNameInputData(
         )
     }
 }
+
+
+
 
 /*----------------------------------------------------------
    ADD CUSTOMER DIALOG (Localized)
@@ -451,7 +500,7 @@ fun CenteredTextField(
         modifier = modifier,
         decorationBox = { inner ->
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
-                if (value.isEmpty()) Text(placeholder, color = Color.Gray, fontSize = 12.sp)
+                if (value.isEmpty()) Text(placeholder, color = Color.Gray, fontSize = 14.sp)
                 inner()
             }
         }

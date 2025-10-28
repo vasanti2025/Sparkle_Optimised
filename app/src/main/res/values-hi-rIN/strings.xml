@@ -1,4 +1,4 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
+<resources>
     <string name="app_name">स्पार्कल आरएफआईडी</string>
     <string name="menu_rates_title">रेट्स</string>
     <string name="menu_rates_subtitle">रेट जोड़ें / अपडेट करें</string>
@@ -105,4 +105,14 @@
     <!-- Dropdown -->
     <string name="label_loading">लोड हो रहा है...</string>
     <string name="hint_enter_customer_name">ग्राहक का नाम दर्ज करें</string>
+
+    <!--Itemcode row-->
+    <string name="enter_rfid_itemcode">आरएफआईडी / आइटम कोड दर्ज करें</string>
+    <string name="clear">साफ करें</string>
+    <string name="scan">स्कैन करें</string>
+    <string name="searching">खोज जारी है...</string>
+    <string name="no_results_found">कोई परिणाम नहीं मिला</string>
+    <string name="rfid_prefix">आरएफआईडी: %1$s</string>
+
+
 </resources>

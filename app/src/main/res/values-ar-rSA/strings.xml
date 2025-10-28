@@ -105,4 +105,12 @@
     <!-- Dropdown -->
     <string name="label_loading">جارٍ التحميل...</string>
     <string name="hint_enter_customer_name">أدخل اسم العميل</string>
+
+    <!--Itemcode row-->
+    <string name="enter_rfid_itemcode">أدخل رقم RFID / رمز المنتج</string>
+    <string name="clear">مسح</string>
+    <string name="scan">مسح ضوئي</string>
+    <string name="searching">جارٍ البحث...</string>
+    <string name="no_results_found">لم يتم العثور على نتائج</string>
+    <string name="rfid_prefix">المعرف: %1$s</string>
 </resources>

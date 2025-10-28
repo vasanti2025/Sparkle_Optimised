@@ -300,7 +300,7 @@ class ScanDisplayViewModel @Inject constructor(
         // ----------------------------
         // 3) Matched Items
         // ----------------------------
-        addHeader("Matched Items (Found)")
+        addHeader("Matched Items")
         val matchTable = Table(
             floatArrayOf(55f, 55f, 60f, 50f, 70f, 60f, 40f, 55f, 55f, 55f, 55f, 70f)
         ).useAllAvailableWidth()

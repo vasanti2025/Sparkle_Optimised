@@ -1108,6 +1108,7 @@ class BulkViewModel @Inject constructor(
     }
 
 
+
     fun syncItems() {
         viewModelScope.launch {
             try {
@@ -1121,54 +1122,83 @@ class BulkViewModel @Inject constructor(
                 // Determine RFID type
                 val tagType = userPreferences.getClient()?.rfidType?.trim()?.lowercase() ?: "webreusable"
 
-                // Stage 1: Download items
+                // Stage 1: Download items from server
                 val response = withContext(Dispatchers.IO) {
                     bulkRepository.syncBulkItemsFromServer(request)
                 }
 
-                // Stage 2: Filter active items
-                val bulkItems = response
-                    .filter { (it.status == "ApiActive" || it.status == "Active") && (!it.rfidCode.isNullOrBlank() || !it.itemCode.isNullOrBlank()) }
-                    .map { it.toBulkItem() }
+                // Stage 2: Filter valid items based on tagType
+                val filteredItems = response.filter { item ->
+                    when (tagType) {
+                        "webreusable" -> {
+                            (item.status == "ApiActive" || item.status == "Active") &&
+                                    !item.rfidCode.isNullOrBlank()
+                        }
+                        "websingle" -> {
+                            (item.status == "ApiActive" || item.status == "Active") &&
+                                    !item.itemCode.isNullOrBlank()
+                        }
+                        else -> false
+                    }
+                }
 
-                val total = bulkItems.size
+                val total = filteredItems.size
+                _syncStatusText.value = "Processing $total items..."
+                _syncProgress.value = 0f
+
+                // Clear old items before inserting new ones
                 withContext(Dispatchers.IO) { bulkRepository.clearAllItems() }
 
-                // Stage 3: Process each item
-                bulkItems.forEachIndexed { index, item ->
-                    val updatedItem = if (tagType == "webreusable") {
-                        // Web reusable: EPC from mapping, skip if RFID null
-                        if (!item.rfid.isNullOrBlank()) {
-                            if (item.epc.isNullOrBlank()) {
-                                item.epc = syncAndMapRow(item.rfid!!)
-                            }
-                            item
-                        } else null
-                    } else {
-                        // Single use: hex from item code
-                        if (!item.itemCode.isNullOrBlank()) {
-                            val hexValue = item.itemCode.toByteArray().joinToString("") { String.format("%02X", it) }
-                            item.copy(rfid = item.itemCode, epc = hexValue, tid = hexValue)
-                        } else null
+                // Stage 3: Process & insert each valid item
+                filteredItems.forEachIndexed { index, apiItem ->
+                    val updatedItem = when (tagType) {
+                        "webreusable" -> {
+                            val bulkItem = apiItem.toBulkItem()
+                            if (!bulkItem.rfid.isNullOrBlank()) {
+                                if (bulkItem.epc.isNullOrBlank()) {
+                                    bulkItem.epc = syncAndMapRow(bulkItem.rfid!!)
+                                }
+                                bulkItem
+                            } else null
+                        }
+
+                        "websingle" -> {
+                            val bulkItem = apiItem.toBulkItem()
+                            if (!bulkItem.itemCode.isNullOrBlank()) {
+                                val hexValue = bulkItem.itemCode!!.toByteArray()
+                                    .joinToString("") { String.format("%02X", it) }
+                                bulkItem.copy(
+                                    rfid = bulkItem.itemCode,
+                                    epc = hexValue,
+                                    tid = hexValue
+                                )
+                            } else null
+                        }
+
+                        else -> null
                     }
 
-                    // Insert only if valid
                     if (updatedItem != null) {
                         withContext(Dispatchers.IO) {
                             bulkRepository.insertSingleItem(updatedItem)
                         }
-                        Log.d("SYNC", "Inserted item: code=${updatedItem.itemCode}, rfid=${updatedItem.rfid}, epc=${updatedItem.epc}")
+                        Log.d(
+                            "SYNC",
+                            "Inserted item: code=${updatedItem.itemCode}, rfid=${updatedItem.rfid}, epc=${updatedItem.epc}"
+                        )
                     } else {
-                        Log.w("SYNC", "Skipped item: code=${item.itemCode}, rfid=${item.rfid}, epc=${item.epc}")
+                        Log.w(
+                            "SYNC",
+                            "Skipped invalid item: code=${apiItem.itemCode}, rfid=${apiItem.rfidCode}"
+                        )
                     }
 
-                    // Update progress
                     val processed = index + 1
                     _syncStatusText.value = "Syncing $processed of $total"
                     _syncProgress.value = processed.toFloat() / total
                 }
 
-                _toastMessage.emit("✅ Synced ${bulkItems.size} items successfully!")
+                _toastMessage.emit("✅ Synced $total items successfully!")
                 _syncStatusText.value = "Sync completed!"
 
             } catch (e: Exception) {
@@ -1180,15 +1210,6 @@ class BulkViewModel @Inject constructor(
             }
         }
     }
-
-
-
-
-
-
-
-
-
 
 
 

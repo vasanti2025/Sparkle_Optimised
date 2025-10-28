@@ -59,6 +59,7 @@ import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.ui.utils.AddItemDialog
 import com.loyalstring.rfid.ui.utils.BackgroundGradient
 import com.loyalstring.rfid.ui.utils.ToastUtils
+import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.BulkViewModel
 
@@ -97,8 +98,9 @@ fun BulkProductScreen(
 
     var clickedIndex by remember { mutableStateOf<Int?>(null) }
 
-    var selectedPower by remember { mutableStateOf(10) }
-    remember { mutableStateOf("") }
+    var selectedPower by remember { mutableStateOf(UserPreferences.getInstance(context).getInt(
+        UserPreferences.KEY_PRODUCT_COUNT)) }
+    remember { mutableStateOf("5") }
 
 
 
@@ -108,7 +110,6 @@ fun BulkProductScreen(
 
     val activity = LocalContext.current as MainActivity
     var isScanning by remember { mutableStateOf(false) }
-    //var showSuccessDialog by remember { mutableStateOf(false) }
     var isEditMode by remember { mutableStateOf(false) }
 
 

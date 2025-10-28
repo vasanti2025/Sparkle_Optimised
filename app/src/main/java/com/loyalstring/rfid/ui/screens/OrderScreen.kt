@@ -178,7 +178,10 @@ fun OrderScreen(
     }
 
     val bulkViewModel: BulkViewModel = hiltViewModel()
-    var selectedPower by remember { mutableStateOf(30) }
+
+    var selectedPower by remember { mutableStateOf(UserPreferences.getInstance(context).getInt(
+        UserPreferences.KEY_ORDER_COUNT)) }
+    remember { mutableStateOf("10") }
     var selectedCustomer by remember { mutableStateOf<EmployeeList?>(null) }
     //val itemCodeList by orderViewModel.itemCodeResponse.collectAsState()
     val customerSuggestions by orderViewModel.empListFlow.collectAsState(UiState.Loading)
@@ -200,7 +203,7 @@ fun OrderScreen(
     LaunchedEffect(editOrder) {
         if (editOrder != null) {
 
-            selectedCustomer = editOrder.Customer?.toEmployeeList()
+            selectedCustomer = editOrder.Customer.toEmployeeList()
 
 
             // ✅ remove after consuming so it won’t run again

@@ -7,9 +7,11 @@ import androidx.compose.material3.DrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.navArgument
 import androidx.navigation.navigation
 import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.data.model.order.CustomOrderResponse
@@ -112,9 +114,29 @@ fun AppNavigation(
             composable(Screens.SearchScreen.route) {
                 SearchScreen(
                     onBack = { navController.popBackStack() },
-                    navController = navController
+                    navController = navController,
+                    listKey = null
                 )
             }
+
+            composable(
+                route = "search_screen/{mode}",
+                arguments = listOf(
+                    navArgument("mode") {
+                        type = NavType.StringType
+                        defaultValue = "normal"
+                    }
+                )
+            ) { backStackEntry ->
+                val mode = backStackEntry.arguments?.getString("mode") ?: "normal"
+
+                SearchScreen(
+                    onBack = { navController.popBackStack() },
+                    navController = navController,
+                    listKey = if (mode == "unmatched") "unmatchedItems" else null
+                )
+            }
+
 
             composable(Screens.StockTransferScreen.route) {
                 StockTransferScreen(onBack = { navController.popBackStack() }, navController)
@@ -174,6 +196,7 @@ fun AppNavigation(
             composable(Screens.DailyRatesEditorScreen.route) {
                 DailyRatesEditorScreen(navController = navController)
             }
+
 
             composable(Screens.LocationListScreen.route) {
                 LocationListScreen(

@@ -7,11 +7,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.data.model.ClientCodeRequest
+import com.loyalstring.rfid.data.model.stockTransfer.LabelledStockItems
 import com.loyalstring.rfid.data.model.stockTransfer.STApproveRejectRequest
 import com.loyalstring.rfid.data.model.stockTransfer.STApproveRejectResponse
 import com.loyalstring.rfid.data.model.stockTransfer.StockInOutRequest
 import com.loyalstring.rfid.data.model.stockTransfer.StockTransferInOutResponse
-import com.loyalstring.rfid.data.remote.api.RetrofitInterface
 import com.loyalstring.rfid.data.remote.data.StockTransferItem
 import com.loyalstring.rfid.data.remote.data.StockTransferRequest
 import com.loyalstring.rfid.repository.BulkRepositoryImpl
@@ -216,6 +216,38 @@ class StockTransferViewModel @Inject constructor(
     fun clearApproveResult() {
         _stApproveRejectResponse.postValue(null)
     }
+
+    fun getLabelledStockByTransferId(
+        clientCode: String,
+        transferId: Int,
+        requestType: String,
+        userId: Int,
+        branchId: Int,
+        onResult: (Result<List<LabelledStockItems>>) -> Unit
+    ) {
+        // Reuse the same API call you already have for fetching all stock transfers
+        val request = StockInOutRequest(
+            ClientCode = clientCode,
+            StockType = "labelled",
+            TransferType = 0,
+            BranchId = branchId,
+            UserID = userId,
+            RequestType = requestType
+        )
+
+        getAllStockTransfers(request) { result ->
+            result.onSuccess { responseList ->
+                // ✅ Find the correct transfer by Id and return its LabelledStockItems
+                val matched = responseList
+                    .firstOrNull { it.Id == transferId }
+                    ?.LabelledStockItems ?: emptyList()
+                onResult(Result.success(matched))
+            }.onFailure { error ->
+                onResult(Result.failure(error))
+            }
+        }
+    }
+
 }
 
 

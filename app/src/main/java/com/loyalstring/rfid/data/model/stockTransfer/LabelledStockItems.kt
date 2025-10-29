@@ -122,6 +122,7 @@ data class LabelledStockItems(
 
     @SerializedName("RequestStatus") var RequestStatus: Int? = null,
     @SerializedName("SalesmanId") var SalesmanId: Int? = null,
+    @SerializedName("TransferItemId") var TransferItemId: Int? = null,
 
 
     @SerializedName("SoldDate") var SoldDate: String? = null,

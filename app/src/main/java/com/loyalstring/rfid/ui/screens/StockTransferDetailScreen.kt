@@ -2,30 +2,38 @@ package com.loyalstring.rfid.ui.screens
 
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.*
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.loyalstring.rfid.R
 import com.loyalstring.rfid.data.model.login.Employee
@@ -41,34 +49,45 @@ import com.loyalstring.rfid.viewmodel.StockTransferViewModel
 @Composable
 fun StockTransferDetailScreen(
     onBack: () -> Unit,
-    labelItems: List<LabelledStockItems>
+    labelItems: List<LabelledStockItems>,
+    requestType: String
 ) {
     val context = LocalContext.current
     val viewModel: StockTransferViewModel = hiltViewModel()
     val employee = remember { UserPreferences.getInstance(context).getEmployee(Employee::class.java) }
 
+    // ✅ Local mutable list for reactive refresh
+    val items = remember { mutableStateListOf<LabelledStockItems>() }
+    LaunchedEffect(labelItems) {
+        items.clear()
+        items.addAll(labelItems)
+    }
+
     var showFilterDialog by remember { mutableStateOf(false) }
     var selectedStatus by remember { mutableStateOf("Pending") }
-
     val selectedIds = remember { mutableStateListOf<Int>() }
     var selectAll by remember { mutableStateOf(false) }
-
     val horizontalScrollState = rememberScrollState()
 
-    // ---- Approve / Reject / Lost Result ----
-    val approveResult by viewModel.stApproveRejectResponse.observeAsState()
+    // ---- Approve / Reject / Lost ----
     var showSuccessDialog by remember { mutableStateOf(false) }
     var apiMessage by remember { mutableStateOf("") }
     var currentActionType by remember { mutableStateOf(0) }
 
-    // Listen for approve/reject response
-    LaunchedEffect(approveResult) {
-        approveResult?.onSuccess {
-            apiMessage = it.Message ?: "Action completed successfully!"
-            showSuccessDialog = true
-            viewModel.clearApproveResult()
-        }?.onFailure {
-            Toast.makeText(context, it.localizedMessage, Toast.LENGTH_SHORT).show()
+
+    // ✅ Refresh API Call
+    fun refreshItems() {
+        val clientCode = employee?.clientCode ?: return
+        val firstItem = labelItems.firstOrNull() ?: return
+        val transferId = firstItem.Id ?: return
+
+        viewModel.getLabelledStockByTransferId(clientCode, transferId,requestType,employee.id,0) { result ->
+            result.onSuccess { updatedList ->
+                items.clear()
+                items.addAll(updatedList)
+            }.onFailure {
+                Toast.makeText(context, "Failed to refresh list: ${it.message}", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -96,7 +115,13 @@ fun StockTransferDetailScreen(
                     text = "Approve",
                     onClick = {
                         currentActionType = 1
-                        handleDetailAction(1, context, selectedIds, employee, viewModel)
+                        handleDetailAction(requestType,1, context, selectedIds, employee, viewModel) {
+                            refreshItems()
+                            showSuccessDialog = true
+                            apiMessage = "Items approved successfully!"
+                            selectedIds.clear()
+                            selectAll = false
+                        }
                     },
                     modifier = Modifier
                         .weight(1f)
@@ -111,7 +136,13 @@ fun StockTransferDetailScreen(
                     text = "Reject",
                     onClick = {
                         currentActionType = 2
-                        handleDetailAction(2, context, selectedIds, employee, viewModel)
+                        handleDetailAction(requestType,2, context, selectedIds, employee, viewModel) {
+                            refreshItems()
+                            showSuccessDialog = true
+                            apiMessage = "Items rejected successfully!"
+                            selectedIds.clear()
+                            selectAll = false
+                        }
                     },
                     modifier = Modifier
                         .weight(1f)
@@ -126,7 +157,13 @@ fun StockTransferDetailScreen(
                     text = "Lost",
                     onClick = {
                         currentActionType = 3
-                        handleDetailAction(3, context, selectedIds, employee, viewModel)
+                        handleDetailAction(requestType,3, context, selectedIds, employee, viewModel) {
+                            refreshItems()
+                            showSuccessDialog = true
+                            apiMessage = "Items marked as Lost!"
+                            selectedIds.clear()
+                            selectAll = false
+                        }
                     },
                     modifier = Modifier
                         .weight(1f)
@@ -159,10 +196,8 @@ fun StockTransferDetailScreen(
                     text = "Status: $selectedStatus",
                     color = Color.Black,
                     fontFamily = poppins,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 8.dp)
+                    fontWeight = FontWeight.Bold
                 )
-
                 IconButton(onClick = { showFilterDialog = true }) {
                     Icon(Icons.Default.Tune, contentDescription = "Filter", tint = Color(0xFF3C3C3C))
                 }
@@ -177,10 +212,9 @@ fun StockTransferDetailScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Sr", color = Color.White, fontFamily = poppins, fontWeight = FontWeight.Bold,
+                    "Sr", color = Color.White, fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center, modifier = Modifier.width(50.dp)
                 )
-
                 Row(
                     modifier = Modifier
                         .horizontalScroll(horizontalScrollState)
@@ -189,19 +223,18 @@ fun StockTransferDetailScreen(
                 ) {
                     listOf("Category", "Item Code", "Branch", "G Wt", "N Wt").forEach { header ->
                         Text(
-                            header, color = Color.White, fontFamily = poppins, fontWeight = FontWeight.Bold,
+                            header, color = Color.White, fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center, modifier = Modifier.width(90.dp)
                         )
                     }
                 }
-
                 Checkbox(
                     checked = selectAll,
                     onCheckedChange = { checked ->
                         selectAll = checked
                         selectedIds.clear()
                         if (checked) selectedIds.addAll(
-                            filteredItems(labelItems, selectedStatus).mapNotNull { it.Id }
+                            filteredItems(items, selectedStatus).mapNotNull { it.TransferItemId }
                         )
                     },
                     colors = CheckboxDefaults.colors(
@@ -209,21 +242,17 @@ fun StockTransferDetailScreen(
                         uncheckedColor = Color.White,
                         checkmarkColor = Color(0xFF3C3C3C)
                     ),
-                    modifier = Modifier
-                        .width(60.dp)
-                        .scale(0.9f)
+                    modifier = Modifier.width(60.dp).scale(0.9f)
                 )
             }
 
             // --- Filtered Data ---
-            val filtered = remember(selectedStatus, labelItems) {
-                filteredItems(labelItems, selectedStatus)
+            val filtered = remember(selectedStatus, items) {
+                filteredItems(items, selectedStatus)
             }
 
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
+                modifier = Modifier.fillMaxWidth().weight(1f)
             ) {
                 itemsIndexed(filtered) { index, item ->
                     var checked by remember { mutableStateOf(selectAll) }
@@ -231,9 +260,9 @@ fun StockTransferDetailScreen(
                     LaunchedEffect(selectAll) {
                         checked = selectAll
                         if (selectAll) {
-                            if (!selectedIds.contains(item.Id ?: 0)) selectedIds.add(item.Id ?: 0)
+                            if (!selectedIds.contains(item.TransferItemId ?: 0)) selectedIds.add(item.TransferItemId ?: 0)
                         } else {
-                            selectedIds.remove(item.Id ?: 0)
+                            selectedIds.remove(item.TransferItemId?: 0)
                         }
                     }
 
@@ -244,13 +273,11 @@ fun StockTransferDetailScreen(
                             .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            "${index + 1}",
+                        Text("${index + 1}",
                             modifier = Modifier.width(50.dp),
                             textAlign = TextAlign.Center,
                             color = Color.Black
                         )
-
                         Row(
                             modifier = Modifier
                                 .horizontalScroll(horizontalScrollState)
@@ -265,24 +292,20 @@ fun StockTransferDetailScreen(
                                 item.NetWt ?: "-"
                             ).forEach { text ->
                                 Text(
-                                    text,
-                                    color = Color.Black,
+                                    text, color = Color.Black,
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier.width(90.dp)
                                 )
                             }
                         }
-
                         Checkbox(
                             checked = checked,
                             onCheckedChange = { isChecked ->
                                 checked = isChecked
-                                val id = item.Id ?: 0
+                                val id = item.TransferItemId ?: 0
                                 if (isChecked) {
                                     if (!selectedIds.contains(id)) selectedIds.add(id)
-                                } else {
-                                    selectedIds.remove(id)
-                                }
+                                } else selectedIds.remove(id)
                                 selectAll = selectedIds.size == filtered.size
                             },
                             colors = CheckboxDefaults.colors(
@@ -308,7 +331,7 @@ fun StockTransferDetailScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color.White, shape = RoundedCornerShape(16.dp))
+                            .background(Color.White, RoundedCornerShape(16.dp))
                             .padding(bottom = 16.dp)
                     ) {
                         Box(
@@ -316,21 +339,15 @@ fun StockTransferDetailScreen(
                                 .fillMaxWidth()
                                 .background(
                                     Brush.horizontalGradient(
-                                        colors = listOf(Color(0xFF5231A7), Color(0xFFD32940))
+                                        listOf(Color(0xFF5231A7), Color(0xFFD32940))
                                     ),
-                                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                                    RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
                                 )
                                 .padding(vertical = 12.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = "Status Filter",
-                                color = Color.White,
-                                fontFamily = poppins,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text("Status Filter", color = Color.White, fontWeight = FontWeight.Bold)
                         }
-
                         listOf("Pending", "Approved", "Rejected", "Lost").forEach {
                             Divider(color = Color(0xFFE0E0E0), thickness = 0.5.dp)
                             FilterRow(it, R.drawable.schedule, selectedStatus) {
@@ -358,7 +375,205 @@ fun StockTransferDetailScreen(
     }
 }
 
-// ✅ Fixed Filter Logic — now filters based on `LabelledStockItems.RequestStatus`
+@Composable
+fun ApproveSuccessDialog(
+    visible: Boolean,
+    approvedCount: Int,
+    transferType: String,
+    onDismiss: () -> Unit,
+    onContinue: () -> Unit,
+    apiMessage: String,
+    actionType: Int
+) {
+    if (!visible) return
+    val actionText = when (actionType) {
+        1 -> stringResource(R.string.approve_action)
+        2 -> stringResource(R.string.reject_action)
+        3 -> stringResource(R.string.lost_action)
+        else -> stringResource(R.string.processed_action)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier
+            .width(320.dp) // matches ~447×346 look
+            .background(Color.Transparent),
+        shape = RoundedCornerShape(24.dp),
+        containerColor = Color.White,
+        title = {
+            // 🔹 Custom header with close button on top right
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp, end = 4.dp)
+            ) {
+                // Close icon
+                IconButton(
+                    onClick = {
+                        onDismiss()
+                        onContinue() // ✅ refresh list
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(28.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_close),
+                        contentDescription = "Close",
+                        tint = Color.Gray
+                    )
+                }
+
+                // Gradient checkmark centered
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(90.dp)
+                        .background(
+                            brush = Brush.linearGradient(
+                                listOf(Color(0xFF5231A7), Color(0xFFEE316B))
+                            ),
+                            shape = RoundedCornerShape(20.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    GradientAnimatedCheckmark()
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Spacer(Modifier.height(16.dp))
+
+                Text(
+                    text = apiMessage.ifBlank { stringResource(R.string.api_default_message) },
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(Modifier.height(6.dp))
+
+                Text(
+                    text = stringResource(R.string.approve_count_text, approvedCount, actionText),
+                    fontSize = 13.sp,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                Text(
+                    text = stringResource(R.string.approve_transfer_type_label, transferType),
+                    color = Color(0xFF5231A7),
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(Modifier.height(12.dp))
+            }
+        },
+        confirmButton = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Button(
+                    onClick = onContinue,
+                    colors = ButtonDefaults.buttonColors(
+                        backgroundColor = Color(0xFF3C3C3C),
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .height(42.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.continue_text),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
+            }
+        }
+    )
+}
+
+
+
+@Composable
+fun GradientAnimatedCheckmark() {
+    val animationProgress by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = tween(1000)
+    )
+
+    val gradientBrush = Brush.linearGradient(
+        colors = listOf(Color(0xFF5231A7), Color(0xFFEE316B))
+    )
+
+    Canvas(
+        modifier = Modifier
+            .size(80.dp)
+            .clip(CircleShape)
+    ) {
+        // Background gradient circle
+        drawCircle(
+            brush = gradientBrush,
+            radius = size.minDimension / 2
+        )
+
+        // Animated checkmark
+        val pathProgress = animationProgress * 1.0f
+        val pathLength = 40.dp.toPx()
+
+        val startX = size.width * 0.30f
+        val startY = size.height * 0.55f
+        val midX = size.width * 0.45f
+        val midY = size.height * 0.70f
+        val endX = size.width * 0.70f
+        val endY = size.height * 0.35f
+
+        drawLine(
+            color = Color.White,
+            start = Offset(startX, startY),
+            end = androidx.compose.ui.geometry.Offset(
+                startX + (midX - startX) * pathProgress,
+                startY + (midY - startY) * pathProgress
+            ),
+            strokeWidth = 5f,
+            cap = StrokeCap.Round
+        )
+
+        if (animationProgress > 0.5f) {
+            val remainingProgress = (animationProgress - 0.5f) * 2
+            drawLine(
+                color = Color.White,
+                start = androidx.compose.ui.geometry.Offset(midX, midY),
+                end = androidx.compose.ui.geometry.Offset(
+                    midX + (endX - midX) * remainingProgress,
+                    midY + (endY - midY) * remainingProgress
+                ),
+                strokeWidth = 5f,
+                cap = StrokeCap.Round
+            )
+        }
+    }
+}
+
+
+// ✅ Filters based on RequestStatus (Int code)
 fun filteredItems(list: List<LabelledStockItems>, selectedStatus: String): List<LabelledStockItems> {
     return list.filter { item ->
         val status = item.RequestStatus ?: -1
@@ -372,13 +587,15 @@ fun filteredItems(list: List<LabelledStockItems>, selectedStatus: String): List<
     }
 }
 
-// ---- Action Handler ----
+// ✅ API Call + Success Callback
 fun handleDetailAction(
+    requestType:String,
     statusType: Int,
     context: Context,
     selectedIds: SnapshotStateList<Int>,
     employee: Employee?,
-    viewModel: StockTransferViewModel
+    viewModel: StockTransferViewModel,
+    onSuccess: () -> Unit
 ) {
     if (selectedIds.isEmpty()) {
         Toast.makeText(context, "Please select at least one item", Toast.LENGTH_SHORT).show()
@@ -391,8 +608,16 @@ fun handleDetailAction(
 
     val request = STApproveRejectRequest(
         StockTransferItems = items,
-        ClientCode = employee?.clientCode.orEmpty()
+        ClientCode = employee?.clientCode.orEmpty(),
+        UserID = employee?.id.toString(),
+        RequestTyp = requestType
     )
 
     viewModel.stApproveReject(request)
+    viewModel.stApproveRejectResponse.observeForever { result ->
+        result?.onSuccess {
+            onSuccess()
+            viewModel.clearApproveResult()
+        }
+    }
 }

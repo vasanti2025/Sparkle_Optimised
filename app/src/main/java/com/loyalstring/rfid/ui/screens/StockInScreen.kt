@@ -1,6 +1,9 @@
 package com.loyalstring.rfid.ui.screens
 
 import android.content.Context
+
+
+import java.io.Serializable
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
@@ -82,7 +85,6 @@ import com.loyalstring.rfid.viewmodel.StockTransferViewModel
 import androidx.compose.ui.res.stringResource
 
 
-
 @Composable
 fun StockInScreen(
     onBack: () -> Unit,
@@ -124,6 +126,49 @@ fun StockInScreen(
         }
     }
 
+    fun safeNumber(value: Any?): String {
+        return try {
+            // ✅ 1. Handle nulls, booleans, and collections immediately
+            when (value) {
+                null -> return "0.000"
+                is Number -> return String.format("%.3f", value.toDouble())
+                is Boolean -> return "0.000"
+                is Collection<*> -> return "0.000"
+                is Map<*, *> -> return "0.000"
+            }
+
+            // ✅ 2. Convert to string and trim
+            val str = value.toString().trim()
+
+            // ✅ 3. Block invalid words or placeholders
+            val invalidWords = listOf(
+                "", "null", "undefined", "nan", "-", ".", "-.", "pending",
+                "approved", "rejected", "lost", "true", "false", "[]", "{}", "kotlin.unit"
+            )
+            if (invalidWords.contains(str.lowercase())) return "0.000"
+
+            // ✅ 4. Remove non-numeric characters except dot & minus
+            val clean = str.replace(",", "")
+                .replace("[^0-9.-]".toRegex(), "")
+                .trim()
+
+            // ✅ 5. Skip malformed numeric strings
+            if (clean.isBlank() || clean == "-" || clean == "." || clean == "-.") {
+                return "0.000"
+            }
+
+            // ✅ 6. Parse safely
+            val parsed = clean.toDoubleOrNull()
+            if (parsed != null && parsed.isFinite()) String.format("%.3f", parsed) else "0.000"
+        } catch (e: Exception) {
+            Log.e("SafeNumber", "❌ Invalid numeric value: $value (${e.message})")
+            "0.000"
+        }
+    }
+
+
+
+
     // 🔹 Fetch Data
     fun fetchStockTransfers() {
         employee?.clientCode?.let { clientCode ->
@@ -147,21 +192,23 @@ fun StockInScreen(
                                 type = it.StockTransferTypeName ?: "N/A",
                                 from = it.SourceName ?: "-",
                                 to = it.DestinationName ?: "-",
-                                gWt = it.LabelledStockItems.firstOrNull()?.GrossWt ?: "0.00",
-                                nWt = it.LabelledStockItems.firstOrNull()?.NetWt ?: "0.00",
+                                gWt = safeNumber(it.LabelledStockItems?.firstOrNull()?.GrossWt),
+                                nWt = safeNumber(it.LabelledStockItems?.firstOrNull()?.NetWt),
                                 pending = it.Pending.toString(),
                                 status = when {
-                                    it.Approved > 0 -> "Approved"
-                                    it.Rejected > 0 -> "Rejected"
-                                    it.Lost > 0 -> "Lost"
+                                    (it.Approved ?: 0) > 0 -> "Approved"
+                                    (it.Rejected ?: 0) > 0 -> "Rejected"
+                                    (it.Lost ?: 0) > 0 -> "Lost"
                                     else -> "Pending"
                                 },
                                 transferBy = it.TransferByEmployee ?: "-",
                                 transferTo = it.TransferedToBranch ?: "-",
-                                transferType = it.StockTransferTypeName ?: "-"
+                                transferType = it.StockTransferTypeName ?: "-",
+                                fulldata = it.LabelledStockItems ?: "-"
                             )
                         }
                     )
+
                 }.onFailure { e ->
                     Log.e("StockTransferVM", "Error: ${e.message}")
                     errorMessage.value = e.message ?: "Something went wrong."
@@ -445,14 +492,23 @@ fun StockInScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(
-                                        if (index % 2 == 0) Color.White else Color(
-                                            0xFFF7F7F7
-                                        )
-                                    )
-                                    .padding(vertical = 6.dp),
+                                    .background(if (index % 2 == 0) Color.White else Color(0xFFF7F7F7))
+                                    .padding(vertical = 6.dp)
+                                    .clickable {
+                                        // ✅ Find the full data for the clicked transfer
+                                        val transferData = item.fulldata
+                                        if (transferData != null) {
+                                            // ✅ Pass full transfer object to detail screen
+                                            navController.currentBackStackEntry
+                                                ?.savedStateHandle
+                                                ?.set("labelItems", transferData)
+                                            navController.navigate("stock_transfer_detail")
+                                        } else {
+                                            Toast.makeText(context, "Transfer details not found", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
                                 verticalAlignment = Alignment.CenterVertically
-                            ) {
+                            )  {
                                 Text("${index + 1}", color = Color.Black, fontFamily = poppins,
                                     textAlign = TextAlign.Center, modifier = Modifier
                                         .width(50.dp)
@@ -866,5 +922,6 @@ data class StockTransfer(
     val status: String,
     val transferBy: String,
     val transferTo: String,
-    val transferType: String
-)
+    val transferType: String,
+    val fulldata: Any
+): Serializable

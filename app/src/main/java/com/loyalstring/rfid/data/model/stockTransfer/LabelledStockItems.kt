@@ -1,15 +1,11 @@
-package com.loyalstring.rfid.data.model.order
+package com.loyalstring.rfid.data.model.stockTransfer
 
-import androidx.room.Entity
-import androidx.room.PrimaryKey
-import androidx.room.TypeConverters
 import com.google.gson.annotations.SerializedName
-import com.loyalstring.rfid.data.local.converters.OrderTypeConverter
+import com.loyalstring.rfid.data.model.order.Diamond
+import com.loyalstring.rfid.data.model.order.Stone
+import java.io.Serializable
 
-@Entity(tableName = "itemcoderesponse")
-@TypeConverters(OrderTypeConverter::class)
-data class ItemCodeResponse(
-    @PrimaryKey
+data class LabelledStockItems(
     @SerializedName("Id") var Id: Int? = null,
     @SerializedName("SKUId") var SKUId: Int? = null,
     @SerializedName("ProductTitle") var ProductTitle: String? = null,
@@ -134,5 +130,4 @@ data class ItemCodeResponse(
     @SerializedName("PurchasedWastageWt") var PurchasedWastageWt: Double? = null,
     @SerializedName("StatusType") var StatusType: Boolean? = null
 
-
-    )
+) : Serializable

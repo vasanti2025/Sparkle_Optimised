@@ -70,6 +70,10 @@ class StockTransferViewModel @Inject constructor(
     private val _errorMessage = MutableLiveData<String>()
     val errorMessage: LiveData<String> = _errorMessage
 
+    // Store all API responses with labelled items
+    var allStockTransferResponseList: List<StockTransferInOutResponse> = emptyList()
+        private set
+
 
     /** -------------------- Load Transfer Types -------------------- **/
     fun loadTransferTypes(request: ClientCodeRequest) {
@@ -196,6 +200,8 @@ class StockTransferViewModel @Inject constructor(
             onResult(Result.failure(e))
         }
     }
+
+
 
     // ✅ Approve/Reject Stock Transfer
     fun stApproveReject(request: STApproveRejectRequest) {

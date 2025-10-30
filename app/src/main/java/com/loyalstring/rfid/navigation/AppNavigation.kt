@@ -210,11 +210,16 @@ fun AppNavigation(
                     ?.savedStateHandle
                     ?.get<String>("requestType")
                     ?: "in"  // default or fallback
+                val selectedTransferType = previousEntry
+                    ?.savedStateHandle
+                    ?.get<String>("selectedTransferType")
+                    ?: "in"  // default or fallback
 
                 StockTransferDetailScreen(
                     onBack = { navController.popBackStack() },
                     labelItems = labelItems,
-                    requestType = requestType
+                    requestType = requestType,
+                    selectedTransferType=selectedTransferType
                 )
             }
         }

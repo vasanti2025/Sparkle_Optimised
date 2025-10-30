@@ -67,18 +67,26 @@ fun StockInScreen(
     // 🔹 Fetch transfer types once
     LaunchedEffect(Unit) {
         employee?.clientCode?.let {
+            // 🟢 Load transfer types first
             viewModel.loadTransferTypes(ClientCodeRequest(it))
         }
+
+        // 🟢 Then fetch transfers
+      //  fetchStockTransfers()
     }
 
-    // 🔹 API Fetch Function
+   /* // 🔹 API Fetch Function
     fun fetchStockTransfers() {
+
+        val selectedTypeId = transferTypes.firstOrNull {
+            it.TransferType.equals(selectedTransferType, ignoreCase = true)
+        }?.Id ?: 0
         employee?.clientCode?.let { clientCode ->
             isLoading.value = true
             val request = StockInOutRequest(
                 ClientCode = clientCode,
                 StockType = "labelled",
-                TransferType = 0,
+                TransferType = selectedTypeId,
                 BranchId = employee?.branchNo ?: 0,
                 UserID = employee?.id ?: 0,
                 RequestType = requestType
@@ -92,7 +100,59 @@ fun StockInScreen(
                         responseList.map {
                             StockTransfer(
                                 id = it.Id ?: 0,
-                                type = it.StockTransferTypeName ?: "N/A",
+                                type = it.StockTransferTypeName ?: "Branch To Branch",
+                                from = it.SourceName ?: "-",
+                                to = it.DestinationName ?: "-",
+                                gWt = safeNumber(it.LabelledStockItems?.firstOrNull()?.GrossWt),
+                                nWt = safeNumber(it.LabelledStockItems?.firstOrNull()?.NetWt),
+                                pending = it.Pending ?: 0,
+                                approved = it.Approved ?: 0,
+                                rejected = it.Rejected ?: 0,
+                                lost = it.Lost ?: 0,
+                                transferBy = it.TransferByEmployee ?: "-",
+                                transferTo = it.TransferedToBranch ?: "-",
+                                transferType = it.StockTransferTypeName ?: "-",
+                                fulldata = it.LabelledStockItems ?: "-"
+                            )
+                        }
+                    )
+                }.onFailure { e ->
+                    errorMessage.value = e.message ?: "Something went wrong."
+                }
+            }
+        }
+    }*/
+
+    fun fetchStockTransfers() {
+        // 🟢 Only send TransferType if user selected something real
+        val selectedTypeId = transferTypes.firstOrNull {
+            it.TransferType.equals(selectedTransferType, ignoreCase = true)
+        }?.Id
+
+        val transferTypeValue =
+            if (selectedTransferType == "Transfer Type" || transferTypes.isEmpty()) null
+            else selectedTypeId
+
+        employee?.clientCode?.let { clientCode ->
+            isLoading.value = true
+            val request = StockInOutRequest(
+                ClientCode = clientCode,
+                StockType = "labelled",
+                TransferType = transferTypeValue, // ✅ null means all data
+                BranchId = employee?.branchNo ?: 0,
+                UserID = employee?.id ?: 0,
+                RequestType = requestType
+            )
+
+            viewModel.getAllStockTransfers(request) { result ->
+                isLoading.value = false
+                result.onSuccess { responseList ->
+                    stockTransfers.clear()
+                    stockTransfers.addAll(
+                        responseList.map {
+                            StockTransfer(
+                                id = it.Id ?: 0,
+                                type = it.StockTransferTypeName ?: "Branch To Branch",
                                 from = it.SourceName ?: "-",
                                 to = it.DestinationName ?: "-",
                                 gWt = safeNumber(it.LabelledStockItems?.firstOrNull()?.GrossWt),
@@ -115,6 +175,7 @@ fun StockInScreen(
         }
     }
 
+
     // 🔹 Initial API Call
     LaunchedEffect(Unit) {
         fetchStockTransfers()
@@ -122,7 +183,7 @@ fun StockInScreen(
 
     // ✅ 🔁 Re-fetch when coming back from detail screen
     val navBackStackEntry = remember(navController) { navController.currentBackStackEntry }
-    DisposableEffect(navBackStackEntry) {
+   /* DisposableEffect(navBackStackEntry) {
         val lifecycle = navBackStackEntry?.lifecycle
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -135,7 +196,29 @@ fun StockInScreen(
             lifecycle?.removeObserver(observer)
         }
     }
+*/
+  /*  LaunchedEffect(selectedTransferType) {
+        if (selectedTransferType != "Transfer Type" && transferTypes.isNotEmpty()) {
+            fetchStockTransfers()
+        }
+    }*/
+    //val navBackStackEntry = remember(navController) { navController.currentBackStackEntry }
 
+    DisposableEffect(navBackStackEntry) {
+        val lifecycle = navBackStackEntry?.lifecycle
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                Log.d("StockInScreen", "Returned from detail — refreshing list")
+                selectedStatus = "All"  // optional reset
+                selectedTransferType = "Transfer Type" // optional reset
+                fetchStockTransfers()
+            }
+        }
+        lifecycle?.addObserver(observer)
+        onDispose {
+            lifecycle?.removeObserver(observer)
+        }
+    }
     // 🔹 Apply Filters
     val filteredTransfers = remember(selectedTransferType, selectedStatus, stockTransfers) {
         stockTransfers.filter {
@@ -285,7 +368,10 @@ fun StockInScreen(
                             .fillMaxWidth()
                             .weight(1f)
                     ) {
-                        itemsIndexed(filteredTransfers) { index, item ->
+                        val displayList = if (selectedStatus == "All") stockTransfers else filteredTransfers
+
+                        itemsIndexed(displayList) { index, item ->
+                        //itemsIndexed(filteredTransfers) { index, item ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -298,7 +384,8 @@ fun StockInScreen(
                                                 ?.savedStateHandle
                                                 ?.apply {
                                                     set("labelItems", transferData)
-                                                    set("requestType", requestType) // 🔹 Pass current request type here
+                                                    set("requestType", requestType)
+                                                    set("selectedTransferType", selectedTransferType)// 🔹 Pass current request type here
                                                 }
                                             navController.navigate("stock_transfer_detail")
                                         } else {
@@ -339,7 +426,8 @@ fun StockInScreen(
                                     "Approved" -> "A: ${item.approved}"
                                     "Rejected" -> "R: ${item.rejected}"
                                     "Lost" -> "L: ${item.lost}"
-                                    else -> "P:${item.pending} | A:${item.approved} | R:${item.rejected} | L:${item.lost}"
+                                    else -> "P:${item.pending}"
+                                  //  else -> "P:${item.pending} | A:${item.approved} | R:${item.rejected} | L:${item.lost}"
                                 }
 
                                 Text(

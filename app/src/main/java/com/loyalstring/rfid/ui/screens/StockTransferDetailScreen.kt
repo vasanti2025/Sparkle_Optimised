@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.*
@@ -50,7 +51,8 @@ import com.loyalstring.rfid.viewmodel.StockTransferViewModel
 fun StockTransferDetailScreen(
     onBack: () -> Unit,
     labelItems: List<LabelledStockItems>,
-    requestType: String
+    requestType: String,
+    selectedTransferType:String
 ) {
     val context = LocalContext.current
     val viewModel: StockTransferViewModel = hiltViewModel()
@@ -73,6 +75,10 @@ fun StockTransferDetailScreen(
     var showSuccessDialog by remember { mutableStateOf(false) }
     var apiMessage by remember { mutableStateOf("") }
     var currentActionType by remember { mutableStateOf(0) }
+
+    var expanded by remember { mutableStateOf(false) }
+    var selectedTransferType by remember { mutableStateOf(selectedTransferType) }
+    val transferTypes by viewModel.transferTypes.collectAsState(initial = emptyList())
 
 
     // ✅ Refresh API Call
@@ -192,12 +198,43 @@ fun StockTransferDetailScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Status: $selectedStatus",
-                    color = Color.Black,
-                    fontFamily = poppins,
-                    fontWeight = FontWeight.Bold
-                )
+                Box {
+                    Button(
+                        onClick = { expanded = true },
+                        colors = ButtonDefaults.buttonColors(
+                            backgroundColor = Color(0xFFF8F8F8),
+                            contentColor = Color.Black
+                        ),
+                        elevation = null,
+                        modifier = Modifier.height(40.dp).width(220.dp)
+                    ) {
+                        Text(selectedTransferType)
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                    }
+
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        if (transferTypes.isEmpty()) {
+                            DropdownMenuItem(onClick = { expanded = false }) {
+                                Text("No Transfer Types Found", color = Color.Gray)
+                            }
+                        } else {
+                            transferTypes.forEach { typeItem ->
+                                DropdownMenuItem(onClick = {
+                                    selectedTransferType = typeItem.TransferType
+                                    expanded = false
+                                }) {
+                                    Text(
+                                        text = typeItem.TransferType,
+                                        color = if (selectedTransferType == typeItem.TransferType)
+                                            Color(0xFF5231A7) else Color.Black,
+                                        fontWeight = if (selectedTransferType == typeItem.TransferType)
+                                            FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
                 IconButton(onClick = { showFilterDialog = true }) {
                     Icon(Icons.Default.Tune, contentDescription = "Filter", tint = Color(0xFF3C3C3C))
                 }

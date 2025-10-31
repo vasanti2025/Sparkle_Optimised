@@ -283,7 +283,7 @@ fun DeliveryChalanScreen(
                 onSave = {
 
                 },
-                onList = { navController.navigate(Screens.ProductListScreen.route) },
+                onList = { navController.navigate(Screens.DeliveryChallanListScreen.route) },
                 onScan = {
                     viewModel.startSingleScan(20)
                 },

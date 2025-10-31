@@ -26,12 +26,12 @@ class DeliveryChallanViewModel @Inject constructor(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    fun fetchAllChallans(clientCode: String, branchId: Int) {
+    fun fetchAllChallans(clientCode: String, branchId: Any) {
         viewModelScope.launch {
             _loading.value = true
             _error.value = null
             try {
-                val request = DeliveryChallanRequestList(clientCode, branchId)
+                val request = DeliveryChallanRequestList(clientCode, branchId as Int)
                 val response = repository.getAllDeliveryChallans(request)
                 if (response.isSuccessful && response.body() != null) {
                     _challanList.value = response.body()!!

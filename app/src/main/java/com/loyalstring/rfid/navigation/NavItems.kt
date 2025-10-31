@@ -23,7 +23,7 @@ enum class Screens(val route: String) {
     ScanDisplayScreen("scan_display"),
     SettingsScreen("settings"),
     InventoryMenuScreen("inventory"),
-    SearchScreen("search_screen"),
+
     EditProductScreen("edit_screen"),
     ScanCounterScreen("scan_counter"),
     ScanBranchScreen("scan_branch"),

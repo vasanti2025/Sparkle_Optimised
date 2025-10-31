@@ -35,10 +35,7 @@
     <string name="approve_button">موافقة</string>
     <string name="reject_button">رفض</string>
     <string name="lost_button">مفقود</string>
-    <string name="filter_button">تصفية</string>
 
-    <!-- Dialogs -->
-    <string name="approve_success_message">تمت الموافقة بنجاح!</string>
     <string name="approve_count_text">%1$d عناصر تمت %2$s</string>
     <string name="approve_transfer_type_label">%1$s</string>
 

@@ -15,6 +15,7 @@ import androidx.navigation.navArgument
 import androidx.navigation.navigation
 import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.data.model.order.CustomOrderResponse
+import com.loyalstring.rfid.data.model.stockTransfer.LabelledStockItems
 import com.loyalstring.rfid.ui.screens.*
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.viewmodel.OrderViewModel
@@ -114,29 +115,9 @@ fun AppNavigation(
             composable(Screens.SearchScreen.route) {
                 SearchScreen(
                     onBack = { navController.popBackStack() },
-                    navController = navController,
-                    listKey = null
+                    navController = navController
                 )
             }
-
-            composable(
-                route = "search_screen/{mode}",
-                arguments = listOf(
-                    navArgument("mode") {
-                        type = NavType.StringType
-                        defaultValue = "normal"
-                    }
-                )
-            ) { backStackEntry ->
-                val mode = backStackEntry.arguments?.getString("mode") ?: "normal"
-
-                SearchScreen(
-                    onBack = { navController.popBackStack() },
-                    navController = navController,
-                    listKey = if (mode == "unmatched") "unmatchedItems" else null
-                )
-            }
-
 
             composable(Screens.StockTransferScreen.route) {
                 StockTransferScreen(onBack = { navController.popBackStack() }, navController)
@@ -197,7 +178,6 @@ fun AppNavigation(
                 DailyRatesEditorScreen(navController = navController)
             }
 
-
             composable(Screens.LocationListScreen.route) {
                 LocationListScreen(
                     onBack = { navController.popBackStack() },
@@ -218,6 +198,36 @@ fun AppNavigation(
                     onBack = { navController.popBackStack() },
                     navController = navController,
                     requestType = "Out Request"
+                )
+            }
+
+            composable("stock_transfer_detail") { backStackEntry ->
+                val previousEntry = navController.previousBackStackEntry
+                val labelItems = previousEntry
+                    ?.savedStateHandle
+                    ?.get<List<LabelledStockItems>>("labelItems")
+                    ?: emptyList()
+
+                val requestType = previousEntry
+                    ?.savedStateHandle
+                    ?.get<String>("requestType")
+                    ?: "in"  // default or fallback
+                val selectedTransferType = previousEntry
+                    ?.savedStateHandle
+                    ?.get<String>("selectedTransferType")
+                    ?: "in"  // default or fallback
+
+                val Id = previousEntry
+                    ?.savedStateHandle
+                    ?.get<Int>("Id")
+                    ?: "0"
+
+                StockTransferDetailScreen(
+                    onBack = { navController.popBackStack() },
+                    labelItems = labelItems,
+                    requestType = requestType,
+                    selectedTransferType =selectedTransferType,
+                    id =Id
                 )
             }
 

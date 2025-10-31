@@ -7,11 +7,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.data.model.ClientCodeRequest
+import com.loyalstring.rfid.data.model.stockTransfer.LabelledStockItems
 import com.loyalstring.rfid.data.model.stockTransfer.STApproveRejectRequest
 import com.loyalstring.rfid.data.model.stockTransfer.STApproveRejectResponse
 import com.loyalstring.rfid.data.model.stockTransfer.StockInOutRequest
 import com.loyalstring.rfid.data.model.stockTransfer.StockTransferInOutResponse
-import com.loyalstring.rfid.data.remote.api.RetrofitInterface
+import com.loyalstring.rfid.data.model.stockTransfer.StockTransferResponse
 import com.loyalstring.rfid.data.remote.data.StockTransferItem
 import com.loyalstring.rfid.data.remote.data.StockTransferRequest
 import com.loyalstring.rfid.repository.BulkRepositoryImpl
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlin.collections.firstOrNull
 
 
 @HiltViewModel
@@ -69,6 +71,17 @@ class StockTransferViewModel @Inject constructor(
 
     private val _errorMessage = MutableLiveData<String>()
     val errorMessage: LiveData<String> = _errorMessage
+
+    // Store all API responses with labelled items
+    var allStockTransferResponseList: List<StockTransferInOutResponse> = emptyList()
+        private set
+
+    // In StockTransferViewModel.kt
+    private val _labelledStockItems = MutableLiveData<List<LabelledStockItems>>()
+    val labelledStockItems: LiveData<List<LabelledStockItems>> = _labelledStockItems
+
+    private val _stockTransferDetail = MutableLiveData<StockTransferResponse?>()
+    val stockTransferDetail: LiveData<StockTransferResponse?> = _stockTransferDetail
 
 
     /** -------------------- Load Transfer Types -------------------- **/
@@ -197,8 +210,10 @@ class StockTransferViewModel @Inject constructor(
         }
     }
 
+
+
     // ✅ Approve/Reject Stock Transfer
-    fun stApproveReject(request: STApproveRejectRequest) {
+   /* fun stApproveReject(request: STApproveRejectRequest) {
         viewModelScope.launch {
             val result = repository.stApproveReject(request)
             result.onFailure {
@@ -206,10 +221,67 @@ class StockTransferViewModel @Inject constructor(
             }
             _stApproveRejectResponse.postValue(result)
         }
+    }*/
+    fun stApproveReject(request: STApproveRejectRequest) {
+        viewModelScope.launch {
+            try {
+                val result = repository.stApproveReject(request)
+                _stApproveRejectResponse.value =result
+            } catch (e: Exception) {
+                _stApproveRejectResponse.value = Result.failure(e)
+            }
+        }
     }
     fun clearApproveResult() {
         _stApproveRejectResponse.postValue(null)
     }
+
+
+    fun getLabelledStockByTransferId(
+        clientCode: String,
+        mainObjectId: Int, // 👈 renamed for clarity
+        requestType: String,
+        userId: Int,
+        branchId: Int
+    ) {
+        viewModelScope.launch {
+            try {
+                val request = StockInOutRequest(
+                    ClientCode = clientCode,
+                    StockType = "labelled",
+                    TransferType = 0,
+                    BranchId = branchId,
+                    UserID = userId,
+                    RequestType = requestType
+                )
+
+                val result = repository.getAllStockTransfers(request)
+                val responseList = result.getOrNull() ?: emptyList()
+
+                // ✅ match by main object Id, not TransferTypeId
+                val matchedTransfer = responseList.firstOrNull { it.Id == mainObjectId }
+
+                if (matchedTransfer != null) {
+                    Log.d("DEBUG_LABELLED", "Matched transfer found: Id=${matchedTransfer.Id}")
+                   // _stockTransferDetail.postValue(matchedTransfer)
+                    _labelledStockItems.postValue(matchedTransfer.LabelledStockItems ?: emptyList())
+                } else {
+                    Log.d("DEBUG_LABELLED", "No transfer found for Id=$mainObjectId")
+                    _stockTransferDetail.postValue(null)
+                    _labelledStockItems.postValue(emptyList())
+                }
+            } catch (e: Exception) {
+                Log.e("DEBUG_LABELLED", "Error fetching transfer details", e)
+                _stockTransferDetail.postValue(null)
+                _labelledStockItems.postValue(emptyList())
+            }
+        }
+    }
+
+
+
+
+
 }
 
 

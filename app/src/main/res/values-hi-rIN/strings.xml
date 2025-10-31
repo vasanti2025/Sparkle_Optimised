@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">स्पार्कल आरएफआईडी</string>
     <string name="menu_rates_title">रेट्स</string>
     <string name="menu_rates_subtitle">रेट जोड़ें / अपडेट करें</string>
@@ -73,6 +73,73 @@
     <string name="filter_approved">स्वीकृत</string>
     <string name="filter_rejected">अस्वीकृत</string>
     <string name="filter_lost">खो गया</string>
+    <!--details screen-->
+
+    <!-- Screen Titles -->
+    <string name="transfer_details_title">ट्रांसफर विवरण</string>
+    <string name="status_filter_title">स्थिति फ़िल्टर</string>
+
+    <!-- Buttons -->
+    <string name="approve_button">स्वीकृत करें</string>
+    <string name="reject_button">अस्वीकृत करें</string>
+    <string name="lost_button">खोया हुआ</string>
+    <string name="continue_text">जारी रखें</string>
+
+    <!-- Messages -->
+    <string name="please_select_items">कृपया कम से कम एक आइटम चुनें</string>
+    <string name="items_processed_success">आइटम सफलतापूर्वक संसाधित किए गए!</string>
+    <string name="items_approved_success">आइटम सफलतापूर्वक स्वीकृत किए गए!</string>
+    <string name="items_rejected_success">आइटम सफलतापूर्वक अस्वीकृत किए गए!</string>
+    <string name="items_lost_success">आइटम को खोया हुआ चिह्नित किया गया!</string>
+
+    <!-- Filter Status -->
+    <string name="pending_status">लंबित</string>
+    <string name="approved_status">स्वीकृत</string>
+    <string name="rejected_status">अस्वीकृत</string>
+    <string name="lost_status">खोया हुआ</string>
+    <string name="no_transfer_type_found">कोई ट्रांसफर प्रकार नहीं मिला</string>
+
+    <!-- Table Headers -->
+    <string name="sr_header">क्रम</string>
+    <string name="category_header">श्रेणी</string>
+    <string name="item_code_header">आइटम कोड</string>
+    <string name="branch_header">शाखा</string>
+    <string name="gross_wt_header">सकल वजन</string>
+    <string name="net_wt_header">शुद्ध वजन</string>
+
+    <!-- Screen Titles -->
+    <string name="stock_transfers_title">स्टॉक ट्रांसफर</string>
+
+    <string name="branch_to_branch">शाखा से शाखा</string>
+
+    <!-- Common Status -->
+    <string name="all_status">सभी</string>
+
+    <!-- Filter / Dialog -->
+    <string name="filter_label">फ़िल्टर</string>
+    <string name="select_status_label">स्थिति चुनें</string>
+
+    <!-- Dropdown Defaults -->
+    <string name="internal_type">आंतरिक</string>
+    <string name="external_type">बाहरी</string>
+    <string name="vendor_type">विक्रेता</string>
+
+    <!-- Table Headers -->
+
+    <string name="from_header">से</string>
+    <string name="to_header">तक</string>
+
+    <string name="transfer_by_header">स्थानांतरण द्वारा</string>
+    <string name="transfer_to_header">स्थानांतरण तक</string>
+    <string name="transfer_type_header">ट्रांसफर प्रकार</string>
+    <string name="status_header">स्थिति</string>
+
+    <!-- Error & Toast Messages -->
+    <string name="error_loading_data">डेटा लोड करने में त्रुटि।</string>
+    <string name="something_went_wrong">कुछ गलत हो गया।</string>
+    <string name="transfer_details_not_found">ट्रांसफर विवरण नहीं मिला</string>
+
+
 
     <!--Delivery challan-->
     <!-- Customer Dialog -->

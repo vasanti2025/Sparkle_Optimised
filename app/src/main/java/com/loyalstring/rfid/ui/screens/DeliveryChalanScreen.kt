@@ -394,6 +394,17 @@ fun DeliveryChalanScreen(
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(4.dp))
+            DeliveryChallanItemListTable(productList = productList)
+            Spacer(modifier = Modifier.height(6.dp))
+
+            DeliveryChallanSummaryRow(
+                gstPercent = 3.0,
+                totalAmount = 50000.0,
+                        onGstCheckedChange = { isChecked ->
+                    println("GST Checkbox changed: $isChecked")
+                }
+            )
 
         }
         }

@@ -38,7 +38,7 @@
     <string name="filter_button">تصفية</string>
 
     <!-- Dialogs -->
-    <string name="approve_success_message">تمت الموافقة بنجاح!</string>
+
     <string name="approve_count_text">%1$d عناصر تمت %2$s</string>
     <string name="approve_transfer_type_label">%1$s</string>
 
@@ -73,4 +73,67 @@
     <string name="filter_approved">تمت الموافقة</string>
     <string name="filter_rejected">تم الرفض</string>
     <string name="filter_lost">مفقود</string>
+
+    <!--in details screen-->
+    <!-- Screen Titles -->
+    <string name="transfer_details_title">تفاصيل النقل</string>
+    <string name="status_filter_title">تصفية الحالة</string>
+
+
+
+    <!-- Messages -->
+    <string name="please_select_items">يرجى اختيار عنصر واحد على الأقل</string>
+    <string name="items_processed_success">تمت معالجة العناصر بنجاح!</string>
+    <string name="items_approved_success">تمت الموافقة على العناصر بنجاح!</string>
+    <string name="items_rejected_success">تم رفض العناصر بنجاح!</string>
+    <string name="items_lost_success">تم وضع علامة العناصر كمفقودة!</string>
+
+
+    <string name="no_transfer_type_found">لم يتم العثور على أنواع النقل</string>
+
+    <!-- Table Headers -->
+    <string name="sr_header">تسلسل</string>
+    <string name="category_header">الفئة</string>
+    <string name="item_code_header">رمز العنصر</string>
+    <string name="branch_header">الفرع</string>
+    <string name="gross_wt_header">الوزن الإجمالي</string>
+    <string name="net_wt_header">الوزن الصافي</string>
+
+    <!-- Screen Titles -->
+    <string name="stock_transfers_title">تحويلات المخزون</string>
+
+    <string name="branch_to_branch">من فرع إلى فرع</string>
+
+    <!-- Common Status -->
+    <string name="all_status">الكل</string>
+    <string name="pending_status">قيد الانتظار</string>
+    <string name="approved_status">تمت الموافقة</string>
+    <string name="rejected_status">مرفوض</string>
+    <string name="lost_status">مفقود</string>
+
+    <!-- Filter / Dialog -->
+    <string name="filter_label">تصفية</string>
+    <string name="select_status_label">اختر الحالة</string>
+
+    <!-- Dropdown Defaults -->
+    <string name="internal_type">داخلي</string>
+    <string name="external_type">خارجي</string>
+    <string name="vendor_type">المورّد</string>
+
+    <!-- Table Headers -->
+
+    <string name="from_header">من</string>
+    <string name="to_header">إلى</string>
+
+    <string name="transfer_by_header">نقل بواسطة</string>
+    <string name="transfer_to_header">نقل إلى</string>
+    <string name="transfer_type_header">نوع النقل</string>
+    <string name="status_header">الحالة</string>
+
+    <!-- Error & Toast Messages -->
+    <string name="error_loading_data">خطأ في تحميل البيانات.</string>
+    <string name="something_went_wrong">حدث خطأ ما.</string>
+    <string name="transfer_details_not_found">لم يتم العثور على تفاصيل النقل</string>
+
+
 </resources>

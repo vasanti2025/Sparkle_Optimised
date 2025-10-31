@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -39,6 +40,7 @@ import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.StockTransferViewModel
 import java.io.Serializable
+import androidx.compose.ui.res.stringResource
 
 @Composable
 fun StockInScreen(
@@ -64,67 +66,11 @@ fun StockInScreen(
     val isLoading = remember { mutableStateOf(false) }
     val errorMessage = remember { mutableStateOf<String?>(null) }
 
-    // 🔹 Fetch transfer types once
-    LaunchedEffect(Unit) {
-        employee?.clientCode?.let {
-            // 🟢 Load transfer types first
-            viewModel.loadTransferTypes(ClientCodeRequest(it))
-        }
+    var isFirstLoad by remember { mutableStateOf(true) }
+    var hasResumedOnce by remember { mutableStateOf(false) }
 
-        // 🟢 Then fetch transfers
-      //  fetchStockTransfers()
-    }
-
-   /* // 🔹 API Fetch Function
-    fun fetchStockTransfers() {
-
-        val selectedTypeId = transferTypes.firstOrNull {
-            it.TransferType.equals(selectedTransferType, ignoreCase = true)
-        }?.Id ?: 0
-        employee?.clientCode?.let { clientCode ->
-            isLoading.value = true
-            val request = StockInOutRequest(
-                ClientCode = clientCode,
-                StockType = "labelled",
-                TransferType = selectedTypeId,
-                BranchId = employee?.branchNo ?: 0,
-                UserID = employee?.id ?: 0,
-                RequestType = requestType
-            )
-
-            viewModel.getAllStockTransfers(request) { result ->
-                isLoading.value = false
-                result.onSuccess { responseList ->
-                    stockTransfers.clear()
-                    stockTransfers.addAll(
-                        responseList.map {
-                            StockTransfer(
-                                id = it.Id ?: 0,
-                                type = it.StockTransferTypeName ?: "Branch To Branch",
-                                from = it.SourceName ?: "-",
-                                to = it.DestinationName ?: "-",
-                                gWt = safeNumber(it.LabelledStockItems?.firstOrNull()?.GrossWt),
-                                nWt = safeNumber(it.LabelledStockItems?.firstOrNull()?.NetWt),
-                                pending = it.Pending ?: 0,
-                                approved = it.Approved ?: 0,
-                                rejected = it.Rejected ?: 0,
-                                lost = it.Lost ?: 0,
-                                transferBy = it.TransferByEmployee ?: "-",
-                                transferTo = it.TransferedToBranch ?: "-",
-                                transferType = it.StockTransferTypeName ?: "-",
-                                fulldata = it.LabelledStockItems ?: "-"
-                            )
-                        }
-                    )
-                }.onFailure { e ->
-                    errorMessage.value = e.message ?: "Something went wrong."
-                }
-            }
-        }
-    }*/
 
     fun fetchStockTransfers() {
-        // 🟢 Only send TransferType if user selected something real
         val selectedTypeId = transferTypes.firstOrNull {
             it.TransferType.equals(selectedTransferType, ignoreCase = true)
         }?.Id
@@ -175,51 +121,36 @@ fun StockInScreen(
         }
     }
 
-
-    // 🔹 Initial API Call
-    LaunchedEffect(Unit) {
-        fetchStockTransfers()
-    }
-
-    // ✅ 🔁 Re-fetch when coming back from detail screen
-    val navBackStackEntry = remember(navController) { navController.currentBackStackEntry }
-   /* DisposableEffect(navBackStackEntry) {
-        val lifecycle = navBackStackEntry?.lifecycle
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                // 🔁 Re-fetch list on return
-                fetchStockTransfers()
-            }
-        }
-        lifecycle?.addObserver(observer)
-        onDispose {
-            lifecycle?.removeObserver(observer)
-        }
-    }
-*/
-  /*  LaunchedEffect(selectedTransferType) {
-        if (selectedTransferType != "Transfer Type" && transferTypes.isNotEmpty()) {
+    LaunchedEffect(employee?.clientCode) {
+        employee?.clientCode?.let {
+            viewModel.loadTransferTypes(ClientCodeRequest(it))
             fetchStockTransfers()
         }
-    }*/
-    //val navBackStackEntry = remember(navController) { navController.currentBackStackEntry }
+    }
 
+    // Refresh when returning from detail
+    val navBackStackEntry = remember(navController) { navController.currentBackStackEntry }
     DisposableEffect(navBackStackEntry) {
         val lifecycle = navBackStackEntry?.lifecycle
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
+                if (hasResumedOnce && !isFirstLoad) {
                 Log.d("StockInScreen", "Returned from detail — refreshing list")
                 selectedStatus = "All"  // optional reset
                 selectedTransferType = "Transfer Type" // optional reset
                 fetchStockTransfers()
             }
+                hasResumedOnce = true
+                isFirstLoad = false
+            }
         }
         lifecycle?.addObserver(observer)
         onDispose {
             lifecycle?.removeObserver(observer)
         }
     }
-    // 🔹 Apply Filters
+
+    // Filters
     val filteredTransfers = remember(selectedTransferType, selectedStatus, stockTransfers) {
         stockTransfers.filter {
             val matchesType =
@@ -238,7 +169,7 @@ fun StockInScreen(
     Scaffold(
         topBar = {
             GradientTopBar(
-                title = "Stock Transfers",
+                title = stringResource(R.string.stock_transfers_title),
                 navigationIcon = {
                     IconButton(onClick = { shouldNavigateBack = true }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
@@ -276,11 +207,7 @@ fun StockInScreen(
                             .width(200.dp)
                     ) {
                         Text(selectedTransferType)
-                        Icon(
-                            Icons.Default.ArrowDropDown,
-                            contentDescription = null,
-                            modifier = Modifier.padding(start = 4.dp)
-                        )
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = null)
                     }
 
                     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -289,11 +216,15 @@ fun StockInScreen(
                                 DropdownMenuItem(onClick = {
                                     selectedTransferType = typeItem.TransferType
                                     expanded = false
-                                    fetchStockTransfers() // 🔁 refresh instantly on type change
+                                    fetchStockTransfers()
                                 }) { Text(typeItem.TransferType) }
                             }
                         } else {
-                            listOf("Internal", "External", "Vendor").forEach { type ->
+                            listOf(
+                                stringResource(R.string.internal_type),
+                                stringResource(R.string.external_type),
+                                stringResource(R.string.vendor_type)
+                            ).forEach { type ->
                                 DropdownMenuItem(onClick = {
                                     selectedTransferType = type
                                     expanded = false
@@ -305,7 +236,7 @@ fun StockInScreen(
                 }
 
                 IconButton(onClick = { showFilterDialog = true }) {
-                    Icon(Icons.Default.Tune, contentDescription = "Filter", tint = Color(0xFF3C3C3C))
+                    Icon(Icons.Default.Tune, contentDescription = stringResource(R.string.filter_label), tint = Color(0xFF3C3C3C))
                 }
             }
 
@@ -316,7 +247,7 @@ fun StockInScreen(
 
                 errorMessage.value != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        text = errorMessage.value ?: "Error loading data.",
+                        text = errorMessage.value ?: stringResource(R.string.error_loading_data),
                         color = Color.Red,
                         fontFamily = poppins,
                         fontWeight = FontWeight.Medium
@@ -332,7 +263,7 @@ fun StockInScreen(
                             .padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Sr", color = Color.White, fontWeight = FontWeight.Bold,
+                        Text(stringResource(R.string.sr_header), color = Color.White, fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center, modifier = Modifier.width(40.dp))
 
                         Row(
@@ -341,20 +272,27 @@ fun StockInScreen(
                                 .weight(1f),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            listOf("From", "To", "G Wt", "N Wt", "Transfer By", "Transfer To", "Transfer Type")
-                                .forEach { header ->
-                                    Text(
-                                        header,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.width(90.dp)
-                                    )
-                                }
+                            listOf(
+                                stringResource(R.string.from_header),
+                                stringResource(R.string.to_header),
+                                stringResource(R.string.gross_wt_header),
+                                stringResource(R.string.net_wt_header),
+                                stringResource(R.string.transfer_by_header),
+                                stringResource(R.string.transfer_to_header),
+                                stringResource(R.string.transfer_type_header)
+                            ).forEach { header ->
+                                Text(
+                                    header,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.width(90.dp)
+                                )
+                            }
                         }
 
                         Text(
-                            "Status",
+                            stringResource(R.string.status_header),
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
@@ -371,7 +309,6 @@ fun StockInScreen(
                         val displayList = if (selectedStatus == "All") stockTransfers else filteredTransfers
 
                         itemsIndexed(displayList) { index, item ->
-                        //itemsIndexed(filteredTransfers) { index, item ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -385,11 +322,16 @@ fun StockInScreen(
                                                 ?.apply {
                                                     set("labelItems", transferData)
                                                     set("requestType", requestType)
-                                                    set("selectedTransferType", selectedTransferType)// 🔹 Pass current request type here
+                                                    set("selectedTransferType", selectedTransferType)
+                                                    set("Id", item.id)
                                                 }
                                             navController.navigate("stock_transfer_detail")
                                         } else {
-                                            Toast.makeText(context, "Transfer details not found", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(
+                                                context,
+                                                context.getString(R.string.transfer_details_not_found),
+                                                Toast.LENGTH_SHORT
+                                            ).show()
                                         }
                                     },
                                 verticalAlignment = Alignment.CenterVertically
@@ -420,14 +362,12 @@ fun StockInScreen(
                                     }
                                 }
 
-                                // ✅ Show only related count per filter
                                 val displayText = when (selectedStatus) {
-                                    "Pending" -> "P: ${item.pending}"
-                                    "Approved" -> "A: ${item.approved}"
-                                    "Rejected" -> "R: ${item.rejected}"
-                                    "Lost" -> "L: ${item.lost}"
+                                    stringResource(R.string.pending_status) -> "P: ${item.pending}"
+                                    stringResource(R.string.approved_status) -> "A: ${item.approved}"
+                                    stringResource(R.string.rejected_status) -> "R: ${item.rejected}"
+                                    stringResource(R.string.lost_status) -> "L: ${item.lost}"
                                     else -> "P:${item.pending}"
-                                  //  else -> "P:${item.pending} | A:${item.approved} | R:${item.rejected} | L:${item.lost}"
                                 }
 
                                 Text(
@@ -471,17 +411,33 @@ fun StockInScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Select Status",
+                                text = stringResource(R.string.select_status_label),
                                 color = Color.White,
                                 fontFamily = poppins,
                                 fontWeight = FontWeight.Bold
                             )
                         }
 
-                        listOf("All", "Pending", "Approved", "Rejected", "Lost").forEach {
+                        val statusIcons = mapOf(
+                            stringResource(R.string.pending_status) to R.drawable.schedule,
+                            stringResource(R.string.approved_status) to R.drawable.check_circle_gray,
+                            stringResource(R.string.rejected_status) to R.drawable.cancel_gray,
+                            stringResource(R.string.lost_status) to R.drawable.ic_lost
+                        )
+
+                        listOf(
+                            stringResource(R.string.pending_status),
+                            stringResource(R.string.approved_status),
+                            stringResource(R.string.rejected_status),
+                            stringResource(R.string.lost_status)
+                        ).forEach { status ->
                             Divider(color = Color(0xFFE0E0E0), thickness = 0.5.dp)
-                            FilterRow(it, R.drawable.schedule, selectedStatus) {
-                                selectedStatus = it
+                            FilterRow(
+                                statusText = status,
+                                iconRes = statusIcons[status] ?: R.drawable.schedule,
+                                selectedStatus = selectedStatus
+                            ) {
+                                selectedStatus = status
                                 showFilterDialog = false
                             }
                         }
@@ -509,38 +465,6 @@ fun safeNumber(value: Any?): String {
     } catch (e: Exception) {
         Log.e("SafeNumber", "Invalid numeric value: $value (${e.message})")
         "0.000"
-    }
-}
-
-// 🔹 Filter Row
-@Composable
-fun FilterRow(
-    text: String,
-    iconRes: Int,
-    selectedStatus: String,
-    onClick: (String) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFFF8F8F8))
-            .clickable { onClick(text) }
-            .padding(start = 50.dp, end = 20.dp, top = 12.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            painter = painterResource(id = iconRes),
-            contentDescription = text,
-            tint = Color(0xFF6B6B6B),
-            modifier = Modifier.size(18.dp)
-        )
-        Spacer(modifier = Modifier.width(10.dp))
-        Text(
-            text = text,
-            color = Color(0xFF3C3C3C),
-            fontFamily = poppins,
-            fontWeight = if (selectedStatus == text) FontWeight.Bold else FontWeight.Normal
-        )
     }
 }
 

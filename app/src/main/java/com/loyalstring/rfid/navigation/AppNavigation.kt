@@ -215,11 +215,17 @@ fun AppNavigation(
                     ?.get<String>("selectedTransferType")
                     ?: "in"  // default or fallback
 
+                val Id = previousEntry
+                    ?.savedStateHandle
+                    ?.get<Int>("Id")
+                    ?: "0"
+
                 StockTransferDetailScreen(
                     onBack = { navController.popBackStack() },
                     labelItems = labelItems,
                     requestType = requestType,
-                    selectedTransferType=selectedTransferType
+                    selectedTransferType =selectedTransferType,
+                    id =Id
                 )
             }
         }

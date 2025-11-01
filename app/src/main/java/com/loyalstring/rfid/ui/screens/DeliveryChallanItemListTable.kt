@@ -12,11 +12,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.loyalstring.rfid.data.local.entity.DeliveryChallanItem
 import com.loyalstring.rfid.data.local.entity.OrderItem
 
 @Composable
 fun DeliveryChallanItemListTable(
-    productList: List<OrderItem>
+    productList: List<DeliveryChallanItem>
 ) {
     // ✅ One shared scroll state for everything
     val sharedScrollState = rememberScrollState()

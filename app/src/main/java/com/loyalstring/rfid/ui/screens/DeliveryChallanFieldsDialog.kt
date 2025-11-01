@@ -23,9 +23,12 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.sparklepos.models.loginclasses.customerBill.EmployeeList
 import com.loyalstring.rfid.R
+import com.loyalstring.rfid.data.model.addSingleItem.BranchModel
 import com.loyalstring.rfid.ui.utils.GradientButtonIcon
 import com.loyalstring.rfid.ui.utils.poppins
+import com.loyalstring.rfid.viewmodel.UiState
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -33,8 +36,8 @@ import java.util.*
 fun InvoiceFieldsDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
-    branchList: List<String>,
-    salesmanList: List<String>
+    branchList: List<BranchModel>,
+    salesmanList: UiState<List<EmployeeList>>
 ) {
     val gradient = Brush.horizontalGradient(listOf(Color(0xFF5231A7), Color(0xFFD32940)))
     val context = LocalContext.current
@@ -100,13 +103,15 @@ fun InvoiceFieldsDialog(
                         .padding(horizontal = 20.dp, vertical = 8.dp)
                 ) {
                     // Branch
+                    // Branch Dropdown
                     DropdownMenuField(
                         label = "Select Branch",
                         options = branchList,
                         selectedValue = selectedBranch,
                         expanded = expandedBranch,
                         onValueChange = { selectedBranch = it },
-                        onExpandedChange = { expandedBranch = it }
+                        onExpandedChange = { expandedBranch = it },
+                        getOptionLabel = { it.BranchName ?: "" }  // ✅ tell how to display
                     )
 
                     Spacer(Modifier.height(8.dp))
@@ -145,14 +150,46 @@ fun InvoiceFieldsDialog(
                     Spacer(Modifier.height(8.dp))
 
                     // Salesman
-                    DropdownMenuField(
-                        label = "Salesman",
-                        options = salesmanList,
-                        selectedValue = salesman,
-                        expanded = expandedSalesman,
-                        onValueChange = { salesman = it },
-                        onExpandedChange = { expandedSalesman = it }
-                    )
+                    // 🔹 Salesman Dropdown (fixed)
+
+                    when (salesmanList) {
+                        is UiState.Success -> {
+                            println("✅ Loaded ${salesmanList.data.size} salesmen")
+
+                            DropdownMenuField(
+                                label = "Salesman",
+                                options = salesmanList.data,
+                                selectedValue = salesman,
+                                expanded = expandedSalesman,
+                                onValueChange = { salesman = it },
+                                onExpandedChange = { expandedSalesman = it },
+                                getOptionLabel = { emp ->
+                                    listOfNotNull(
+                                        emp.FirstName,
+                                        emp.LastName
+                                    ).joinToString(" ").ifBlank { "Unknown" }
+                                }
+                            )
+                        }
+                        is UiState.Loading -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                            }
+                        }
+                        is UiState.Error -> {
+                            Text(
+                                text = "Failed to load salesmen",
+                                color = Color.Red,
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                    }
+
+
                 }
 
                 Spacer(Modifier.height(10.dp))

@@ -48,7 +48,8 @@ import com.example.sparklepos.models.loginclasses.customerBill.EmployeeList
 import com.google.gson.Gson
 import com.loyalstring.rfid.R
 import com.loyalstring.rfid.data.local.entity.BulkItem
-import com.loyalstring.rfid.data.local.entity.OrderItem
+import com.loyalstring.rfid.data.local.entity.DeliveryChallanItem
+import com.loyalstring.rfid.data.model.ClientCodeRequest
 import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.data.model.order.ItemCodeResponse
 import com.loyalstring.rfid.data.remote.resource.Resource
@@ -56,8 +57,10 @@ import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.viewmodel.BulkViewModel
+import com.loyalstring.rfid.viewmodel.DeliveryChallanViewModel
 import com.loyalstring.rfid.viewmodel.OrderViewModel
 import com.loyalstring.rfid.viewmodel.ProductListViewModel
+import com.loyalstring.rfid.viewmodel.SingleProductViewModel
 import com.loyalstring.rfid.viewmodel.UiState
 
 @SuppressLint("UnrememberedMutableState")
@@ -69,6 +72,8 @@ fun DeliveryChalanScreen(
 
     val viewModel: BulkViewModel = hiltViewModel()
     val orderViewModel: OrderViewModel = hiltViewModel()
+    val singleProductViewModel: SingleProductViewModel = hiltViewModel()
+    val deliveryChallanViewModel: DeliveryChallanViewModel = hiltViewModel()
     val context = LocalContext.current
     var selectedPower by remember { mutableStateOf(10) }
     var isScanning by remember { mutableStateOf(false) }
@@ -87,14 +92,29 @@ fun DeliveryChalanScreen(
     val isLoading by orderViewModel.isItemCodeLoading.collectAsState()
     var showDropdownItemcode by remember { mutableStateOf(false) }
     var selectedCustomer by remember { mutableStateOf<EmployeeList?>(null) }
-    val productList = remember { mutableStateListOf<OrderItem>() }
+    val productList = remember { mutableStateListOf<DeliveryChallanItem>() }
     var selectedItem by remember { mutableStateOf<ItemCodeResponse?>(null) }
     val productListViewModel: ProductListViewModel = hiltViewModel()
     var showInvoiceDialog by remember { mutableStateOf(false) }
     // Sample branch/salesman lists (can come from API)
-    val branchList = listOf("Main Branch", "Sub Branch", "Online Branch")
-    val salesmanList = listOf("Rohit", "Priya", "Vikas")
-    val selectedOrderItem = OrderItem(
+    //val branchList = listOf("Main Branch", "Sub Branch", "Online Branch")
+    //val salesmanList = listOf("Rohit", "Priya", "Vikas")
+
+    val branchList = singleProductViewModel.branches
+    val salesmanList by orderViewModel.empListFlow.collectAsState()
+
+    LaunchedEffect(employee?.clientCode) {
+        val code = employee?.clientCode ?: return@LaunchedEffect
+        // No need for withContext here; VM already uses IO
+        singleProductViewModel.getAllBranches(ClientCodeRequest(code))
+        orderViewModel.getAllEmpList(ClientCodeRequest(code).toString())
+    }
+
+
+    val tags by viewModel.scannedTags.collectAsState()
+    val scanTrigger by viewModel.scanTrigger.collectAsState()
+
+    val selectedOrderItem = DeliveryChallanItem(
         id = 0,
         branchId = "",
         branchName = "Main Branch",
@@ -186,15 +206,15 @@ fun DeliveryChalanScreen(
             }
         }
     }
-    var filteredBulkList by remember { mutableStateOf<List<BulkItem>>(emptyList()) }
-    var isFiltering by remember { mutableStateOf(false) }
+    val lastChallanNo by deliveryChallanViewModel.lastChallanNo.collectAsState()
 
-
-  /*  val filteredList: List<BulkItem> =
-        filteredApiList.value +
-                filteredBulkList.map { it.toItemCodeResponse() }
-
-    Log.d("itemcode list", "size" + filteredList.size)*/
+    LaunchedEffect(Unit) {
+        // Call the function when screen loads
+        deliveryChallanViewModel.fetchLastChallanNo(
+            clientCode = employee?.clientCode ?: "",
+            branchId = employee?.branchNo ?: 0
+        )
+    }
 
 
     LaunchedEffect(shouldNavigateBack) {
@@ -247,6 +267,94 @@ fun DeliveryChalanScreen(
                 Toast.makeText(context, "❌ Failed to add customer!", Toast.LENGTH_SHORT).show()
             }
             else -> { /* Loading or Idle */ }
+        }
+    }
+
+    LaunchedEffect(tags) {
+        if (tags.isNotEmpty()) {
+            Log.d("RFIDScan", "📦 Received ${tags.size} scanned tags: $tags")
+
+            tags.forEach { epc ->
+
+                // 🟣 Find matching item by RFID in your local product list or API
+                val matchedItem = allItems.firstOrNull { item ->
+                    val match = item.epc.equals("E2801191A50400703908F0FB", ignoreCase = true)
+                    Log.d("matchedItem", "🔍 Checking ${item.epc} — match = $match")
+                    match
+                }
+
+                Log.d(
+                    "matchedItem",
+                    "📦 Received ${tags.size} scanned matchedItem tags: $matchedItem"
+                )
+                if (matchedItem != null) {
+                    // Convert ItemCodeResponse → OrderItem
+                    val orderItem = DeliveryChallanItem(
+                        id = 0,
+                        branchId = "",
+                        branchName = "",
+                        exhibition = "",
+                        remark = "",
+                        purity = matchedItem.purity ?: "",
+                        size = "",
+                        length = "",
+                        typeOfColor = "",
+                        screwType = "",
+                        polishType = "",
+                        finePer = "",
+                        wastage = "",
+                        orderDate = "",
+                        deliverDate = "",
+                        productName = matchedItem.productName ?: "",
+                        itemCode = matchedItem.itemCode ?: "",
+                        rfidCode = matchedItem.rfid ?: "",
+                        grWt = matchedItem.grossWeight ?: "",
+                        nWt = matchedItem.netWeight ?: "",
+                        stoneAmt = matchedItem.totalStoneWt.toString() ?: "",
+                        finePlusWt = "",
+                        itemAmt = "",
+                        packingWt = "",
+                        totalWt = matchedItem.totalGwt.toString(),
+                        stoneWt = matchedItem.totalStoneWt.toString() ?: "",
+                        dimondWt = "" ?: "",
+                        sku = matchedItem.sku ?: "",
+                        qty = matchedItem.pcs.toString() ?: "1",
+                        hallmarkAmt = "",
+                        mrp = matchedItem.mrp.toString() ?: "",
+                        image = matchedItem.imageUrl ?: "",
+                        netAmt = "",
+                        diamondAmt = "" ?: "",
+                        categoryId = 0,
+                        categoryName = matchedItem.category ?: "",
+                        productId = matchedItem.productId ?: 0,
+                        productCode = matchedItem.itemCode ?: "",
+                        skuId = 0,
+                        designid = 0,
+                        designName = matchedItem.design ?: "",
+                        purityid = 0,
+                        counterId = 0,
+                        counterName = "",
+                        companyId = 0,
+                        epc = "",
+                        tid = matchedItem.tid ?: "",
+                        todaysRate = "",
+                        makingPercentage = matchedItem.makingPercent ?: "",
+                        makingFixedAmt = matchedItem.fixMaking ?: "",
+                        makingFixedWastage = matchedItem.fixWastage ?: "",
+                        makingPerGram = matchedItem.makingPerGram ?: ""
+                    )
+
+                    // Prevent duplicates
+                    if (productList.none { it.rfidCode == orderItem.rfidCode }) {
+                        productList.add(orderItem)
+                        Log.d("RFIDScan", "✅ Added ${orderItem.itemCode} (${orderItem.rfidCode})")
+                    } else {
+                        Log.d("RFIDScan", "⚠️ Duplicate tag skipped: ${orderItem.rfidCode}")
+                    }
+                } else {
+                    Log.w("RFIDScan", "❌ No match found for RFID: $epc")
+                }
+            }
         }
     }
 
@@ -408,9 +516,39 @@ fun DeliveryChalanScreen(
 
         }
         }
+
+    // 🧩 Debug log before showing Invoice dialog
+    when (salesmanList) {
+        is UiState.Success -> {
+            val list = (salesmanList as UiState.Success<List<EmployeeList>>).data
+            Log.d("SalesmanDebug", "✅ Loaded ${list.size} salesmen:")
+            list.take(10).forEachIndexed { index, emp ->
+                Log.d(
+                    "SalesmanDebug",
+                    "[$index] ${emp.FirstName ?: emp.FirstName ?: emp.LastName ?: "Unknown"}"
+                )
+            }
+        }
+
+        is UiState.Loading -> {
+            Log.d("SalesmanDebug", "⏳ Salesman list is still loading...")
+        }
+
+        is UiState.Error -> {
+            Log.e(
+                "SalesmanDebug",
+                "❌ Failed to load salesmen: ${(salesmanList as UiState.Error).message}"
+            )
+        }
+
+        else -> {
+            Log.d("SalesmanDebug", "ℹ️ Salesman list is in unknown state: $salesmanList")
+        }
+    }
+
     // 🔹 Show the dialog when state = true
     if (showInvoiceDialog) {
-     /*   InvoiceFieldsDialog(
+        /*InvoiceFieldsDialog(
             onDismiss = { showInvoiceDialog = false },
             onConfirm = {
                 // ✅ Handle confirm logic here (save or apply data)
@@ -418,9 +556,9 @@ fun DeliveryChalanScreen(
             },
             branchList = branchList,
             salesmanList = salesmanList
-        )*/
-
-        InvoiceDetailsDialogEditAndDisplay(
+        )
+*/
+        DeliveryChallanDialogEditAndDisplay(
             selectedItem = selectedOrderItem,
             branchList = branchList,
             salesmanList = salesmanList,

@@ -18,8 +18,15 @@ import com.loyalstring.rfid.data.model.addSingleItem.ProductModel
 import com.loyalstring.rfid.data.model.addSingleItem.PurityModel
 import com.loyalstring.rfid.data.model.addSingleItem.SKUModel
 import com.loyalstring.rfid.data.model.addSingleItem.VendorModel
+import com.loyalstring.rfid.data.model.deliveryChallan.AddDeliveryChallanRequest
+import com.loyalstring.rfid.data.model.deliveryChallan.AddDeliveryChallanResponse
+import com.loyalstring.rfid.data.model.deliveryChallan.ChallanNoRequest
+import com.loyalstring.rfid.data.model.deliveryChallan.ChallanNoResponse
+import com.loyalstring.rfid.data.model.deliveryChallan.CustomerTunchRequest
+import com.loyalstring.rfid.data.model.deliveryChallan.CustomerTunchResponse
 import com.loyalstring.rfid.data.model.deliveryChallan.DeliveryChallanRequestList
 import com.loyalstring.rfid.data.model.deliveryChallan.DeliveryChallanResponseList
+import com.loyalstring.rfid.data.model.deliveryChallan.UpdateDeliveryChallanRequest
 import com.loyalstring.rfid.data.model.login.LoginRequest
 import com.loyalstring.rfid.data.model.login.LoginResponse
 import com.loyalstring.rfid.data.model.order.CustomOrderRequest
@@ -224,5 +231,20 @@ interface RetrofitInterface {
 
     @POST("/api/Invoice/GetAllDeliveryChallan")
     suspend fun getAllChallanList(@Body request: DeliveryChallanRequestList): Response<List<DeliveryChallanResponseList>>
+
+    @POST("/api/Invoice/GetLastChallanNo")
+    suspend fun getLastChallanNo(@Body request: ChallanNoRequest): Response<ChallanNoResponse>
+
+    @POST("/api/Invoice/AddDeliveryChallan")
+    suspend fun addDeliveryChallan(@Body request: AddDeliveryChallanRequest): Response<AddDeliveryChallanResponse>
+
+    @POST("/api/Invoice/UpdateDeliveryChallan")
+    suspend fun updateDeliveryChallan(@Body request: UpdateDeliveryChallanRequest): Response<AddDeliveryChallanResponse>
+
+    @POST("/api/Invoice/GetAllCustomerTounch")
+    suspend fun getAllCustomerTounch(@Body request: CustomerTunchRequest): Response<List<CustomerTunchResponse>>
+
+
+
 
 }

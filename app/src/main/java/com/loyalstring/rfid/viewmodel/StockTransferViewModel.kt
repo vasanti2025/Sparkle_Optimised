@@ -7,6 +7,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.data.model.ClientCodeRequest
+import com.loyalstring.rfid.data.model.stockTransfer.CancelStockTransfer
+import com.loyalstring.rfid.data.model.stockTransfer.CancelStockTransferResponse
 import com.loyalstring.rfid.data.model.stockTransfer.LabelledStockItems
 import com.loyalstring.rfid.data.model.stockTransfer.STApproveRejectRequest
 import com.loyalstring.rfid.data.model.stockTransfer.STApproveRejectResponse
@@ -82,6 +84,10 @@ class StockTransferViewModel @Inject constructor(
 
     private val _stockTransferDetail = MutableLiveData<StockTransferResponse?>()
     val stockTransferDetail: LiveData<StockTransferResponse?> = _stockTransferDetail
+
+    private val _cancelResponse =
+        MutableStateFlow<Result<CancelStockTransferResponse>?>(null)
+    val cancelResponse: StateFlow<Result<CancelStockTransferResponse>?> = _cancelResponse
 
 
     /** -------------------- Load Transfer Types -------------------- **/
@@ -278,6 +284,16 @@ class StockTransferViewModel @Inject constructor(
         }
     }
 
+    fun cancelStockTransfer(id: Int, clientCode: String) {
+        viewModelScope.launch {
+            val request = CancelStockTransfer(Id = id, ClientCode = clientCode)
+            val result = repository.cancelStockTransfer(request)
+            _cancelResponse.value = result
+        }
+    }
+    fun clearCancelResponse() {
+        _cancelResponse.value = null
+    }
 
 
 

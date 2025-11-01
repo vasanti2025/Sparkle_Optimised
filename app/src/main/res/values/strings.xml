@@ -136,6 +136,13 @@
     <string name="something_went_wrong">Something went wrong.</string>
     <string name="transfer_details_not_found">Transfer details not found</string>
 
+    <string name="delete_confirmation_title">Confirm Deletion</string>
+    <string name="delete_confirmation_message">Are you sure you want to delete this item?</string>
+    <string name="delete_button">Delete</string>
+    <string name="cancel_button">Cancel</string>
+    <string name="delete_success_message">✅ Item deleted successfully</string>
+    <string name="delete_failed_message">❌ Failed to delete item</string>
+
 
 
 </resources>

@@ -84,9 +84,9 @@ fun DeliveryChallanListScreen(
 
     val headerTitles = listOf(
         "S.No",
-        "Challan No",
+        "C.No",
         "Date",
-        "Customer Name",
+        "Cust Name",
         "Qty",
         "G.Wt",
         "S.Wt",
@@ -101,7 +101,7 @@ fun DeliveryChallanListScreen(
 
     val columnWidths = listOf(
         45.dp,  // S.No
-        100.dp, // Challan No
+        45.dp, // Challan No
         80.dp,  // Date
         140.dp, // Customer Name
         50.dp,  // Qty
@@ -240,7 +240,7 @@ fun DeliveryChallanTable(
                                 .weight(1f)
                                 .horizontalScroll(sharedScrollState)
                         ) {
-                            val values = listOf(
+                           /* val values = listOf(
                                 (index + 1).toString(),
                                 challan.ChallanNo ?: "",
                                 formatDate(challan.LastUpdated ?: ""),
@@ -255,9 +255,26 @@ fun DeliveryChallanTable(
                                 challan.TotalAmount ?: "0.00",
                                 challan.BranchId ?: "-"
                             )
+*/
+
+                            val values = listOf(
+                                (index + 1).toString(),
+                                challan.ChallanNo ?: "",
+                                "_",
+                                "_",
+                                challan.Qty ?: "0",
+                                challan.GrossWt ?: "0.000",
+                                challan.StoneWt ?: "0.000",
+                                challan.TotalDiamondWeight ?: "0.000",
+                                challan.NetWt ?: "0.000",
+                                challan.TotalFineMetal ?: "0.000",
+                                challan.TotalGSTAmount ?: "0.00",
+                                challan.TotalNetAmount ?: "0.00",
+                                "_"
+                            )
 
 
-                                values.forEachIndexed { index, rawValue ->
+                            values.forEachIndexed { index, rawValue ->
                                     val value = rawValue ?: ""           // handle null
                                     Text(
                                         text = value.toString(),          // enforce String type

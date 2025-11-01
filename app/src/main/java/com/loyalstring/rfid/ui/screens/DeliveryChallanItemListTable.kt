@@ -39,7 +39,7 @@ fun DeliveryChallanItemListTable(
                     .padding(vertical = 6.dp)
             ) {
                 listOf(
-                    "P Name", "Itemcode", "G.Wt", "N.Wt", "F+W Wt", "S.Amt", "D Amt"
+                    "P Name", "Itemcode", "G.Wt", "N.Wt", "F+W Wt", "S.Amt", "D Amt","Item Amt","RFID Code"
                 ).forEach { title ->
                     Text(
                         text = title,
@@ -69,7 +69,9 @@ fun DeliveryChallanItemListTable(
                         item.nWt ?: "",
                         item.finePlusWt ?: "",
                         item.stoneAmt ?: "",
-                        item.diamondAmt ?: ""
+                        item.diamondAmt ?: "",
+                        item.itemAmt ?: "",
+                        item.rfidCode ?: ""
                     ).forEach { value ->
                         Text(
                             text = value,
@@ -110,6 +112,8 @@ fun DeliveryChallanItemListTable(
                     "%.3f".format(totalGross),
                     "%.3f".format(totalNet),
                     "%.3f".format(totalFine),
+                    "%.2f".format(totalAmt),
+                    "%.2f".format(totalAmt),
                     "%.2f".format(totalAmt),
                     "%.2f".format(totalAmt)
                 ).forEach { total ->

@@ -40,6 +40,8 @@ import com.loyalstring.rfid.data.model.setting.LocationSyncRequest
 import com.loyalstring.rfid.data.model.setting.LocationSyncResponse
 import com.loyalstring.rfid.data.model.setting.UpdateDailyRatesReq
 import com.loyalstring.rfid.data.model.setting.UpdateDailyRatesResponse
+import com.loyalstring.rfid.data.model.stockTransfer.CancelStockTransfer
+import com.loyalstring.rfid.data.model.stockTransfer.CancelStockTransferResponse
 import com.loyalstring.rfid.data.model.stockTransfer.STApproveRejectRequest
 import com.loyalstring.rfid.data.model.stockTransfer.STApproveRejectResponse
 import com.loyalstring.rfid.data.model.stockTransfer.StockInOutRequest
@@ -229,6 +231,8 @@ interface RetrofitInterface {
     @POST("/api/ProductMaster/ApproveStockTransfer")
     suspend fun approveStockTransfer(@Body request: STApproveRejectRequest): Response<STApproveRejectResponse>
 
+    @POST("/api/ProductMaster/CancelStockTransferMasterDetails")
+    suspend fun cancelStockTransferDetails(@Body request: CancelStockTransfer): Response<CancelStockTransferResponse>
     @POST("/api/Invoice/GetAllDeliveryChallan")
     suspend fun getAllChallanList(@Body request: DeliveryChallanRequestList): Response<List<DeliveryChallanResponseList>>
 

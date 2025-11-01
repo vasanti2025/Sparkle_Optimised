@@ -37,10 +37,8 @@ import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.data.model.stockTransfer.StockInOutRequest
 import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.ui.utils.UserPreferences
-import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.StockTransferViewModel
 import java.io.Serializable
-import androidx.compose.ui.res.stringResource
 
 @Composable
 fun StockInScreen(
@@ -69,6 +67,17 @@ fun StockInScreen(
     var isFirstLoad by remember { mutableStateOf(true) }
     var hasResumedOnce by remember { mutableStateOf(false) }
 
+    val coroutineScope = rememberCoroutineScope()
+
+    // Delete dialog state
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var deleteItem by remember { mutableStateOf<StockTransfer?>(null) }
+    var isDeleting by remember { mutableStateOf(false) }
+
+    // Observe delete API result
+    val deleteResponse by viewModel.cancelResponse.collectAsState()
+
+
 
     fun fetchStockTransfers() {
         val selectedTypeId = transferTypes.firstOrNull {
@@ -84,7 +93,7 @@ fun StockInScreen(
             val request = StockInOutRequest(
                 ClientCode = clientCode,
                 StockType = "labelled",
-                TransferType = transferTypeValue, // ✅ null means all data
+                TransferType = transferTypeValue,
                 BranchId = employee?.branchNo ?: 0,
                 UserID = employee?.id ?: 0,
                 RequestType = requestType
@@ -127,6 +136,23 @@ fun StockInScreen(
             fetchStockTransfers()
         }
     }
+    LaunchedEffect(deleteResponse) {
+        deleteResponse?.onSuccess { result ->
+            val apiMsg = result.Message ?: "✅ Item deleted successfully"
+            Toast.makeText(context, apiMsg, Toast.LENGTH_SHORT).show()
+            isDeleting = false
+            showDeleteDialog = false
+            deleteItem = null
+            fetchStockTransfers()
+            viewModel.clearCancelResponse()
+        }?.onFailure { error ->
+            val apiMsg = error.message ?: "❌ Failed to delete item"
+            Toast.makeText(context, apiMsg, Toast.LENGTH_SHORT).show()
+            isDeleting = false
+            viewModel.clearCancelResponse()
+        }
+    }
+
 
     // Refresh when returning from detail
     val navBackStackEntry = remember(navController) { navController.currentBackStackEntry }
@@ -145,12 +171,9 @@ fun StockInScreen(
             }
         }
         lifecycle?.addObserver(observer)
-        onDispose {
-            lifecycle?.removeObserver(observer)
-        }
+        onDispose { lifecycle?.removeObserver(observer) }
     }
 
-    // Filters
     val filteredTransfers = remember(selectedTransferType, selectedStatus, stockTransfers) {
         stockTransfers.filter {
             val matchesType =
@@ -186,7 +209,7 @@ fun StockInScreen(
                 .fillMaxSize()
                 .background(Color.White)
         ) {
-            // 🔹 Filter Row
+            // Filter Row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -219,18 +242,6 @@ fun StockInScreen(
                                     fetchStockTransfers()
                                 }) { Text(typeItem.TransferType) }
                             }
-                        } else {
-                            listOf(
-                                stringResource(R.string.internal_type),
-                                stringResource(R.string.external_type),
-                                stringResource(R.string.vendor_type)
-                            ).forEach { type ->
-                                DropdownMenuItem(onClick = {
-                                    selectedTransferType = type
-                                    expanded = false
-                                    fetchStockTransfers()
-                                }) { Text(type) }
-                            }
                         }
                     }
                 }
@@ -248,14 +259,12 @@ fun StockInScreen(
                 errorMessage.value != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         text = errorMessage.value ?: stringResource(R.string.error_loading_data),
-                        color = Color.Red,
-                        fontFamily = poppins,
-                        fontWeight = FontWeight.Medium
+                        color = Color.Red
                     )
                 }
 
                 else -> {
-                    // 🔹 Table Header
+                    // Table Header
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -263,7 +272,8 @@ fun StockInScreen(
                             .padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(stringResource(R.string.sr_header), color = Color.White, fontWeight = FontWeight.Bold,
+                        Text(
+                            "SR", color = Color.White, fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center, modifier = Modifier.width(40.dp))
 
                         Row(
@@ -282,49 +292,50 @@ fun StockInScreen(
                                 stringResource(R.string.transfer_type_header)
                             ).forEach { header ->
                                 Text(
-                                    header,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.width(90.dp)
+                                    header, color = Color.White, fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center, modifier = Modifier.width(90.dp)
                                 )
                             }
                         }
 
-                        Text(
-                            stringResource(R.string.status_header),
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.width(100.dp)
-                        )
+                        if (requestType == "Out Request") {
+                            Text(
+                                "Action", color = Color.White, fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center, modifier = Modifier.width(100.dp)
+                            )
+                        } else {
+                            Text(
+                                stringResource(R.string.status_header), color = Color.White,
+                                fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                                modifier = Modifier.width(100.dp)
+                            )
+                        }
                     }
 
-                    // 🔹 Data Rows
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                    ) {
+                    // Data Rows
+                    LazyColumn(modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)) {
                         val displayList = if (selectedStatus == "All") stockTransfers else filteredTransfers
-
                         itemsIndexed(displayList) { index, item ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(if (index % 2 == 0) Color.White else Color(0xFFF7F7F7))
-                                    .padding(vertical = 8.dp)
+                                    .background(
+                                        if (index % 2 == 0) Color.White else Color(
+                                            0xFFF7F7F7
+                                        )
+                                    )
+                                    .padding(vertical = 4.dp)
                                     .clickable {
                                         val transferData = item.fulldata
                                         if (transferData != null) {
-                                            navController.currentBackStackEntry
-                                                ?.savedStateHandle
-                                                ?.apply {
-                                                    set("labelItems", transferData)
-                                                    set("requestType", requestType)
-                                                    set("selectedTransferType", selectedTransferType)
-                                                    set("Id", item.id)
-                                                }
+                                            navController.currentBackStackEntry?.savedStateHandle?.apply {
+                                                set("labelItems", transferData)
+                                                set("requestType", requestType)
+                                                set("selectedTransferType", selectedTransferType)
+                                                set("Id", item.id)
+                                            }
                                             navController.navigate("stock_transfer_detail")
                                         } else {
                                             Toast.makeText(
@@ -337,10 +348,8 @@ fun StockInScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    "${index + 1}",
-                                    color = Color.Black,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.width(40.dp)
+                                    "${index + 1}", color = Color.Black,
+                                    textAlign = TextAlign.Center, modifier = Modifier.width(40.dp)
                                 )
 
                                 Row(
@@ -362,21 +371,36 @@ fun StockInScreen(
                                     }
                                 }
 
-                                val displayText = when (selectedStatus) {
-                                    stringResource(R.string.pending_status) -> "P: ${item.pending}"
-                                    stringResource(R.string.approved_status) -> "A: ${item.approved}"
-                                    stringResource(R.string.rejected_status) -> "R: ${item.rejected}"
-                                    stringResource(R.string.lost_status) -> "L: ${item.lost}"
-                                    else -> "P:${item.pending}"
-                                }
+                                if (requestType == "Out Request") {
+                                    IconButton(
+                                        onClick = {
+                                            deleteItem = item
+                                            showDeleteDialog = true
+                                        },
+                                        modifier = Modifier.width(100.dp)
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.ic_delete),
+                                            contentDescription = "Delete",
+                                            tint = Color.Red,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                } else {
+                                    val displayText = when (selectedStatus) {
+                                        stringResource(R.string.pending_status) -> "P: ${item.pending}"
+                                        stringResource(R.string.approved_status) -> "A: ${item.approved}"
+                                        stringResource(R.string.rejected_status) -> "R: ${item.rejected}"
+                                        stringResource(R.string.lost_status) -> "L: ${item.lost}"
+                                        else -> "P:${item.pending}"
+                                    }
 
-                                Text(
-                                    text = displayText,
-                                    color = Color.Black,
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.width(120.dp)
-                                )
+                                    Text(
+                                        displayText, color = Color.Black,
+                                        fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                                        modifier = Modifier.width(120.dp)
+                                    )
+                                }
                             }
                             Divider(color = Color(0xFFE0E0E0))
                         }
@@ -385,7 +409,7 @@ fun StockInScreen(
             }
         }
 
-        // 🔹 Filter Dialog
+        // --- Filter Dialog ---
         if (showFilterDialog) {
             AlertDialog(
                 onDismissRequest = { showFilterDialog = false },
@@ -395,7 +419,7 @@ fun StockInScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color.White, shape = RoundedCornerShape(16.dp))
+                            .background(Color.White, RoundedCornerShape(16.dp))
                             .padding(bottom = 16.dp)
                     ) {
                         Box(
@@ -403,17 +427,16 @@ fun StockInScreen(
                                 .fillMaxWidth()
                                 .background(
                                     Brush.horizontalGradient(
-                                        colors = listOf(Color(0xFF5231A7), Color(0xFFD32940))
+                                        listOf(Color(0xFF5231A7), Color(0xFFD32940))
                                     ),
-                                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                                    RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
                                 )
                                 .padding(vertical = 12.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = stringResource(R.string.select_status_label),
+                                stringResource(R.string.status_filter_title),
                                 color = Color.White,
-                                fontFamily = poppins,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -446,6 +469,39 @@ fun StockInScreen(
             )
         }
 
+        // Delete Confirmation
+        if (showDeleteDialog && deleteItem != null) {
+            AlertDialog(
+                onDismissRequest = { if (!isDeleting) showDeleteDialog = false },
+                title = {
+                    Text(
+                        "Confirm Deletion",
+                        color = Color.Black,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = { Text("Are you sure you want to delete this item (${deleteItem?.from} → ${deleteItem?.to})?") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            isDeleting = true
+                            employee?.clientCode?.let {
+                                viewModel.cancelStockTransfer(deleteItem!!.id, it)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(backgroundColor = Color.Red)
+                    ) { Text("Delete", color = Color.White) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteDialog = false }) {
+                        Text("Cancel", color = Color.Gray)
+                    }
+                },
+                shape = RoundedCornerShape(16.dp),
+                backgroundColor = Color.White
+            )
+        }
+
         if (shouldNavigateBack) onBack()
     }
 }
@@ -456,11 +512,7 @@ fun safeNumber(value: Any?): String {
         when (value) {
             null -> "0.000"
             is Number -> String.format("%.3f", value.toDouble())
-            else -> {
-                val str = value.toString().trim()
-                val parsed = str.toDoubleOrNull()
-                if (parsed != null && parsed.isFinite()) String.format("%.3f", parsed) else "0.000"
-            }
+            else -> value.toString()
         }
     } catch (e: Exception) {
         Log.e("SafeNumber", "Invalid numeric value: $value (${e.message})")
@@ -468,7 +520,6 @@ fun safeNumber(value: Any?): String {
     }
 }
 
-// 🔹 Data Model
 data class StockTransfer(
     val id: Int,
     val type: String,

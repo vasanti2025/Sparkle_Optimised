@@ -502,6 +502,139 @@ fun DeliveryChalanScreen(
         deliveryChallanViewModel.addDeliveryChallan(request)
     }
 
+    LaunchedEffect(itemCode.text) {
+        val query = itemCode.text.trim()
+        if (query.isNotEmpty()) {
+            // Find the matching item from your list (ItemCode or RFID)
+            val matchedItem = allItems.firstOrNull {
+                it.itemCode.equals(query, ignoreCase = true) ||
+                        it.rfid.equals(query, ignoreCase = true)
+            }
+
+            if (matchedItem != null) {
+                // Prevent duplicates
+                if (productList.none { it.RFIDCode == matchedItem.rfid }) {
+
+                    val productDetail = ChallanDetails(
+                        ChallanId = 0,
+                        MRP = matchedItem.mrp?.toString() ?: "0.0",
+                        CategoryName = matchedItem.category.orEmpty(),
+                        ChallanStatus = "Pending",
+                        ProductName = matchedItem.productName.orEmpty(),
+                        Quantity = (matchedItem.totalQty ?: matchedItem.pcs ?: 1).toString(),
+                        HSNCode = "",
+                        ItemCode = matchedItem.itemCode.orEmpty(),
+                        GrossWt = matchedItem.grossWeight ?: "0.0",
+                        NetWt = matchedItem.netWeight ?: "0.0",
+                        ProductId = matchedItem.productId ?: 0,
+                        CustomerId = 0,
+                        MetalRate = ""?.toString() ?: "0.0",
+                        MakingCharg = matchedItem.makingPerGram ?: "0.0",
+                        Price = matchedItem.mrp?.toString() ?: "0.0",
+                        HUIDCode = "",
+                        ProductCode = matchedItem.productCode.orEmpty(),
+                        ProductNo = "",
+                        Size = "1" ?: "",
+                        StoneAmount = matchedItem.stoneAmount ?: "0.0",
+                        TotalWt = matchedItem.totalGwt?.toString() ?: "0.0",
+                        PackingWeight = "" ?: "0.0",
+                        MetalAmount =""?.toString() ?: "0.0",
+                        OldGoldPurchase = false,
+                        RatePerGram ="" ?: "0.0",
+                        Amount =""?.toString() ?: "0.0",
+                        ChallanType = "Delivery",
+                        FinePercentage = ""?: "0.0",
+                        PurchaseInvoiceNo = "",
+                        HallmarkAmount = "" ?: "0.0",
+                        HallmarkNo =""?: "",
+                        MakingFixedAmt = matchedItem.fixMaking ?: "0.0",
+                        MakingFixedWastage = matchedItem.fixWastage ?: "0.0",
+                        MakingPerGram = matchedItem.makingPerGram ?: "0.0",
+                        MakingPercentage = matchedItem.makingPercent ?: "0.0",
+                        Description = ""?: "",
+                        CuttingGrossWt = matchedItem.grossWeight ?: "0.0",
+                        CuttingNetWt = matchedItem.netWeight ?: "0.0",
+                        BaseCurrency = "INR",
+                        CategoryId = matchedItem.categoryId ?: 0,
+                        PurityId = 0?: 0,
+                        TotalStoneWeight = matchedItem.totalStoneWt?.toString() ?: "0.0",
+                        TotalStoneAmount = matchedItem.stoneAmount ?: "0.0",
+                        TotalStonePieces = ""?.toString() ?: "0",
+                        TotalDiamondWeight = matchedItem.diamondWeight ?: "0.0",
+                        TotalDiamondPieces ="".toString() ?: "0",
+                        TotalDiamondAmount = matchedItem.diamondAmount ?: "0.0",
+                        SKUId =0 ?: 0,
+                        SKU = matchedItem.sku.orEmpty(),
+                        FineWastageWt = matchedItem.fixWastage ?: "0.0",
+                        TotalItemAmount ="".toString() ?: "0.0",
+                        ItemAmount = "".toString() ?: "0.0",
+                        ItemGSTAmount = "0.0",
+                        ClientCode = "",
+                        DiamondSize = "",
+                        DiamondWeight = "0.0",
+                        DiamondPurchaseRate = "0.0",
+                        DiamondSellRate = "0.0",
+                        DiamondClarity = "",
+                        DiamondColour = "",
+                        DiamondShape = "",
+                        DiamondCut = "",
+                        DiamondName = "",
+                        DiamondSettingType = "",
+                        DiamondCertificate = "",
+                        DiamondPieces = "0",
+                        DiamondPurchaseAmount = "0.0",
+                        DiamondSellAmount = "0.0",
+                        DiamondDescription = "",
+                        MetalName = "",
+                        NetAmount = "0.0",
+                        GSTAmount = "0.0",
+                        TotalAmount = "0.0",
+
+                        Purity = matchedItem.purity ?: "",
+                        DesignName = matchedItem.design ?: "",
+                        CompanyId = 0?: 0,
+                        BranchId = matchedItem.branchId ?: 0,
+                        CounterId = matchedItem.counterId ?: 0,
+                        EmployeeId = 0,
+                        LabelledStockId = 0 ?: 0,
+                        FineSilver = "0.0",
+                        FineGold = "0.0",
+                        DebitSilver = "0.0",
+                        DebitGold = "0.0",
+                        BalanceSilver = "0.0",
+                        BalanceGold = "0.0",
+                        ConvertAmt = "0.0",
+                        Pieces = matchedItem.pcs?.toString() ?: "1",
+                        StoneLessPercent = "0.0",
+                        DesignId = matchedItem.designId ?: 0,
+                        PacketId = matchedItem.packetId ?: 0,
+                        RFIDCode = matchedItem.rfid.orEmpty(),
+                        Image = matchedItem.imageUrl.orEmpty(),
+                        DiamondWt = matchedItem.diamondWeight ?: "0.0",
+                        StoneAmt = matchedItem.stoneAmount ?: "0.0",
+                        DiamondAmt = matchedItem.diamondAmount ?: "0.0",
+                        FinePer ="" ?: "0.0",
+                        FineWt = "" ?: "0.0",
+                        qty = (matchedItem.pcs ?: 1),
+                        tid = matchedItem.tid ?: "",
+                        totayRate = ""?.toString() ?: "0.0",
+                        makingPercent = matchedItem.makingPercent ?: "0.0",
+                        fixMaking = matchedItem.fixMaking ?: "0.0",
+                        fixWastage = matchedItem.fixWastage ?: "0.0"
+                    )
+
+
+                    productList.add(productDetail)
+                    Log.d("ManualEntry", "✅ Added ${matchedItem.itemCode}")
+                    itemCode = TextFieldValue("") // clear input
+                } else {
+                    Log.d("ManualEntry", "⚠️ Already exists: ${matchedItem.itemCode}")
+                }
+            }
+        }
+    }
+
+
 
 // 🔹 Show success message when challan added
     val addChallanResponse by deliveryChallanViewModel.addChallanResponse.collectAsState()
@@ -900,15 +1033,15 @@ fun DeliveryChalanScreen(
             }
             Spacer(modifier = Modifier.height(4.dp))
             DeliveryChallanItemListTable(productList = productList)
-            Spacer(modifier = Modifier.height(6.dp))
-
+            //Spacer(modifier = Modifier.height(6.dp))
+/*
             DeliveryChallanSummaryRow(
                 gstPercent = 3.0,
                 totalAmount = 50000.0,
                         onGstCheckedChange = { isChecked ->
                     println("GST Checkbox changed: $isChecked")
                 }
-            )
+            )*/
 
         }
         }

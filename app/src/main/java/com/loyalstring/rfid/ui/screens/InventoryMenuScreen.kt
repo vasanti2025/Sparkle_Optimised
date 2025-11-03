@@ -25,7 +25,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.loyalstring.rfid.R
 import com.loyalstring.rfid.navigation.GradientTopBar
@@ -86,15 +87,28 @@ fun InventoryMenuScreen(
     }
     
     // Lazy load filters only when needed
+    /*LaunchedEffect(Unit) {
+        bulkViewModel.ensureFiltersLoaded()
+    }*/
+
+    // Warm cache after first frame so compose can finish rendering
     LaunchedEffect(Unit) {
+        withFrameNanos { /* wait for first frame */ }
         bulkViewModel.ensureFiltersLoaded()
     }
     
     // Use remember to avoid recreating on recomposition
-    val counters by remember { bulkViewModel.counters }.collectAsState()
+   /* val counters by remember { bulkViewModel.counters }.collectAsState()
     val branches by remember { bulkViewModel.branches }.collectAsState()
     val boxes by remember { bulkViewModel.boxes }.collectAsState()
-    val exhibitions by remember { bulkViewModel.exhibitions }.collectAsState()
+    val exhibitions by remember { bulkViewModel.exhibitions }.collectAsState()*/
+
+    // Observe data with lifecycle awareness (no extra remember wrapper)
+    val counters by bulkViewModel.counters.collectAsStateWithLifecycle(emptyList())
+    val branches by bulkViewModel.branches.collectAsStateWithLifecycle(emptyList())
+    val boxes by bulkViewModel.boxes.collectAsStateWithLifecycle(emptyList())
+    val exhibitions by bulkViewModel.exhibitions.collectAsStateWithLifecycle(emptyList())
+
 
     // Dialog state
     var showDialog by remember { mutableStateOf(false) }

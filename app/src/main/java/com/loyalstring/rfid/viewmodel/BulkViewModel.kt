@@ -1107,111 +1107,67 @@ class BulkViewModel @Inject constructor(
         return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
-
-
     fun syncItems() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                _isLoading.value = true
-                _syncStatusText.value = "Downloading data from server..."
-                _syncProgress.value = 0f
+                Log.d("Sync", "syncItems called")
+                withContext(Dispatchers.Main) {
+                    _isLoading.value = true
+                    _syncProgress.value = 0f
+                    _syncStatusText.value = "Starting sync..."
+                }
 
-                val clientCode = employee?.clientCode ?: return@launch
+                val clientCode = employee?.clientCode ?: run {
+                    withContext(Dispatchers.Main) { _isLoading.value = false }
+                    return@launch
+                }
                 val request = ClientCodeRequest(clientCode)
+                withContext(Dispatchers.Main) { _syncStatusText.value = "Fetching data..." }
+                val response = bulkRepository.syncBulkItemsFromServer(request)
+                val bulkItems = response
+                    .filter { (it.status == "ApiActive" || it.status == "Active") && !it.rfidCode.isNullOrBlank() }
+                    .map { it.toBulkItem() }
 
-                // Determine RFID type
-                val tagType = userPreferences.getClient()?.rfidType?.trim()?.lowercase() ?: "webreusable"
+                val total = bulkItems.size
+                bulkRepository.clearAllItems()
 
-                // Stage 1: Download items from server
-                val response = withContext(Dispatchers.IO) {
-                    bulkRepository.syncBulkItemsFromServer(request)
+                if (total == 0) {
+                    withContext(Dispatchers.Main) {
+                        _syncProgress.value = 1f
+                        _syncStatusText.value = "No items to sync"
+                        _isLoading.value = false
+                    }
+                    return@launch
                 }
-
-                // Stage 2: Filter valid items based on tagType
-                val filteredItems = response.filter { item ->
-                    when (tagType) {
-                        "webreusable" -> {
-                            (item.status == "ApiActive" || item.status == "Active") &&
-                                    !item.rfidCode.isNullOrBlank()
-                        }
-                        "websingle" -> {
-                            (item.status == "ApiActive" || item.status == "Active") &&
-                                    !item.itemCode.isNullOrBlank()
-                        }
-                        else -> false
+                var inserted = 0
+                while (inserted < total) {
+                    val end = minOf(inserted + 10, total)
+                    val batch = bulkItems.subList(inserted, end)
+                    bulkRepository.insertBulkItems(batch)
+                    inserted = end
+                    val progress = inserted.toFloat() / total
+                    withContext(Dispatchers.Main) {
+                        _syncProgress.value = progress
+                        _syncStatusText.value = "Syncing... $inserted of $total"
                     }
                 }
 
-                val total = filteredItems.size
-                _syncStatusText.value = "Processing $total items..."
-                _syncProgress.value = 0f
-
-                // Clear old items before inserting new ones
-                withContext(Dispatchers.IO) { bulkRepository.clearAllItems() }
-
-                // Stage 3: Process & insert each valid item
-                filteredItems.forEachIndexed { index, apiItem ->
-                    val updatedItem = when (tagType) {
-                        "webreusable" -> {
-                            val bulkItem = apiItem.toBulkItem()
-                            if (!bulkItem.rfid.isNullOrBlank()) {
-                                if (bulkItem.epc.isNullOrBlank()) {
-                                    bulkItem.epc = syncAndMapRow(bulkItem.rfid!!)
-                                }
-                                bulkItem
-                            } else null
-                        }
-
-                        "websingle" -> {
-                            val bulkItem = apiItem.toBulkItem()
-                            if (!bulkItem.itemCode.isNullOrBlank()) {
-                                val hexValue = bulkItem.itemCode!!.toByteArray()
-                                    .joinToString("") { String.format("%02X", it) }
-                                bulkItem.copy(
-                                    rfid = bulkItem.itemCode,
-                                    epc = hexValue,
-                                    tid = hexValue
-                                )
-                            } else null
-                        }
-
-                        else -> null
-                    }
-
-                    if (updatedItem != null) {
-                        withContext(Dispatchers.IO) {
-                            bulkRepository.insertSingleItem(updatedItem)
-                        }
-                        Log.d(
-                            "SYNC",
-                            "Inserted item: code=${updatedItem.itemCode}, rfid=${updatedItem.rfid}, epc=${updatedItem.epc}"
-                        )
-                    } else {
-                        Log.w(
-                            "SYNC",
-                            "Skipped invalid item: code=${apiItem.itemCode}, rfid=${apiItem.rfidCode}"
-                        )
-                    }
-
-                    val processed = index + 1
-                    _syncStatusText.value = "Syncing $processed of $total"
-                    _syncProgress.value = processed.toFloat() / total
+                withContext(Dispatchers.Main) {
+                    _toastMessage.emit("✅ Synced $total items successfully!")
+                    _syncStatusText.value = "Sync completed successfully!"
                 }
-
-                _toastMessage.emit("✅ Synced $total items successfully!")
-                _syncStatusText.value = "Sync completed!"
 
             } catch (e: Exception) {
-                _syncStatusText.value = "Sync failed: ${e.localizedMessage}"
-                _toastMessage.emit("❌ Sync failed: ${e.localizedMessage}")
-                Log.e("SYNC", "Error syncing items", e)
+                withContext(Dispatchers.Main) {
+                    _syncStatusText.value = "Sync failed: ${e.localizedMessage}"
+                    _toastMessage.emit("❌ Sync failed: ${e.localizedMessage}")
+                }
+                Log.e("Sync", "Error: ${e.localizedMessage}")
             } finally {
-                _isLoading.value = false
+                withContext(Dispatchers.Main) { _isLoading.value = false }
             }
         }
     }
-
-
 
     fun setRfidForAllTags(scanned: String) {
         val updatedMap = mutableMapOf<Int, String>()

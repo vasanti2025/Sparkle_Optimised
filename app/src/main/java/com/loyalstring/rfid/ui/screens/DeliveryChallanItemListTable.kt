@@ -14,10 +14,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.loyalstring.rfid.data.local.entity.DeliveryChallanItem
 import com.loyalstring.rfid.data.local.entity.OrderItem
+import com.loyalstring.rfid.data.model.deliveryChallan.ChallanDetails
 
 @Composable
 fun DeliveryChallanItemListTable(
-    productList: List<DeliveryChallanItem>
+    productList: List<ChallanDetails>
 ) {
     // ✅ One shared scroll state for everything
     val sharedScrollState = rememberScrollState()
@@ -63,15 +64,15 @@ fun DeliveryChallanItemListTable(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     listOf(
-                        item.productName ?: "",
-                        item.itemCode ?: "",
-                        item.grWt ?: "",
-                        item.nWt ?: "",
-                        item.finePlusWt ?: "",
-                        item.stoneAmt ?: "",
-                        item.diamondAmt ?: "",
-                        item.itemAmt ?: "",
-                        item.rfidCode ?: ""
+                        item.ProductName ?: "",
+                        item.ItemCode ?: "",
+                        item.GrossWt ?: "",
+                        item.NetWt ?: "",
+                        item.FineWastageWt ?: "",
+                        item.StoneAmount ?: "",
+                        item.DiamondSellAmount ?: "",
+                        item.ItemAmount ?: "",
+                        item.RFIDCode ?: ""
                     ).forEach { value ->
                         Text(
                             text = value,
@@ -97,10 +98,10 @@ fun DeliveryChallanItemListTable(
 
             // 🔹 Total Row
             val totalQty = productList.size
-            val totalGross = productList.sumOf { it.grWt?.toDoubleOrNull() ?: 0.0 }
-            val totalNet = productList.sumOf { it.nWt?.toDoubleOrNull() ?: 0.0 }
-            val totalFine = productList.sumOf { it.finePlusWt?.toDoubleOrNull() ?: 0.0 }
-            val totalAmt = productList.sumOf { it.itemAmt?.toDoubleOrNull() ?: 0.0 }
+            val totalGross = productList.sumOf { it.GrossWt?.toDoubleOrNull() ?: 0.0 }
+            val totalNet = productList.sumOf { it.NetWt?.toDoubleOrNull() ?: 0.0 }
+            val totalFine = productList.sumOf { it.FineWastageWt?.toDoubleOrNull() ?: 0.0 }
+            val totalAmt = productList.sumOf { it.ItemAmount?.toDoubleOrNull() ?: 0.0 }
 
             Row(
                 modifier = Modifier

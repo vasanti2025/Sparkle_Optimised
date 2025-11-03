@@ -76,5 +76,5 @@ data class AddDeliveryChallanResponse( val Id: Int,
                                        val TransactionMetalType: String,
                                        val Description: String?,
                                        val MetalType: String,
-                                       val ChallanDetails: List<ChallanDetail>,
+                                       val ChallanDetails: List<ChallanDetails>,
                                        val Payments: List<Payment>)

@@ -1121,12 +1121,18 @@ class BulkViewModel @Inject constructor(
                     withContext(Dispatchers.Main) { _isLoading.value = false }
                     return@launch
                 }
-                val request = ClientCodeRequest(clientCode)
-                withContext(Dispatchers.Main) { _syncStatusText.value = "Fetching data..." }
-                val response = bulkRepository.syncBulkItemsFromServer(request)
-                val bulkItems = response
+
+                withContext(Dispatchers.Main) {
+                    _syncStatusText.value = "Fetching data..."
+                }
+
+                val response = bulkRepository.syncBulkItemsFromServer(ClientCodeRequest(clientCode))
+
+                // Use sequence for memory-efficient lazy filtering
+                val bulkItems = response.asSequence()
                     .filter { (it.status == "ApiActive" || it.status == "Active") && !it.rfidCode.isNullOrBlank() }
                     .map { it.toBulkItem() }
+                    .toList()
 
                 val total = bulkItems.size
                 bulkRepository.clearAllItems()
@@ -1139,16 +1145,25 @@ class BulkViewModel @Inject constructor(
                     }
                     return@launch
                 }
+
                 var inserted = 0
+                var lastProgressUpdate = System.currentTimeMillis()
+
                 while (inserted < total) {
-                    val end = minOf(inserted + 10, total)
+                    val end = minOf(inserted + 100, total)
                     val batch = bulkItems.subList(inserted, end)
                     bulkRepository.insertBulkItems(batch)
                     inserted = end
-                    val progress = inserted.toFloat() / total
-                    withContext(Dispatchers.Main) {
-                        _syncProgress.value = progress
-                        _syncStatusText.value = "Syncing... $inserted of $total"
+
+                    // Update UI only every ~500ms
+                    val now = System.currentTimeMillis()
+                    if (now - lastProgressUpdate > 500) {
+                        val progress = inserted.toFloat() / total
+                        withContext(Dispatchers.Main) {
+                            _syncProgress.value = progress
+                            _syncStatusText.value = "Syncing... $inserted of $total"
+                        }
+                        lastProgressUpdate = now
                     }
                 }
 
@@ -1162,7 +1177,7 @@ class BulkViewModel @Inject constructor(
                     _syncStatusText.value = "Sync failed: ${e.localizedMessage}"
                     _toastMessage.emit("❌ Sync failed: ${e.localizedMessage}")
                 }
-                Log.e("Sync", "Error: ${e.localizedMessage}")
+                Log.e("Sync", "Error: ${e.localizedMessage}", e)
             } finally {
                 withContext(Dispatchers.Main) { _isLoading.value = false }
             }

@@ -251,6 +251,13 @@ fun AppNavigation(
                     id =Id
                 )
             }
+
+            composable(Screens.DeliveryChalan.route) {
+                DeliveryChalanScreen(
+                    onBack = { navController.popBackStack() },
+                    navController = navController
+                )
+            }
         }
     }
 }

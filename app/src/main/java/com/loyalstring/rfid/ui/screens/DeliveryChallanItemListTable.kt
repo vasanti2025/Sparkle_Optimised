@@ -51,16 +51,11 @@ fun DeliveryChallanItemListTable(
             LazyColumn(
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // 🔹 Header Row (compact)
-                items(productList.size) { index ->
-                    val item = productList[index]
+                // 🔹 Always show header first
+                item {
                     Row(
                         modifier = Modifier
                             .background(Color(0xFF2E2E2E))
-                            .clickable {
-                                selectedItem = item
-                                showDialog = true
-                            }
                             .padding(vertical = 4.dp)
                     ) {
                         listOf(
@@ -80,14 +75,18 @@ fun DeliveryChallanItemListTable(
                     }
                 }
 
-                // 🔹 Data Rows (compact)
+                // 🔹 Data rows appear below header (only when items exist)
                 items(productList.size) { index ->
                     val item = productList[index]
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(if (index % 2 == 0) Color(0xFFF4F4F4) else Color.White)
-                            .padding(vertical = 3.dp),
+                            .padding(vertical = 3.dp)
+                            .clickable {
+                                selectedItem = item
+                                showDialog = true
+                            },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         listOf(
@@ -114,6 +113,7 @@ fun DeliveryChallanItemListTable(
                     }
                 }
             }
+
         }
 
         // 🔹 Fixed Footer Row (Totals)

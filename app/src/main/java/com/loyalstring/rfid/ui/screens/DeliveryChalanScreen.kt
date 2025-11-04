@@ -133,7 +133,7 @@ fun DeliveryChalanScreen(
                     deliveryChallanViewModel.setSelectedChallan(selected)
 
                     // ✅ Step 3: Prefill UI fields
-                    customerName = selected.CustomerId.toString()
+                    customerName = selected.CustomerName.toString()
                     customerId = selected.CustomerId
                     productList.clear()
                     selected.ChallanDetails?.let { productList.addAll(it) }

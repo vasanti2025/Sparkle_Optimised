@@ -18,8 +18,8 @@ android {
         applicationId = "com.loyalstring.rfid"
         minSdk = 26
         targetSdk = 35
-        versionCode = 30
-        versionName = "1.30"
+        versionCode = 32
+        versionName = "1.32"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

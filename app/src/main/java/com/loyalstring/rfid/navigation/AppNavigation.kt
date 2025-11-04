@@ -119,6 +119,7 @@ fun AppNavigation(
                 )
             }
 
+
             composable(Screens.StockTransferScreen.route) {
                 StockTransferScreen(onBack = { navController.popBackStack() }, navController)
             }
@@ -178,6 +179,7 @@ fun AppNavigation(
                 DailyRatesEditorScreen(navController = navController)
             }
 
+
             composable(Screens.LocationListScreen.route) {
                 LocationListScreen(
                     onBack = { navController.popBackStack() },
@@ -201,6 +203,35 @@ fun AppNavigation(
                 )
             }
 
+            composable("stock_transfer_detail") { backStackEntry ->
+                val previousEntry = navController.previousBackStackEntry
+                val labelItems = previousEntry
+                    ?.savedStateHandle
+                    ?.get<List<LabelledStockItems>>("labelItems")
+                    ?: emptyList()
+
+                val requestType = previousEntry
+                    ?.savedStateHandle
+                    ?.get<String>("requestType")
+                    ?: "in"  // default or fallback
+                val selectedTransferType = previousEntry
+                    ?.savedStateHandle
+                    ?.get<String>("selectedTransferType")
+                    ?: "in"  // default or fallback
+
+                val Id = previousEntry
+                    ?.savedStateHandle
+                    ?.get<Int>("Id")
+                    ?: "0"
+
+                StockTransferDetailScreen(
+                    onBack = { navController.popBackStack() },
+                    labelItems = labelItems,
+                    requestType = requestType,
+                    selectedTransferType =selectedTransferType,
+                    id =Id
+                )
+            }
             composable("stock_transfer_detail") { backStackEntry ->
                 val previousEntry = navController.previousBackStackEntry
                 val labelItems = previousEntry

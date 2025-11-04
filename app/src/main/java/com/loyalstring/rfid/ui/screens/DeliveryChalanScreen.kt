@@ -52,6 +52,7 @@ import com.loyalstring.rfid.data.local.entity.DeliveryChallanItem
 import com.loyalstring.rfid.data.model.ClientCodeRequest
 import com.loyalstring.rfid.data.model.deliveryChallan.AddDeliveryChallanRequest
 import com.loyalstring.rfid.data.model.deliveryChallan.ChallanDetails
+import com.loyalstring.rfid.data.model.deliveryChallan.UpdateDeliveryChallanRequest
 import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.data.model.order.ItemCodeResponse
 import com.loyalstring.rfid.data.remote.resource.Resource
@@ -712,6 +713,16 @@ fun DeliveryChalanScreen(
         }
     }
 
+    LaunchedEffect(deliveryChallanViewModel.updateChallanResponse.collectAsState().value) {
+        deliveryChallanViewModel.updateChallanResponse.collect { response ->
+            if (response != null) {
+                Toast.makeText(context, "Challan updated successfully!", Toast.LENGTH_SHORT).show()
+               // deliveryChallanViewModel.fetchAllChallans(clientCode, branchId)
+                onBack()
+            }
+        }
+    }
+
     // ✅ This is your barcode scanner logic
     LaunchedEffect(Unit) {
 
@@ -934,16 +945,98 @@ fun DeliveryChalanScreen(
 
             ScanBottomBar(
                 onSave = {
-                    if (isEditMode) {
-                       // deliveryChallanViewModel.updateDeliveryChallan(selectedChallan!!.Id, updatedData)
-                    }else {
+                    /*if (isEditMode) {
+                        // ✅ 1️⃣ Create the update request object
+                        val updateRequest = UpdateDeliveryChallanRequest(
+                            Id = deliveryChallanViewModel.selectedChallan.value?.Id ?: 0,
+                            CreatedOn = selectedChallan?.CreatedOn ?: getCurrentDateTime(),
+                            LastUpdated = getCurrentDateTime(),
+                            StatusType = true,
+                            CustomerId = customerId,
+                            VendorId = 0,
+                            BranchId = branchId,
+                            TotalAmount = productList.sumOf { it.ItemAmount?.toDoubleOrNull() ?: 0.0 }.toString(),
+                            PaymentMode = "Cash",
+                            Offer = "0.0",
+                            Qty = productList.size.toString(),
+                            GST = "3.0",
+                            ReceivedAmount = "0.0",
+                            ChallanStatus = "Open",
+                            Visibility = "1",
+                            MRP = productList.sumOf { it.MRP?.toDoubleOrNull() ?: 0.0 }.toString(),
+                            GrossWt = productList.sumOf { it.GrossWt?.toDoubleOrNull() ?: 0.0 }.toString(),
+                            NetWt = productList.sumOf { it.NetWt?.toDoubleOrNull() ?: 0.0 }.toString(),
+                            StoneWt = productList.sumOf { it.StoneWt?.toDoubleOrNull() ?: 0.0 }.toString(),
+                            TotalNetAmount = productList.sumOf { it.ItemAmount?.toDoubleOrNull() ?: 0.0 }.toString(),
+                            TotalGSTAmount = "0.0",
+                            TotalPurchaseAmount = "0.0",
+                            PurchaseStatus = "N/A",
+                            GSTApplied = "true",
+                            Discount = "0.0",
+                            TotalBalanceMetal = "0.0",
+                            BalanceAmount = "0.0",
+                            TotalFineMetal = productList.sumOf { it.FineWastageWt?.toDoubleOrNull() ?: 0.0 }.toString(),
+                            CourierCharge = "0.0",
+                            TDS = "0.0",
+                            URDNo = "",
+                            gstCheckboxConfirm = "false",
+                            AdditionTaxApplied = "false",
+                            CategoryId = 0,
+                            InvoiceNo = selectedChallan?.InvoiceNo ?: "",
+                            DeliveryAddress = "",
+                            BillType = "Normal",
+                            UrdPurchaseAmt = "0.0",
+                            BilledBy = employee?.name ?: "System",
+                            TotalAdvanceAmount = "0.0",
+                            TotalAdvancePaid = "0.0",
+                            CreditSilver = "0.0",
+                            CreditGold = "0.0",
+                            CreditAmount = "0.0",
+                            BalanceAmt = "0.0",
+                            BalanceSilver = "0.0",
+                            BalanceGold = "0.0",
+                            TotalSaleGold = "0.0",
+                            TotalSaleSilver = "0.0",
+                            TotalSaleUrdGold = "0.0",
+                            TotalSaleUrdSilver = "0.0",
+                            SaleType = "Delivery",
+                            FinancialYear = getFinancialYear(),
+                            BaseCurrency = "INR",
+                            TotalStoneWeight = productList.sumOf { it.StoneWt?.toDoubleOrNull() ?: 0.0 }.toString(),
+                            TotalStoneAmount = productList.sumOf { it.StoneAmount?.toDoubleOrNull() ?: 0.0 }.toString(),
+                            TotalStonePieces = productList.sumOf { it.StonePcs?.toIntOrNull() ?: 0 }.toString(),
+                            TotalDiamondWeight = productList.sumOf { it.DiamondWeight?.toDoubleOrNull() ?: 0.0 }.toString(),
+                            TotalDiamondPieces = productList.sumOf { it.DiamondPieces?.toIntOrNull() ?: 0 }.toString(),
+                            TotalDiamondAmount = productList.sumOf { it.DiamondSellAmount?.toDoubleOrNull() ?: 0.0 }.toString(),
+                            ClientCode = clientCode,
+                            ChallanNo = selectedChallan?.ChallanNo,
+                            InvoiceCount = "1",
+                            FineSilver = "0.0",
+                            FineGold = "0.0",
+                            DebitSilver = "0.0",
+                            DebitGold = "0.0",
+                            TotalPaidMetal = "0.0",
+                            TotalPaidAmount = "0.0",
+                            UrdWt = "0.0",
+                            UrdAmt = "0.0",
+                            TransactionAmtType = "CREDIT",
+                            TransactionMetalType = "GOLD",
+                            Description = "Updated from mobile app",
+                            MetalType = "GOLD",
+                            ChallanDetails = productList,
+                            Payments = emptyList() // You can populate this if you have payment info
+                        )
+
+                        // ✅ 2️⃣ Call update API
+                        deliveryChallanViewModel.updateDeliveryChallan(updateRequest)
+                    } else {*/
 
                         val clientCode = employee?.clientCode ?: return@ScanBottomBar
                         val branchId = employee.branchNo ?: 1
 
                         // 🔹 Step 1: Fetch last challan no
                         deliveryChallanViewModel.fetchLastChallanNo(clientCode, branchId)
-                    }
+                   // }
                 },
                 onList = { navController.navigate(Screens.DeliveryChallanListScreen.route) },
                 onScan = {

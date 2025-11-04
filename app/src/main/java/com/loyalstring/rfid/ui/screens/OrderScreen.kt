@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+
 import android.os.Build
 import android.util.Log
 import android.widget.Toast
@@ -147,8 +148,12 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.onEach
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 import kotlinx.coroutines.withContext
+
 
 
 @RequiresApi(Build.VERSION_CODES.R)
@@ -1522,6 +1527,7 @@ fun OrderScreenContent(
                                         AdditionTaxApplied = false
 
                                     }
+                                    val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
                                     Log.d("@@ TOTAL AMOUNT", "TAX" + calculatedTotalAmount+" TAX is "+gstAmt+"   gstApplied"+gstApplied)
                                     val orderDate: String = productList.firstOrNull()?.orderDate
                                         ?.takeIf { !it.isNullOrBlank() }  // only use if not null/empty
@@ -1612,8 +1618,8 @@ fun OrderScreenContent(
                                             CustomOrderItem(
                                                 CustomOrderId = 0,
                                                 RFIDCode =selectedItem?.RFIDCode.toString(),
-                                                OrderDate = product.orderDate,
-                                                 DeliverDate = product.deliverDate,
+                                                OrderDate = product.orderDate?.takeIf { it.isNotBlank() } ?: todayDate,
+                                                DeliverDate = product.deliverDate?.takeIf { it.isNotBlank() } ?: todayDate,
                                                 SKUId = 0,
                                                 SKU = product.sku,
                                                 CategoryId = product.categoryId,
@@ -1698,7 +1704,7 @@ fun OrderScreenContent(
                                             )
                                         },
 
-                                        Payments = listOf(Payment("")),
+                                        Payments =emptyList(),
                                         uRDPurchases = listOf(URDPurchase("")),
                                         Customer = Customer(
                                             FirstName = selectedCustomer.FirstName.orEmpty(),

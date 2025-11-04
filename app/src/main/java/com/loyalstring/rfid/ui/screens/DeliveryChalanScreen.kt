@@ -945,16 +945,16 @@ fun DeliveryChalanScreen(
 
             ScanBottomBar(
                 onSave = {
-                    /*if (isEditMode) {
+                    if (isEditMode) {
                         // ✅ 1️⃣ Create the update request object
                         val updateRequest = UpdateDeliveryChallanRequest(
                             Id = deliveryChallanViewModel.selectedChallan.value?.Id ?: 0,
-                            CreatedOn = selectedChallan?.CreatedOn ?: getCurrentDateTime(),
-                            LastUpdated = getCurrentDateTime(),
+                            CreatedOn ="",
+                            LastUpdated = "2025",
                             StatusType = true,
-                            CustomerId = customerId,
+                            CustomerId = customerId.toString(),
                             VendorId = 0,
-                            BranchId = branchId,
+                            BranchId = productList.get(0).BranchId,
                             TotalAmount = productList.sumOf { it.ItemAmount?.toDoubleOrNull() ?: 0.0 }.toString(),
                             PaymentMode = "Cash",
                             Offer = "0.0",
@@ -966,7 +966,7 @@ fun DeliveryChalanScreen(
                             MRP = productList.sumOf { it.MRP?.toDoubleOrNull() ?: 0.0 }.toString(),
                             GrossWt = productList.sumOf { it.GrossWt?.toDoubleOrNull() ?: 0.0 }.toString(),
                             NetWt = productList.sumOf { it.NetWt?.toDoubleOrNull() ?: 0.0 }.toString(),
-                            StoneWt = productList.sumOf { it.StoneWt?.toDoubleOrNull() ?: 0.0 }.toString(),
+                            StoneWt = productList.sumOf { it.TotalStoneWeight?.toDoubleOrNull() ?: 0.0 }.toString(),
                             TotalNetAmount = productList.sumOf { it.ItemAmount?.toDoubleOrNull() ?: 0.0 }.toString(),
                             TotalGSTAmount = "0.0",
                             TotalPurchaseAmount = "0.0",
@@ -982,11 +982,11 @@ fun DeliveryChalanScreen(
                             gstCheckboxConfirm = "false",
                             AdditionTaxApplied = "false",
                             CategoryId = 0,
-                            InvoiceNo = selectedChallan?.InvoiceNo ?: "",
+                            InvoiceNo = "",
                             DeliveryAddress = "",
                             BillType = "Normal",
                             UrdPurchaseAmt = "0.0",
-                            BilledBy = employee?.name ?: "System",
+                            BilledBy = ""?: "System",
                             TotalAdvanceAmount = "0.0",
                             TotalAdvancePaid = "0.0",
                             CreditSilver = "0.0",
@@ -1000,16 +1000,16 @@ fun DeliveryChalanScreen(
                             TotalSaleUrdGold = "0.0",
                             TotalSaleUrdSilver = "0.0",
                             SaleType = "Delivery",
-                            FinancialYear = getFinancialYear(),
+                            FinancialYear = "2025",
                             BaseCurrency = "INR",
-                            TotalStoneWeight = productList.sumOf { it.StoneWt?.toDoubleOrNull() ?: 0.0 }.toString(),
+                            TotalStoneWeight = productList.sumOf { it.TotalStoneWeight?.toDoubleOrNull() ?: 0.0 }.toString(),
                             TotalStoneAmount = productList.sumOf { it.StoneAmount?.toDoubleOrNull() ?: 0.0 }.toString(),
-                            TotalStonePieces = productList.sumOf { it.StonePcs?.toIntOrNull() ?: 0 }.toString(),
+                            TotalStonePieces ="",
                             TotalDiamondWeight = productList.sumOf { it.DiamondWeight?.toDoubleOrNull() ?: 0.0 }.toString(),
                             TotalDiamondPieces = productList.sumOf { it.DiamondPieces?.toIntOrNull() ?: 0 }.toString(),
                             TotalDiamondAmount = productList.sumOf { it.DiamondSellAmount?.toDoubleOrNull() ?: 0.0 }.toString(),
-                            ClientCode = clientCode,
-                            ChallanNo = selectedChallan?.ChallanNo,
+                            ClientCode = productList.get(0).ClientCode,
+                            ChallanNo = challanId.toString(),
                             InvoiceCount = "1",
                             FineSilver = "0.0",
                             FineGold = "0.0",
@@ -1029,14 +1029,14 @@ fun DeliveryChalanScreen(
 
                         // ✅ 2️⃣ Call update API
                         deliveryChallanViewModel.updateDeliveryChallan(updateRequest)
-                    } else {*/
+                    } else {
 
                         val clientCode = employee?.clientCode ?: return@ScanBottomBar
                         val branchId = employee.branchNo ?: 1
 
                         // 🔹 Step 1: Fetch last challan no
                         deliveryChallanViewModel.fetchLastChallanNo(clientCode, branchId)
-                   // }
+                    }
                 },
                 onList = { navController.navigate(Screens.DeliveryChallanListScreen.route) },
                 onScan = {

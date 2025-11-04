@@ -106,6 +106,8 @@ fun ProductManagementScreen(
     var showProgress by remember { mutableStateOf(false) }
     var showOverlay by remember { mutableStateOf(false) }
 
+    var filtersReady by remember { mutableStateOf(false) }
+    var filtersLoading by remember { mutableStateOf(true) }
 
     val isGoogleSheetDone by importViewModel.syncStatusText.collectAsStateWithLifecycle(initialValue = "")
 
@@ -162,7 +164,10 @@ fun ProductManagementScreen(
     LaunchedEffect(Unit) {
         Log.d("StartupTrace", "ProductManagementScreen ensureFiltersLoaded start")
         val t0 = System.nanoTime()
+        filtersLoading = true
         viewModel.ensureFiltersLoaded()
+        filtersReady = true
+        filtersLoading = false
         Log.d(
             "StartupTrace",
             "ProductManagementScreen ensureFiltersLoaded end ${(System.nanoTime() - t0) / 1_000_000} ms"

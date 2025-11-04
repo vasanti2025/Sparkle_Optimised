@@ -244,9 +244,27 @@ private fun SetupNavigation(
                                                 }
                                             }
 
-                                            Screens.SettingsScreen.route,
+                                            Screens.SettingsScreen.route ->{
+                                                scope.launch {
+                                                    drawerState.close()
+                                                    navController.navigate(navigationItem.route)
+                                                }
+                                            }
                                             Screens.OrderScreen.route -> {
-                                                navController.navigate(navigationItem.route)
+                                                scope.launch {
+                                                    drawerState.close()
+                                                    navController.navigate(navigationItem.route)
+                                                }
+
+                                            }
+                                            Screens.SearchScreen.route -> {
+                                                scope.launch {
+                                                    drawerState.close()
+                                                    navController.navigate("${Screens.SearchScreen.route}/normal") {
+                                                        launchSingleTop = true
+                                                        restoreState = true
+                                                    }                                                }
+
                                             }
 
                                             else -> {
@@ -339,7 +357,7 @@ fun ProductTopBar(navController: NavHostController) {
 @Composable
 fun HomeTopBar(onNavigationClick: () -> Unit) {
     TopAppBar(
-        title = { Text("Home", color = Color.White) },
+        title = { Text("Home", color = Color.White, fontFamily = poppins) },
         navigationIcon = {
             IconButton(onClick = { onNavigationClick() }) {
                 Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = Color.White)

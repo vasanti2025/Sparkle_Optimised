@@ -89,6 +89,8 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.ui.unit.DpOffset
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.work.Data
@@ -98,7 +100,6 @@ import androidx.work.WorkManager
 import com.loyalstring.rfid.worker.EmailSender
 import com.loyalstring.rfid.worker.SyncDataWorker
 import com.loyalstring.rfid.worker.cancelPeriodicSync
-import com.loyalstring.rfid.worker.schedulePeriodicSync
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -161,6 +162,26 @@ fun SettingsScreen(
         mutableStateOf(userPreferences.isAutoSyncEnabled() ?: true)
     }
     var showLocationList by remember { mutableStateOf(false) }
+
+    // ✅ Ensure default counter values are stored in SharedPreferences
+    LaunchedEffect(Unit) {
+        val defaults = mapOf(
+            UserPreferences.KEY_PRODUCT_COUNT to 5,
+            UserPreferences.KEY_INVENTORY_COUNT to 30,
+            UserPreferences.KEY_SEARCH_COUNT to 30,
+            UserPreferences.KEY_ORDER_COUNT to 10,
+            UserPreferences.KEY_STOCK_TRANSFER_COUNT to 10
+        )
+
+        defaults.forEach { (key, defaultValue) ->
+            val current = userPreferences.getInt(key, 0)
+            if (current == 0) {
+                userPreferences.saveInt(key, defaultValue)
+                Log.d("Settings", "Default value set for $key = $defaultValue")
+            }
+        }
+    }
+
 
     LaunchedEffect(updateState.value) {
         when (val s = updateState.value) {
@@ -231,23 +252,23 @@ fun SettingsScreen(
     val menuItems = listOf(
         // Counters (first 5)
         SettingsMenuItem(
-            "product_count",
+            UserPreferences.KEY_PRODUCT_COUNT,
             "Product",
             Icons.Default.Settings,
             SettingType.Counter,
             5
         ),
         SettingsMenuItem(
-            "inventory_count",
+            UserPreferences.KEY_INVENTORY_COUNT,
             "Inventory",
             Icons.Default.Settings,
             SettingType.Counter,
             30
         ),
-        SettingsMenuItem("search_count", "Search", Icons.Default.Settings, SettingType.Counter, 30),
-        SettingsMenuItem("orders_count", "Orders", Icons.Default.Settings, SettingType.Counter, 10),
+        SettingsMenuItem(UserPreferences.KEY_SEARCH_COUNT, "Search", Icons.Default.Settings, SettingType.Counter, 30),
+        SettingsMenuItem(UserPreferences.KEY_ORDER_COUNT, "Orders", Icons.Default.Settings, SettingType.Counter, 10),
         SettingsMenuItem(
-            "stock_transfer_count",
+            UserPreferences.KEY_STOCK_TRANSFER_COUNT,
             "Stock transfer",
             Icons.Default.Settings,
             SettingType.Counter,
@@ -1000,13 +1021,11 @@ fun MenuItemRow(
 ) {
     var expanded by remember { mutableStateOf(false) }
     var selectedValue by remember {
-        try {
-            mutableIntStateOf(userPreferences.getInt(item.key, item.defaultValue ?: 0))
-        } catch (e: Exception) {
-            e.printStackTrace()
-            mutableIntStateOf(item.defaultValue ?: 0) // fallback to default
-        }
+        mutableIntStateOf(
+            userPreferences.getInt(item.key, item.defaultValue ?: 0)
+        )
     }
+
 
     Surface(
         modifier = Modifier
@@ -1055,41 +1074,45 @@ fun MenuItemRow(
             when (item.type) {
                 is SettingType.Counter -> {
                     Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .background(Color(0xFFE0E0E0), RoundedCornerShape(6.dp))
-                            .clickable { expanded = true },
-                        contentAlignment = Alignment.Center
+                        modifier = Modifier.wrapContentSize(Alignment.TopEnd) // ✅ anchor to right
                     ) {
-                        Text(
-                            selectedValue.toString(),
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = poppins
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false },
-                        modifier = Modifier
-                            .height(300.dp)
-                            .width(60.dp)
-                    ) {
-                        (1..30).forEach { count ->
-                            DropdownMenuItem(
-                                text = { Text(count.toString(), fontFamily = poppins) },
-                                onClick = {
-                                    selectedValue = count
-                                    userPreferences.saveInt(item.key, count)
-                                    expanded = false
-                                }
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(Color(0xFFE0E0E0), RoundedCornerShape(6.dp))
+                                .clickable { expanded = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                selectedValue.toString(),
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = poppins
                             )
+                        }
+
+                        DropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false },
+                            modifier = Modifier
+                                .width(70.dp)
+                                .background(Color.White),
+                            offset = DpOffset(x = (-20).dp, y = 0.dp) // small tweak to match alignment
+                        ) {
+                            (1..30).forEach { count ->
+                                DropdownMenuItem(
+                                    text = { Text(count.toString(), fontFamily = poppins) },
+                                    onClick = {
+                                        selectedValue = count
+                                        userPreferences.saveInt(item.key, count)
+                                        expanded = false
+                                    }
+                                )
+                            }
                         }
                     }
                 }
 
                 is SettingType.Action -> {
-                    // ✅ If hasToggle is true → show switch instead of subtitle
                     if (item.hasToggle) {
                         Switch(
                             checked = item.isToggled,
@@ -1100,6 +1123,8 @@ fun MenuItemRow(
                     }
                 }
             }
+
+
         }
     }
 }

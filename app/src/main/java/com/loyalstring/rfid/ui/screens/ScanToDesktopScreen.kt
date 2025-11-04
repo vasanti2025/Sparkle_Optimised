@@ -47,6 +47,7 @@ import com.loyalstring.rfid.data.reader.ScanKeyListener
 import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.ui.utils.ToastUtils
+import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.BulkViewModel
 
@@ -61,7 +62,9 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
     val items by viewModel.scannedItems.collectAsState()
     val rfidMap by viewModel.rfidMap.collectAsState()
     var firstPress by remember { mutableStateOf(false) }
-    var selectedCount by remember { mutableStateOf(1) }
+    var selectedPower by remember { mutableStateOf(UserPreferences.getInstance(context).getInt(
+        UserPreferences.KEY_PRODUCT_COUNT)) }
+    remember { mutableStateOf("5") }
     var shouldNavigateBack by remember { mutableStateOf(false) }
 
     LaunchedEffect(shouldNavigateBack) {
@@ -73,7 +76,6 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
 
     var clickedIndex by remember { mutableStateOf<Int?>(null) }
     val activity = LocalContext.current as MainActivity
-    var selectedPower by remember { mutableStateOf(30) }
     var isScanning by remember { mutableStateOf(false) }
     var isEditMode by remember { mutableStateOf(false) }
 
@@ -143,9 +145,9 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
 
                 },
                 showCounter = true,
-                selectedCount = selectedCount,
+                selectedCount = selectedPower,
                 onCountSelected = {
-                    selectedCount = it
+                    selectedPower = it
                 }
             )
         },

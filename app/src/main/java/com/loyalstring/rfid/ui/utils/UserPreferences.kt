@@ -84,23 +84,28 @@ class UserPreferences @Inject constructor(
         return if (json != null) gson.fromJson(json, clazz) else null
     }
 
-    // ---------------- LOGIN / LOGOUT ----------------
+    //---------------- LOGIN / LOGOUT ----------------
     fun saveLoginCredentials(username: String, password: String, rememberMe: Boolean,rfidtype:String, userId: Int, branchId: Int) {
         prefs.edit().apply {
             putBoolean(KEY_REMEMBER_ME, rememberMe)
-            if (rememberMe) {
+            if (rememberMe){
                 putString(KEY_USERNAME, username)
                 putString(KEY_PASSWORD, password)
                 putString(KEY_RFIDTYPE,rfidtype)
                 putInt(KEY_USER_ID,userId)
                 putInt(KEY_BRANCH_ID,branchId)
-
-            } else {
+            }else {
                 remove(KEY_USERNAME)
                 remove(KEY_PASSWORD)
                 remove(KEY_RFIDTYPE)
                 remove(KEY_USER_ID)
                 remove(KEY_BRANCH_ID)
+
+            /*    putString(KEY_USERNAME, username)
+                putString(KEY_PASSWORD, password)
+                putString(KEY_RFIDTYPE,rfidtype)
+                putInt(KEY_USER_ID,userId)
+                putInt(KEY_BRANCH_ID,branchId)*/
 
             }
             apply()

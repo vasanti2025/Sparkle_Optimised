@@ -32,8 +32,6 @@ enum class Screens(val route: String) {
     StockInScreen("stock_in"),
     StockOutScreen("stock_out"),
     StockTransferDetailScreen("stock_transfer_detail"),
-    SearchScreen("search_screen/{mode}")
-    StockTransferDetailScreen("stock_transfer_detail"),
     DeliveryChalan("delivery_chalan"),
     SearchMenuScreen("search_screen"),
     SearchScreen("search_screen/{mode}"),

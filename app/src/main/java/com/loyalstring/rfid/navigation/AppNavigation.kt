@@ -115,9 +115,29 @@ fun AppNavigation(
             composable(Screens.SearchScreen.route) {
                 SearchScreen(
                     onBack = { navController.popBackStack() },
-                    navController = navController
+                    navController = navController,
+                    listKey = null
                 )
             }
+
+            composable(
+                route = "search_screen/{mode}",
+                arguments = listOf(
+                    navArgument("mode") {
+                        type = NavType.StringType
+                        defaultValue = "normal"
+                    }
+                )
+            ) { backStackEntry ->
+                val mode = backStackEntry.arguments?.getString("mode") ?: "normal"
+
+                SearchScreen(
+                    onBack = { navController.popBackStack() },
+                    navController = navController,
+                    listKey = if (mode == "unmatched") "unmatchedItems" else null
+                )
+            }
+
 
 
             composable(Screens.StockTransferScreen.route) {
@@ -283,6 +303,13 @@ fun AppNavigation(
                     onBack = { navController.popBackStack() },
                     navController,
                     )
+            }
+
+            composable(Screens.DeliveryChalan.route) {
+                DeliveryChalanScreen(
+                    onBack = { navController.popBackStack() },
+                    navController = navController
+                )
             }
         }
     }

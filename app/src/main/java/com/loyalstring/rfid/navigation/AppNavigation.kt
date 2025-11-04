@@ -15,6 +15,7 @@ import androidx.navigation.navArgument
 import androidx.navigation.navigation
 import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.data.model.order.CustomOrderResponse
+import com.loyalstring.rfid.data.model.stockTransfer.LabelledStockItems
 import com.loyalstring.rfid.ui.screens.*
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.viewmodel.OrderViewModel
@@ -221,6 +222,35 @@ fun AppNavigation(
                 )
             }
 
+            composable("stock_transfer_detail") { backStackEntry ->
+                val previousEntry = navController.previousBackStackEntry
+                val labelItems = previousEntry
+                    ?.savedStateHandle
+                    ?.get<List<LabelledStockItems>>("labelItems")
+                    ?: emptyList()
+
+                val requestType = previousEntry
+                    ?.savedStateHandle
+                    ?.get<String>("requestType")
+                    ?: "in"  // default or fallback
+                val selectedTransferType = previousEntry
+                    ?.savedStateHandle
+                    ?.get<String>("selectedTransferType")
+                    ?: "in"  // default or fallback
+
+                val Id = previousEntry
+                    ?.savedStateHandle
+                    ?.get<Int>("Id")
+                    ?: "0"
+
+                StockTransferDetailScreen(
+                    onBack = { navController.popBackStack() },
+                    labelItems = labelItems,
+                    requestType = requestType,
+                    selectedTransferType =selectedTransferType,
+                    id =Id
+                )
+            }
         }
     }
 }

@@ -2,6 +2,8 @@ package com.loyalstring.rfid.repository
 
 import com.loyalstring.rfid.data.local.entity.TransferTypeEntity
 import com.loyalstring.rfid.data.model.ClientCodeRequest
+import com.loyalstring.rfid.data.model.stockTransfer.CancelStockTransfer
+import com.loyalstring.rfid.data.model.stockTransfer.CancelStockTransferResponse
 import com.loyalstring.rfid.data.model.stockTransfer.STApproveRejectRequest
 import com.loyalstring.rfid.data.model.stockTransfer.STApproveRejectResponse
 import com.loyalstring.rfid.data.model.stockTransfer.StockInOutRequest
@@ -16,4 +18,6 @@ interface TransferRepository {
     suspend fun submitStockTransfer(request: StockTransferRequest): Result<Unit>
     suspend fun getAllStockTransfers(request: StockInOutRequest): Result<List<StockTransferInOutResponse>>
     suspend fun stApproveReject(request: STApproveRejectRequest): Result<STApproveRejectResponse>
+    suspend fun cancelStockTransfer(request: CancelStockTransfer): Result<CancelStockTransferResponse>
+
 }

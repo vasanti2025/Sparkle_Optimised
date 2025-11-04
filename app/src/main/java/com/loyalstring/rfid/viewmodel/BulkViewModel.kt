@@ -262,15 +262,22 @@ class BulkViewModel @Inject constructor(
 
     init {
         // Lazy load data only when needed instead of immediately
+        /*   viewModelScope.launch {
+               bulkRepository.getAllBulkItems().collect { items ->
+                   _allItems = items
+                   if (isDataLoaded) {
+                       // Only preload filters after first load to avoid blocking initial composition
+                       preloadFilters(_allItems)
+                   }
+                   _scannedFilteredItems.value = items
+                   isDataLoaded = true
+               }
+           }*/
         viewModelScope.launch {
             bulkRepository.getAllBulkItems().collect { items ->
                 _allItems = items
-                if (isDataLoaded) {
-                    // Only preload filters after first load to avoid blocking initial composition
-                    preloadFilters(_allItems)
-                }
+                preloadFilters(_allItems)
                 _scannedFilteredItems.value = items
-                isDataLoaded = true
             }
         }
     }

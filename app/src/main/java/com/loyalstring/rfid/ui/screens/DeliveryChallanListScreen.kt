@@ -53,7 +53,8 @@ import com.loyalstring.rfid.R
 @Composable
 fun DeliveryChallanListScreen(
     onBack: () -> Unit,
-    navController: NavHostController
+    navController: NavHostController,
+
 ) {
     val viewModel: DeliveryChallanViewModel = hiltViewModel()
     val context = LocalContext.current
@@ -261,7 +262,7 @@ fun DeliveryChallanTable(
                                 (index + 1).toString(),
                                 challan.ChallanNo ?: "",
                                 "_",
-                                "_",
+                                challan.CustomerName ?: "",
                                 challan.Qty ?: "0",
                                 challan.GrossWt ?: "0.000",
                                 challan.StoneWt ?: "0.000",
@@ -303,10 +304,11 @@ fun DeliveryChallanTable(
                                 CoroutineScope(Dispatchers.Main).launch {
                                     Toast.makeText(
                                         context,
-                                        "Printing ${challan.ChallanNo ?: "Challan"}",
+                                        "editing ${challan.ChallanNo ?: "Challan"}",
                                         Toast.LENGTH_SHORT
                                     ).show()
                                     // TODO: Integrate PDF print logic here
+                                    navController.navigate("editDeliveryChallan/${challan.Id}")
                                 }
                             }) {
                                 Icon(

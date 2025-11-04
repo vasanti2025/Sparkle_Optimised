@@ -67,5 +67,6 @@ data class AddDeliveryChallanRequest(val BranchId: Any,
                                      val GSTApplied: String,
                                      val gstCheckboxConfirm: String,
                                      val AdditionTaxApplied: String,
-                                     val TotalGSTAmount: String
+                                     val TotalGSTAmount: String,
+                                     val CustomerName:String
 )

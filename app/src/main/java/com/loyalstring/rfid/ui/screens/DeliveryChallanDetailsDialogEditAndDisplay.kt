@@ -30,6 +30,7 @@ import com.loyalstring.rfid.data.local.entity.DeliveryChallanItem
 import com.loyalstring.rfid.data.local.entity.OrderItem
 import com.loyalstring.rfid.data.model.ClientCodeRequest
 import com.loyalstring.rfid.data.model.addSingleItem.BranchModel
+import com.loyalstring.rfid.data.model.deliveryChallan.ChallanDetails
 import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.ui.utils.GradientButtonIcon
 import com.loyalstring.rfid.ui.utils.UserPreferences
@@ -50,7 +51,7 @@ import java.util.*
  */
 @Composable
 fun DeliveryChallanDialogEditAndDisplay(
-    selectedItem: DeliveryChallanItem?,
+    selectedItem: ChallanDetails?,
     branchList: List<BranchModel>,
     salesmanList: UiState<List<EmployeeList>>, // ✅ Added this line
     onDismiss: () -> Unit,
@@ -146,51 +147,51 @@ fun DeliveryChallanDialogEditAndDisplay(
     }
 
     // Initialize from selectedItem
-    LaunchedEffect(selectedItem) {
-        selectedItem?.let { s ->
-            branch = s.branchName ?: ""
-            productName = s.productName.orEmpty()
-            itemCode = s.itemCode.orEmpty()
-            totalWt = s.totalWt.orEmpty()
-            packingWt = s.packingWt.orEmpty()
-            grossWT = s.grWt.orEmpty()
-            stoneWt = s.stoneWt.orEmpty()
-            dimondWt = s.dimondWt.orEmpty()
-            NetWt = s.nWt.orEmpty()
-            sku = s.sku.orEmpty()
-            purity = s.purity.orEmpty()
-            size = s.size.orEmpty()
-            length = s.length.orEmpty()
-            exhibition = s.exhibition.orEmpty()
-            remark = s.remark.orEmpty()
-            typeOfColors = s.typeOfColor.orEmpty()
-            screwType = s.screwType.orEmpty()
-            polishType = s.polishType.orEmpty()
-            finePercentage = s.finePer.orEmpty()
-            wastage = s.wastage.orEmpty()
-            orderDate = formatDateSafe(s.orderDate)
-            deliverDate = formatDateSafe(s.deliverDate)
-            qty = when {
-                s.qty == null -> ""
-                s.qty.equals("null", true) -> "1"
-                s.qty.isBlank() -> ""
-                s.qty == "0" -> "1"
-                else -> s.qty
-            }
-            hallMarkAmt = s.hallmarkAmt.orEmpty()
-            mrp = s.mrp.orEmpty()
-            ratePerGRam = s.todaysRate.orEmpty()
-            stoneAmt = s.stoneAmt.orEmpty()
-            finePlusWt = s.finePlusWt.orEmpty()
+    selectedItem?.let { s ->
+        branch = s.BranchId?.toString().orEmpty()
+        productName = s.ProductName.orEmpty()
+        itemCode = s.ItemCode.orEmpty()
+        totalWt = s.TotalWt.orEmpty()
+        packingWt = s.PackingWeight.orEmpty()
+        grossWT = s.GrossWt.orEmpty()
+        stoneWt = s.TotalStoneWeight.orEmpty()
+        dimondWt = s.DiamondWeight.orEmpty()
+        NetWt = s.NetWt.orEmpty()
+        sku = s.SKU.orEmpty()
+        purity = s.Purity.orEmpty()
+        size = s.Size.orEmpty()
+        length = ""
+        exhibition = ""
+        remark =""
+        typeOfColors = s.DiamondColour.orEmpty()
+        screwType = ""
+        polishType = ""
+        finePercentage = s.FinePer.orEmpty()
+        wastage = s.fixWastage.orEmpty()
+        orderDate = formatDateSafe("")
+        deliverDate = formatDateSafe("")
+        qty = s.qty.toString()/*when {
+            s.qty == null -> ""
+            s.qty.equals("null", true) -> "1"
+         *//*   s.qty.isBlank() -> ""
+            s.qty == "0" -> "1"*//*
+            else -> s.qty
+        }*/
+        hallMarkAmt = s.HallmarkAmount.orEmpty()
+        mrp = s.MRP.orEmpty()
+        ratePerGRam = s.totayRate.orEmpty()
+        stoneAmt = s.StoneAmount.orEmpty()
+        finePlusWt = s.FineWastageWt.orEmpty()
 
-            // default itemAmt: prefer mrp then itemAmt
-            itemAmt = if (!s.mrp.isNullOrEmpty()) s.mrp else s.itemAmt.orEmpty()
-            // try numeric formatting safely
-            itemAmt = try {
-                "%.2f".format(itemAmt.toDouble())
-            } catch (_: Exception) { itemAmt }
-        }
+        // Prefer MRP, fallback to ItemAmount
+        itemAmt = if (!s.MRP.isNullOrEmpty()) s.MRP else s.ItemAmount.orEmpty()
+
+        // Safe numeric formatting
+        itemAmt = try {
+            "%.2f".format(itemAmt.toDouble())
+        } catch (_: Exception) { itemAmt }
     }
+
 
     // Observe daily rates if available
     val dailyRates by orderViewModel.getAllDailyRate.collectAsState(initial = emptyList())
@@ -258,7 +259,7 @@ fun DeliveryChallanDialogEditAndDisplay(
                         horizontalArrangement = Arrangement.Center
                     ) {
                         AsyncImage(
-                            model = baseUrl + (selectedItem?.image ?: ""),
+                            model = baseUrl + (selectedItem?.Image ?: ""),
                             contentDescription = "Product image",
                             placeholder = painterResource(R.drawable.add_photo),
                             error = painterResource(R.drawable.add_photo),
@@ -513,7 +514,7 @@ fun DeliveryChallanDialogEditAndDisplay(
                         text = "Save",
                         onClick = {
                             // build updated OrderItem (copy existing and replace fields)
-                            selectedItem?.let { s ->
+                           /* selectedItem?.let { s ->
                                 val updated = s.copy(
                                     branchName = branch,
                                     exhibition = exhibition,
@@ -551,7 +552,7 @@ fun DeliveryChallanDialogEditAndDisplay(
                                 // If selectedItem is null, show toast and close
                                 Toast.makeText(context, "No item selected", Toast.LENGTH_SHORT).show()
                                 onDismiss()
-                            }
+                            }*/
                         },
                         icon = painterResource(id = R.drawable.check_circle),
                         iconDescription = "Save",

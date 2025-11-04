@@ -69,7 +69,8 @@ import com.loyalstring.rfid.viewmodel.UiState
 @Composable
 fun DeliveryChalanScreen(
     onBack: () -> Unit,
-    navController: NavHostController
+    navController: NavHostController,
+    challanId: Int? = null
 ) {
 
     val viewModel: BulkViewModel = hiltViewModel()
@@ -115,6 +116,41 @@ fun DeliveryChalanScreen(
 
     val tags by viewModel.scannedTags.collectAsState()
     val scanTrigger by viewModel.scanTrigger.collectAsState()
+
+    LaunchedEffect(challanId) {
+        if (challanId != null && challanId != 0) {
+            isEditMode = true
+
+            // ✅ Step 1: Load challan list if not already loaded
+            employee?.let {
+                deliveryChallanViewModel.fetchAllChallans(it.clientCode ?: "", it.branchNo ?: 0)
+            }
+
+            // ✅ Step 2: Observe challan list and find the matching one
+            deliveryChallanViewModel.challanList.collect { challans ->
+                val selected = challans.firstOrNull { it.Id == challanId }
+                if (selected != null) {
+                    deliveryChallanViewModel.setSelectedChallan(selected)
+
+                    // ✅ Step 3: Prefill UI fields
+                    customerName = selected.CustomerId.toString()
+                    customerId = selected.CustomerId
+                    productList.clear()
+                    selected.ChallanDetails?.let { productList.addAll(it) }
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(shouldNavigateBack) {
+        if (shouldNavigateBack) {
+            isEditMode = false
+            productList.clear()
+            deliveryChallanViewModel.setSelectedChallan(null)
+            onBack()
+        }
+    }
+
 
     val selectedOrderItem = DeliveryChallanItem(
         id = 0,
@@ -496,7 +532,8 @@ fun DeliveryChalanScreen(
             GSTApplied = "true",
             gstCheckboxConfirm = "true",
             AdditionTaxApplied = "false",
-            TotalGSTAmount = "0.0"
+            TotalGSTAmount = "0.0",
+            CustomerName = customerName
         )
 
         deliveryChallanViewModel.addDeliveryChallan(request)
@@ -621,6 +658,7 @@ fun DeliveryChalanScreen(
                         makingPercent = matchedItem.makingPercent ?: "0.0",
                         fixMaking = matchedItem.fixMaking ?: "0.0",
                         fixWastage = matchedItem.fixWastage ?: "0.0"
+
                     )
 
 
@@ -896,12 +934,16 @@ fun DeliveryChalanScreen(
 
             ScanBottomBar(
                 onSave = {
+                    if (isEditMode) {
+                       // deliveryChallanViewModel.updateDeliveryChallan(selectedChallan!!.Id, updatedData)
+                    }else {
 
-                    val clientCode = employee?.clientCode ?: return@ScanBottomBar
-                    val branchId = employee.branchNo ?: 1
+                        val clientCode = employee?.clientCode ?: return@ScanBottomBar
+                        val branchId = employee.branchNo ?: 1
 
-                    // 🔹 Step 1: Fetch last challan no
-                    deliveryChallanViewModel.fetchLastChallanNo(clientCode, branchId)
+                        // 🔹 Step 1: Fetch last challan no
+                        deliveryChallanViewModel.fetchLastChallanNo(clientCode, branchId)
+                    }
                 },
                 onList = { navController.navigate(Screens.DeliveryChallanListScreen.route) },
                 onScan = {
@@ -1077,7 +1119,7 @@ fun DeliveryChalanScreen(
 
     // 🔹 Show the dialog when state = true
     if (showInvoiceDialog) {
-        /*InvoiceFieldsDialog(
+        InvoiceFieldsDialog(
             onDismiss = { showInvoiceDialog = false },
             onConfirm = {
                 // ✅ Handle confirm logic here (save or apply data)
@@ -1086,8 +1128,8 @@ fun DeliveryChalanScreen(
             branchList = branchList,
             salesmanList = salesmanList
         )
-*/
-        DeliveryChallanDialogEditAndDisplay(
+
+      /*  DeliveryChallanDialogEditAndDisplay(
             selectedItem = selectedOrderItem,
             branchList = branchList,
             salesmanList = salesmanList,
@@ -1096,7 +1138,7 @@ fun DeliveryChalanScreen(
                 println("✅ Saved Invoice: ${updatedItem.branchName}")
                 showInvoiceDialog = false
             }
-        )
+        )*/
     }
     }
 

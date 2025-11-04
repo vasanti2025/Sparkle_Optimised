@@ -78,5 +78,8 @@ data class DeliveryChallanResponseList(val Id: Int,
                                        val TransactionMetalType: String?,
                                        val Description: String?,
                                        val MetalType: String?,
-                                       val ChallanDetails: List<ChallanDetail>,
-                                       val Payments: List<Payment>)
+                                       val ChallanDetails: List<ChallanDetails>,
+                                       val Payments: List<Payment>,
+                                       val CustomerName: String?
+
+)

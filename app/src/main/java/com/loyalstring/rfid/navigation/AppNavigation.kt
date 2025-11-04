@@ -269,6 +269,15 @@ fun AppNavigation(
                 )
             }
 
+            composable("editDeliveryChallan/{challanId}") { backStackEntry ->
+                val challanId = backStackEntry.arguments?.getString("challanId")?.toIntOrNull()
+                DeliveryChalanScreen(
+                    onBack = { navController.popBackStack() },
+                    navController = navController,
+                    challanId = challanId // ✅ pass here
+                )
+            }
+
             composable(Screens.DeliveryChallanListScreen.route) {
                 DeliveryChallanListScreen(
                     onBack = { navController.popBackStack() },

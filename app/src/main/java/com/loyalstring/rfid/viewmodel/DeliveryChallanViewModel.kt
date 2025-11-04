@@ -43,6 +43,12 @@ class DeliveryChallanViewModel @Inject constructor(
 
     private val _customerTunchList = MutableStateFlow<List<CustomerTunchResponse>>(emptyList())
     val customerTunchList: StateFlow<List<CustomerTunchResponse>> = _customerTunchList
+    private val _selectedChallan = MutableStateFlow<DeliveryChallanResponseList?>(null)
+    val selectedChallan: StateFlow<DeliveryChallanResponseList?> = _selectedChallan
+
+    fun setSelectedChallan(challan: DeliveryChallanResponseList?) {
+        _selectedChallan.value = challan
+    }
 
 
     fun fetchAllChallans(clientCode: String, branchId: Any) {
@@ -153,6 +159,8 @@ class DeliveryChallanViewModel @Inject constructor(
             }
         }
     }
+
+
 
 
 

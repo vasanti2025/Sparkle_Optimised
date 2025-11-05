@@ -32,6 +32,7 @@ import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,6 +64,7 @@ import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.BulkViewModel
 import com.loyalstring.rfid.viewmodel.LoginViewModel
 import com.loyalstring.rfid.viewmodel.ScanDisplayViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @Composable
@@ -81,6 +83,7 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
     val isLoading = loginResponse is Resource.Loading
     val errorMessage = (loginResponse as? Resource.Error)?.message
     val loginSuccess = loginResponse is Resource.Success
+    val coroutineScope = rememberCoroutineScope()
 
 
     LaunchedEffect(errorMessage) {
@@ -93,6 +96,7 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
         if (loginSuccess) {
             val loginData = (loginResponse as? Resource.Success<LoginResponse>)?.data
             loginData?.let { response ->
+                coroutineScope.launch(Dispatchers.IO) {
                 userPrefs.saveToken(response.token.orEmpty())
                 userPrefs.saveUserName(response.employee?.username.toString())
                 userPrefs.saveEmployee(response.employee)
@@ -107,6 +111,7 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
                 launch {
                     bulkviewmodel.syncRFIDDataIfNeeded(context)
                 }
+                    }
                 navController.navigate(Screens.HomeScreen.route)
             }
         }
@@ -235,7 +240,7 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
 
 @Composable
 fun CurvedGradientHeader() {
-    val headerHeight = 250.dp
+    val gradientPath = remember { Path() }
 
     Box(
         modifier = Modifier
@@ -250,20 +255,21 @@ fun CurvedGradientHeader() {
             val width = size.width
             val height = size.height
 
-            val path = Path().apply {
-                moveTo(0f, 0f)
-                lineTo(0f, height * 0.3f)
-                quadraticTo(
-                    width * -0.3f, height * 1.3f,
-                    width, height * 0.75f
-                )
-                lineTo(width, 0.56f)
-                close()
-            }
+            gradientPath.reset()
+            gradientPath.moveTo(0f, 0f)
+            gradientPath.lineTo(0f, height * 0.3f)
+            gradientPath.quadraticTo(
+                width * -0.3f,
+                height * 1.3f,
+                width,
+                height * 0.75f
+            )
+            gradientPath.lineTo(width, 0.56f)
+            gradientPath.close()
 
             drawPath(
-                path = path,
-                BackGroundLinerGradient
+                path = gradientPath,
+                brush = BackGroundLinerGradient
             )
         }
 

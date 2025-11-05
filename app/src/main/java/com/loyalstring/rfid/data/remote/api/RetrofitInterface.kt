@@ -107,7 +107,7 @@ interface RetrofitInterface {
     suspend fun getAllPurityDetails(@Body request: ClientCodeRequest): Response<List<PurityModel>>
 
     //Get all stock
-    @POST("api/ProductMaster/GetAllLabeledStock")
+    @POST("api/ProductMaster/GetAllStockAndroid")
     suspend fun getAllLabeledStock(@Body request: RequestBody): Response<List<AlllabelResponse.LabelItem>>
 
     //Get all packets
@@ -146,7 +146,7 @@ interface RetrofitInterface {
     suspend fun getAllEmpList(@Body clientCodeRequest: ClientCodeRequest): Response<List<EmployeeList>>
 
     //Label list
-    @POST("api/ProductMaster/GetAllLabeledStock") // Replace with your actual API endpoint
+    @POST("api/ProductMaster/GetAllStockAndroid") // Replace with your actual API endpoint
     suspend fun getAllItemCodeList(@Body clientCodeRequest: ClientCodeRequest): Response<List<ItemCodeResponse>>
 
     @POST("api/ClientOnboarding/GetAllBranchMaster")

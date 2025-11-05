@@ -297,7 +297,7 @@ class OrderViewModel @Inject constructor(
                 val response = repository.getAllItemCodeList(request)
                 if (response.isSuccessful && response.body() != null) {
                     _itemCodeResponse.value = response.body()!!
-                    Log.d("OrderViewModel", "itemcode: ${response.body()}")
+                    //Log.d("OrderViewModel", "itemcode: ${response.body()}")
                     repository.saveAllItemCodeToRoom(response.body()!!)
                 } else {
                     val localData = repository.getAllItemCodeFromRoom(request)

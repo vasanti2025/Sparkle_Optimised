@@ -15,15 +15,19 @@ import com.loyalstring.rfid.data.local.dao.LocationDao
 import com.loyalstring.rfid.data.local.dao.OrderItemDao
 import com.loyalstring.rfid.data.local.dao.TransferTypeDao
 import com.loyalstring.rfid.data.local.dao.UHFTAGDao
+import com.loyalstring.rfid.data.local.dao.UserPermissionDao
 import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.data.local.entity.Category
 import com.loyalstring.rfid.data.local.entity.CustomerEmailEntity
 import com.loyalstring.rfid.data.local.entity.Design
 import com.loyalstring.rfid.data.local.entity.EpcDto
+import com.loyalstring.rfid.data.local.entity.ModuleEntity
 import com.loyalstring.rfid.data.local.entity.OrderItem
+import com.loyalstring.rfid.data.local.entity.PageControlEntity
 import com.loyalstring.rfid.data.local.entity.Product
 import com.loyalstring.rfid.data.local.entity.TransferTypeEntity
 import com.loyalstring.rfid.data.local.entity.UHFTAGEntity
+import com.loyalstring.rfid.data.local.entity.UserPermissionEntity
 import com.loyalstring.rfid.data.model.addSingleItem.BranchModel
 import com.loyalstring.rfid.data.model.addSingleItem.PurityModel
 import com.loyalstring.rfid.data.model.addSingleItem.SKUModel
@@ -52,7 +56,10 @@ import com.loyalstring.rfid.data.model.setting.LocationItem
         TransferTypeEntity::class,
         EpcDto::class,
         CustomerEmailEntity::class,
-        LocationItem::class
+        LocationItem::class,
+        UserPermissionEntity::class,
+        ModuleEntity::class,
+        PageControlEntity::class
 
     ],
     version = 1
@@ -66,7 +73,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun epcDao(): EpcDao
     abstract fun customerEmailDao(): CustomerEmailDao
     abstract fun locationDao(): LocationDao
-
+    abstract fun userPermissionDao(): UserPermissionDao
 
     companion object {
         @Volatile
@@ -75,13 +82,13 @@ abstract class AppDatabase : RoomDatabase() {
         fun getDatabase(context: Context): AppDatabase =
 
             INSTANCE ?: synchronized(this) {
-                 // context.deleteDatabase("app_db")
+                //context.deleteDatabase("app_db")
                 Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "app_db"
                 )
-                    //.fallbackToDestructiveMigration(false)
+                 //  .fallbackToDestructiveMigration(false)
                     .build().also { INSTANCE = it }
             }
 

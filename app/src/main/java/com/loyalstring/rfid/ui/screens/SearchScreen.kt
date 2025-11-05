@@ -55,10 +55,9 @@ fun SearchScreen(
     var allDbItems by remember { mutableStateOf<List<BulkItem>>(emptyList()) }
     var filteredDbItems by remember { mutableStateOf<List<BulkItem>>(emptyList()) }
 
-    val selectedPower by remember {
-        mutableStateOf(
-            UserPreferences.getInstance(context).getInt(UserPreferences.KEY_SEARCH_COUNT)
-        )
+    var selectedPower by remember {
+        mutableIntStateOf(UserPreferences.getInstance(context).getInt(
+            UserPreferences.KEY_SEARCH_COUNT))
     }
 
     // ✅ Explicit unmatched flag
@@ -190,8 +189,12 @@ fun SearchScreen(
                         )
                     }
                 },
-                showCounter = false
-            )
+                showCounter = true,
+                selectedCount = selectedPower,
+                onCountSelected = {
+                    selectedPower = it
+
+                }            )
         },
         bottomBar = {
             ScanBottomBar(

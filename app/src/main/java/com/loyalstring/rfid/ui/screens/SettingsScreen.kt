@@ -90,6 +90,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.DpOffset
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -174,13 +175,13 @@ fun SettingsScreen(
         )
 
         defaults.forEach { (key, defaultValue) ->
-            val current = userPreferences.getInt(key, 0)
-            if (current == 0) {
+            if (!userPreferences.contains(key)) {
                 userPreferences.saveInt(key, defaultValue)
-                Log.d("Settings", "Default value set for $key = $defaultValue")
+                Log.d("Settings", "✅ Default value set for $key = $defaultValue")
             }
         }
     }
+
 
 
     LaunchedEffect(updateState.value) {
@@ -528,6 +529,7 @@ fun SettingsScreen(
     }
     if (showPasswordDialog) {
         var password by remember { mutableStateOf("") }
+        var passwordVisible by remember { mutableStateOf(false) }
         val correctPassword =
             userPreferences.getSavedPassword() // You can define this in UserPreferences
 
@@ -542,7 +544,16 @@ fun SettingsScreen(
                         onValueChange = { password = it },
                         label = { Text("Password", fontFamily = poppins) },
                         visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                                trailingIcon = {
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(
+                                    painter = painterResource(id = if (passwordVisible) R.drawable.ic_action_eye else R.drawable.ic_action_eye_off),
+                                    contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                                    tint = Color.DarkGray
+                                )
+                            }
+                        }
                     )
                 }
             },

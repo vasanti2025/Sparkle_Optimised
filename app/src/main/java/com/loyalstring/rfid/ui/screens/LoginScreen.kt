@@ -32,7 +32,6 @@ import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,7 +63,7 @@ import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.BulkViewModel
 import com.loyalstring.rfid.viewmodel.LoginViewModel
 import com.loyalstring.rfid.viewmodel.ScanDisplayViewModel
-import kotlinx.coroutines.Dispatchers
+import com.loyalstring.rfid.viewmodel.UserPermissionViewModel
 import kotlinx.coroutines.launch
 
 @Composable
@@ -72,6 +71,7 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
     val context = LocalContext.current
     val bulkviewmodel: BulkViewModel = hiltViewModel()
     val scanDisplayViewModel: ScanDisplayViewModel = hiltViewModel()
+    val userPermissionViewModel: UserPermissionViewModel = hiltViewModel()
     val userPrefs = remember { UserPreferences(context) }
 
     var username by remember { mutableStateOf("") }
@@ -83,8 +83,26 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
     val isLoading = loginResponse is Resource.Loading
     val errorMessage = (loginResponse as? Resource.Error)?.message
     val loginSuccess = loginResponse is Resource.Success
-    val coroutineScope = rememberCoroutineScope()
+    val permissionResponse by userPermissionViewModel.permissionResponse.observeAsState()
 
+
+    LaunchedEffect(permissionResponse) {
+        when (permissionResponse) {
+            is Resource.Success -> {
+                navController.navigate(Screens.HomeScreen.route) {
+                    popUpTo(Screens.LoginScreen.route) { inclusive = true }
+                }
+            }
+            is Resource.Error -> {
+                Toast.makeText(
+                    context,
+                    (permissionResponse as Resource.Error).message,
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            else -> {}
+        }
+    }
 
     LaunchedEffect(errorMessage) {
         errorMessage?.let {
@@ -93,10 +111,9 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
     }
 
     LaunchedEffect(loginSuccess) {
-        if (loginSuccess) {
+        if (loginSuccess){
             val loginData = (loginResponse as? Resource.Success<LoginResponse>)?.data
             loginData?.let { response ->
-                coroutineScope.launch(Dispatchers.IO) {
                 userPrefs.saveToken(response.token.orEmpty())
                 userPrefs.saveUserName(response.employee?.username.toString())
                 userPrefs.saveEmployee(response.employee)
@@ -107,11 +124,14 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
 
                 userPrefs.saveLoginCredentials(username, password, rememberMe,response.employee.clients.rfidType.toString(),response.employee.id,response.employee.defaultBranchId)
 
+                response.employee.clientCode?.let {
+                    userPermissionViewModel.loadPermissions(it, response.employee.id)
+                }
 
                 launch {
                     bulkviewmodel.syncRFIDDataIfNeeded(context)
                 }
-                    }
+
                 navController.navigate(Screens.HomeScreen.route)
             }
         }
@@ -240,7 +260,7 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
 
 @Composable
 fun CurvedGradientHeader() {
-    val gradientPath = remember { Path() }
+    val headerHeight = 250.dp
 
     Box(
         modifier = Modifier
@@ -255,21 +275,20 @@ fun CurvedGradientHeader() {
             val width = size.width
             val height = size.height
 
-            gradientPath.reset()
-            gradientPath.moveTo(0f, 0f)
-            gradientPath.lineTo(0f, height * 0.3f)
-            gradientPath.quadraticTo(
-                width * -0.3f,
-                height * 1.3f,
-                width,
-                height * 0.75f
-            )
-            gradientPath.lineTo(width, 0.56f)
-            gradientPath.close()
+            val path = Path().apply {
+                moveTo(0f, 0f)
+                lineTo(0f, height * 0.3f)
+                quadraticTo(
+                    width * -0.3f, height * 1.3f,
+                    width, height * 0.75f
+                )
+                lineTo(width, 0.56f)
+                close()
+            }
 
             drawPath(
-                path = gradientPath,
-                brush = BackGroundLinerGradient
+                path = path,
+                BackGroundLinerGradient
             )
         }
 

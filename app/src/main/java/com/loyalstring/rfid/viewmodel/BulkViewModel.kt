@@ -13,6 +13,7 @@ import android.widget.Toast
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
@@ -463,37 +464,38 @@ class BulkViewModel @Inject constructor(
         filteredItems: List<BulkItem>,
         stayVisibleInUnmatched: Boolean = false
     ) {
+        // ✅ Create a snapshot copy to safely iterate
+        val safeFilteredItems = filteredItems.toList()
+
         val matched = mutableListOf<BulkItem>()
         val unmatched = mutableListOf<BulkItem>()
         val scannedEpcSet = scannedEpcList.map { it.trim().uppercase() }.toSet()
         _matchedEpcSet.value = scannedEpcSet
-        // Compute matched TIDs too if needed (disabled)
-        // val scannedTidSet = _allScannedTags.value.mapNotNull { it.tid?.trim()?.uppercase() }.toSet() // TID matching disabled
-        // _matchedTidSet.value = scannedTidSet // TID matching disabled
 
-        filteredItems.forEach { item ->
+        safeFilteredItems.forEach { item ->
             val dbEpc = item.epc?.trim()?.uppercase()
             if (dbEpc != null && scannedEpcSet.contains(dbEpc)) {
                 val updatedItem = item.copy(scannedStatus = "Matched")
                 matched.add(updatedItem)
-                if (stayVisibleInUnmatched) {
-                    unmatched.add(updatedItem)
-                }
+                if (stayVisibleInUnmatched) unmatched.add(updatedItem)
             } else {
                 val updatedItem = item.copy(scannedStatus = "Unmatched")
                 unmatched.add(updatedItem)
             }
         }
 
-        _matchedItems.clear()
-        _matchedItems.addAll(matched)
+        // ✅ Update state lists safely within a Compose snapshot
+        androidx.compose.runtime.snapshots.Snapshot.withMutableSnapshot {
+            _matchedItems.clear()
+            _matchedItems.addAll(matched)
 
-        _unmatchedItems.clear()
-        _unmatchedItems.addAll(unmatched)
+            _unmatchedItems.clear()
+            _unmatchedItems.addAll(unmatched)
 
-        // Keep base list stable; do not remap entire list here
-        _scannedFilteredItems.value = filteredItems
+            _scannedFilteredItems.value = safeFilteredItems
+        }
     }
+
 
 
     fun pauseScanning() {
@@ -539,7 +541,9 @@ class BulkViewModel @Inject constructor(
 
     fun stopScanningAndCompute() {
         stopScanning()
-        computeScanResults(_filteredSource)
+        viewModelScope.launch(Dispatchers.Main) {
+            computeScanResults(filteredItems)
+        }
     }
 
 

@@ -949,8 +949,6 @@ fun DeliveryChalanScreen(
                         // ✅ 1️⃣ Create the update request object
                         val updateRequest = UpdateDeliveryChallanRequest(
                             Id = deliveryChallanViewModel.selectedChallan.value?.Id ?: 0,
-                            CreatedOn ="",
-                            LastUpdated = "2025",
                             StatusType = true,
                             CustomerId = customerId.toString(),
                             VendorId = 0,

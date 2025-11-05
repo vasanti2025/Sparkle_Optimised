@@ -37,6 +37,7 @@
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/logo_sparkle"
         android:label="@string/app_name"
+        android:largeHeap="true"
         android:roundIcon="@mipmap/logo_sparkle_round"
         android:supportsRtl="true"
         android:theme="@style/Theme_Sparkle_Splash"

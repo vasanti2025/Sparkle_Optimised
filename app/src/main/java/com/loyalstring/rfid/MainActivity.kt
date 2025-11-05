@@ -369,7 +369,7 @@ fun ProductTopBar(navController: NavHostController) {
 @Composable
 fun HomeTopBar(onNavigationClick: () -> Unit) {
     TopAppBar(
-        title = { Text("Home", color = Color.White) },
+        title = { Text("Home", color = Color.White, fontFamily = poppins) },
         navigationIcon = {
             IconButton(onClick = { onNavigationClick() }) {
                 Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = Color.White)

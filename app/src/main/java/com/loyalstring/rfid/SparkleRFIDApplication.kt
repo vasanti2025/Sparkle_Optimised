@@ -8,11 +8,13 @@ import com.rscja.deviceapi.RFIDWithUHFUART
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltAndroidApp
 class SparkleRFIDApplication : Application(), Configuration.Provider {
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
@@ -29,7 +31,7 @@ class SparkleRFIDApplication : Application(), Configuration.Provider {
         super.onCreate()
         Log.d("StartupTrace", "Application.onCreate start")
 
-        CoroutineScope(Dispatchers.IO).launch {
+        applicationScope.launch {
             try {
                 val reader = RFIDWithUHFUART.getInstance()
                 if (reader != null && reader.init()) {

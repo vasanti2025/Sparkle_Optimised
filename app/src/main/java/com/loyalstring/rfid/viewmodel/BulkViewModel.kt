@@ -13,7 +13,6 @@ import android.widget.Toast
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
@@ -263,22 +262,15 @@ class BulkViewModel @Inject constructor(
 
     init {
         // Lazy load data only when needed instead of immediately
-        /*   viewModelScope.launch {
-               bulkRepository.getAllBulkItems().collect { items ->
-                   _allItems = items
-                   if (isDataLoaded) {
-                       // Only preload filters after first load to avoid blocking initial composition
-                       preloadFilters(_allItems)
-                   }
-                   _scannedFilteredItems.value = items
-                   isDataLoaded = true
-               }
-           }*/
         viewModelScope.launch {
             bulkRepository.getAllBulkItems().collect { items ->
                 _allItems = items
-                preloadFilters(_allItems)
+                if (isDataLoaded) {
+                    // Only preload filters after first load to avoid blocking initial composition
+                    preloadFilters(_allItems)
+                }
                 _scannedFilteredItems.value = items
+                isDataLoaded = true
             }
         }
     }
@@ -464,38 +456,37 @@ class BulkViewModel @Inject constructor(
         filteredItems: List<BulkItem>,
         stayVisibleInUnmatched: Boolean = false
     ) {
-        // ✅ Create a snapshot copy to safely iterate
-        val safeFilteredItems = filteredItems.toList()
-
         val matched = mutableListOf<BulkItem>()
         val unmatched = mutableListOf<BulkItem>()
         val scannedEpcSet = scannedEpcList.map { it.trim().uppercase() }.toSet()
         _matchedEpcSet.value = scannedEpcSet
+        // Compute matched TIDs too if needed (disabled)
+        // val scannedTidSet = _allScannedTags.value.mapNotNull { it.tid?.trim()?.uppercase() }.toSet() // TID matching disabled
+        // _matchedTidSet.value = scannedTidSet // TID matching disabled
 
-        safeFilteredItems.forEach { item ->
+        filteredItems.forEach { item ->
             val dbEpc = item.epc?.trim()?.uppercase()
             if (dbEpc != null && scannedEpcSet.contains(dbEpc)) {
                 val updatedItem = item.copy(scannedStatus = "Matched")
                 matched.add(updatedItem)
-                if (stayVisibleInUnmatched) unmatched.add(updatedItem)
+                if (stayVisibleInUnmatched) {
+                    unmatched.add(updatedItem)
+                }
             } else {
                 val updatedItem = item.copy(scannedStatus = "Unmatched")
                 unmatched.add(updatedItem)
             }
         }
 
-        // ✅ Update state lists safely within a Compose snapshot
-        androidx.compose.runtime.snapshots.Snapshot.withMutableSnapshot {
-            _matchedItems.clear()
-            _matchedItems.addAll(matched)
+        _matchedItems.clear()
+        _matchedItems.addAll(matched)
 
-            _unmatchedItems.clear()
-            _unmatchedItems.addAll(unmatched)
+        _unmatchedItems.clear()
+        _unmatchedItems.addAll(unmatched)
 
-            _scannedFilteredItems.value = safeFilteredItems
-        }
+        // Keep base list stable; do not remap entire list here
+        _scannedFilteredItems.value = filteredItems
     }
-
 
 
     fun pauseScanning() {
@@ -541,9 +532,7 @@ class BulkViewModel @Inject constructor(
 
     fun stopScanningAndCompute() {
         stopScanning()
-        viewModelScope.launch(Dispatchers.Main) {
-            computeScanResults(filteredItems)
-        }
+        computeScanResults(_filteredSource)
     }
 
 
@@ -1117,36 +1106,54 @@ class BulkViewModel @Inject constructor(
         val capabilities = cm.getNetworkCapabilities(network) ?: return false
         return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
+
     fun syncItems() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                _isLoading.value = true
-                _syncStatusText.value = "Downloading data from server..."
-                _syncProgress.value = 0f
+                Log.d("SYNC", "syncItems called")
 
-                val clientCode = employee?.clientCode ?: return@launch
+                withContext(Dispatchers.Main) {
+                    _isLoading.value = true
+                    _syncStatusText.value = "Downloading data from server..."
+                    _syncProgress.value = 0f
+                }
+
+                val clientCode = employee?.clientCode ?: run {
+                    withContext(Dispatchers.Main) { _isLoading.value = false }
+                    return@launch
+                }
+
                 val request = ClientCodeRequest(clientCode)
-
-                // Determine RFID type
                 val tagType = userPreferences.getClient()?.rfidType?.trim()?.lowercase() ?: "webreusable"
 
                 // Stage 1: Download items
-                val response = withContext(Dispatchers.IO) {
-                    bulkRepository.syncBulkItemsFromServer(request)
-                }
+                val response = bulkRepository.syncBulkItemsFromServer(request)
 
                 // Stage 2: Filter active items
-                val bulkItems = response
+                val bulkItems = response.asSequence()
                     .filter { (it.status == "ApiActive" || it.status == "Active") && (!it.rfidCode.isNullOrBlank() || !it.itemCode.isNullOrBlank()) }
                     .map { it.toBulkItem() }
+                    .toList()
 
                 val total = bulkItems.size
-                withContext(Dispatchers.IO) { bulkRepository.clearAllItems() }
+                bulkRepository.clearAllItems()
+
+                if (total == 0) {
+                    withContext(Dispatchers.Main) {
+                        _syncProgress.value = 1f
+                        _syncStatusText.value = "No items to sync"
+                        _isLoading.value = false
+                    }
+                    return@launch
+                }
 
                 // Stage 3: Process each item
-                bulkItems.forEachIndexed { index, item ->
+                val processedItems = mutableListOf<BulkItem>()
+                var processed = 0
+                var lastUpdate = System.currentTimeMillis()
+
+                for (item in bulkItems) {
                     val updatedItem = if (tagType == "webreusable") {
-                        // Web reusable: EPC from mapping, skip if RFID null
                         if (!item.rfid.isNullOrBlank()) {
                             if (item.epc.isNullOrBlank()) {
                                 item.epc = syncAndMapRow(item.rfid!!)
@@ -1154,121 +1161,57 @@ class BulkViewModel @Inject constructor(
                             item
                         } else null
                     } else {
-                        // Single use: hex from item code
                         if (!item.itemCode.isNullOrBlank()) {
-                            val hexValue = item.itemCode.toByteArray().joinToString("") { String.format("%02X", it) }
+                            val hexValue = item.itemCode.toByteArray()
+                                .joinToString("") { String.format("%02X", it) }
                             item.copy(rfid = item.itemCode, epc = hexValue, tid = hexValue)
                         } else null
                     }
 
-                    // Insert only if valid
                     if (updatedItem != null) {
-                        withContext(Dispatchers.IO) {
-                            bulkRepository.insertSingleItem(updatedItem)
-                        }
-                        Log.d("SYNC", "Inserted item: code=${updatedItem.itemCode}, rfid=${updatedItem.rfid}, epc=${updatedItem.epc}")
-                    } else {
-                        Log.w("SYNC", "Skipped item: code=${item.itemCode}, rfid=${item.rfid}, epc=${item.epc}")
+                        processedItems.add(updatedItem)
                     }
 
-                    // Update progress
-                    val processed = index + 1
-                    _syncStatusText.value = "Syncing $processed of $total"
-                    _syncProgress.value = processed.toFloat() / total
+                    processed++
+                    val now = System.currentTimeMillis()
+                    if (now - lastUpdate > 500) {
+                        val progress = processed.toFloat() / total
+                        withContext(Dispatchers.Main) {
+                            _syncProgress.value = progress
+                            _syncStatusText.value = "Processing $processed of $total"
+                        }
+                        lastUpdate = now
+                    }
+
+                    if (processedItems.size >= 100) {
+                        bulkRepository.insertBulkItems(processedItems.toList())
+                        processedItems.clear()
+                    }
                 }
 
-                _toastMessage.emit("✅ Synced ${bulkItems.size} items successfully!")
-                _syncStatusText.value = "Sync completed!"
+                if (processedItems.isNotEmpty()) {
+                    bulkRepository.insertBulkItems(processedItems)
+                }
+
+                withContext(Dispatchers.Main) {
+                    _toastMessage.emit("✅ Synced $total items successfully!")
+                    _syncStatusText.value = "Sync completed!"
+                }
 
             } catch (e: Exception) {
-                _syncStatusText.value = "Sync failed: ${e.localizedMessage}"
-                _toastMessage.emit("❌ Sync failed: ${e.localizedMessage}")
+                withContext(Dispatchers.Main) {
+                    _syncStatusText.value = "Sync failed: ${e.localizedMessage}"
+                    _toastMessage.emit("❌ Sync failed: ${e.localizedMessage}")
+                }
                 Log.e("SYNC", "Error syncing items", e)
             } finally {
-                _isLoading.value = false
+                withContext(Dispatchers.Main) {
+                    _isLoading.value = false
+                }
             }
         }
     }
 
-
-
-
-    /* fun syncItems() {
-         viewModelScope.launch(Dispatchers.IO) {
-             try {
-                 Log.d("Sync", "syncItems called")
-                 withContext(Dispatchers.Main) {
-                     _isLoading.value = true
-                     _syncProgress.value = 0f
-                     _syncStatusText.value = "Starting sync..."
-                 }
-
-                 val clientCode = employee?.clientCode ?: run {
-                     withContext(Dispatchers.Main) { _isLoading.value = false }
-                     return@launch
-                 }
-
-                 withContext(Dispatchers.Main) {
-                     _syncStatusText.value = "Fetching data..."
-                 }
-
-                 val response = bulkRepository.syncBulkItemsFromServer(ClientCodeRequest(clientCode))
-
-                 // Use sequence for memory-efficient lazy filtering
-                 val bulkItems = response.asSequence()
-                     .filter { (it.status == "ApiActive" || it.status == "Active") && !it.rfidCode.isNullOrBlank() }
-                     .map { it.toBulkItem() }
-                     .toList()
-
-                 val total = bulkItems.size
-                 bulkRepository.clearAllItems()
-
-                 if (total == 0) {
-                     withContext(Dispatchers.Main) {
-                         _syncProgress.value = 1f
-                         _syncStatusText.value = "No items to sync"
-                         _isLoading.value = false
-                     }
-                     return@launch
-                 }
-
-                 var inserted = 0
-                 var lastProgressUpdate = System.currentTimeMillis()
-
-                 while (inserted < total) {
-                     val end = minOf(inserted + 100, total)
-                     val batch = bulkItems.subList(inserted, end)
-                     bulkRepository.insertBulkItems(batch)
-                     inserted = end
-
-                     // Update UI only every ~500ms
-                     val now = System.currentTimeMillis()
-                     if (now - lastProgressUpdate > 500) {
-                         val progress = inserted.toFloat() / total
-                         withContext(Dispatchers.Main) {
-                             _syncProgress.value = progress
-                             _syncStatusText.value = "Syncing... $inserted of $total"
-                         }
-                         lastProgressUpdate = now
-                     }
-                 }
-
-                 withContext(Dispatchers.Main) {
-                     _toastMessage.emit("✅ Synced $total items successfully!")
-                     _syncStatusText.value = "Sync completed successfully!"
-                 }
-
-             } catch (e: Exception) {
-                 withContext(Dispatchers.Main) {
-                     _syncStatusText.value = "Sync failed: ${e.localizedMessage}"
-                     _toastMessage.emit("❌ Sync failed: ${e.localizedMessage}")
-                 }
-                 Log.e("Sync", "Error: ${e.localizedMessage}", e)
-             } finally {
-                 withContext(Dispatchers.Main) { _isLoading.value = false }
-             }
-         }
-     }*/
 
     fun setRfidForAllTags(scanned: String) {
         val updatedMap = mutableMapOf<Int, String>()

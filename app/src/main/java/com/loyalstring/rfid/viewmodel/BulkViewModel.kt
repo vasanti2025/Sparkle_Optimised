@@ -452,10 +452,10 @@ class BulkViewModel @Inject constructor(
         }
     }
 
-    fun computeScanResults(
+    suspend fun computeScanResults(
         filteredItems: List<BulkItem>,
         stayVisibleInUnmatched: Boolean = false
-    ) {
+    ) = withContext(Dispatchers.Default) {
         val matched = mutableListOf<BulkItem>()
         val unmatched = mutableListOf<BulkItem>()
         val scannedEpcSet = scannedEpcList.map { it.trim().uppercase() }.toSet()
@@ -478,11 +478,16 @@ class BulkViewModel @Inject constructor(
             }
         }
 
-        _matchedItems.clear()
-        _matchedItems.addAll(matched)
-
-        _unmatchedItems.clear()
-        _unmatchedItems.addAll(unmatched)
+        withContext(Dispatchers.Main) {
+            _matchedItems.clear()
+            //_matchedItems.addAll(matched)
+            matched.chunked(2000).forEach { chunk ->
+                _matchedItems.addAll(chunk)
+                delay(1)
+            }
+            _unmatchedItems.clear()
+            _unmatchedItems.addAll(unmatched)
+        }
 
         // Keep base list stable; do not remap entire list here
         _scannedFilteredItems.value = filteredItems
@@ -532,7 +537,9 @@ class BulkViewModel @Inject constructor(
 
     fun stopScanningAndCompute() {
         stopScanning()
-        computeScanResults(_filteredSource)
+        viewModelScope.launch {
+            computeScanResults(_filteredSource)
+        }
     }
 
 

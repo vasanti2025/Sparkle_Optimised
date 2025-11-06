@@ -9,6 +9,7 @@ import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.data.local.entity.SearchItem
 import com.loyalstring.rfid.data.reader.RFIDReaderManager
 import com.loyalstring.rfid.repository.BulkRepositoryImpl
+import com.loyalstring.rfid.ui.screens.lightTag
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -43,6 +44,7 @@ class SearchViewModel @Inject constructor(
 
 
     fun startSearch(unmatchedItems: List<BulkItem>,power: Int) {
+       // lightTag("535432535432535432535432")
         _searchItems.clear()
         _searchItems.addAll(unmatchedItems.map { item ->
             val epcValue = when {
@@ -67,35 +69,39 @@ class SearchViewModel @Inject constructor(
         }
     }
 
+    private var lastBlinkEpc: String? = null
+
     fun startTagScanning(power: Int) {
-        readerManager.startInventoryTag(power,true)
+        readerManager.reader?.apply {
+            setTagFocus(false)
+            setFastID(false)
+            setDynamicDistance(0)
+        }
+
+        readerManager.startInventoryTag(power, true)
 
         scanJob?.cancel()
         scanJob = viewModelScope.launch(Dispatchers.IO) {
             while (isActive) {
                 val tag = readerManager.readTagFromBuffer()
+
                 if (tag?.epc != null) {
-                    val epc = tag.epc
+                    val epc = tag.epc.trim()
                     val rssi = tag.rssi
                     val proximity = convertRssiToProximity(rssi)
-                    var id = -1
 
-                    // Assign ID based on proximity
-                    id = when {
-                        proximity in 1..49 -> 4
-                        proximity in 51..59 -> 2
-                        proximity in 61..69 -> 5
+                    val id = when {
                         proximity >= 70 -> 1
+                        proximity in 61..69 -> 5
+                        proximity in 51..59 -> 2
+                        proximity in 1..49 -> 4
                         else -> -1
                     }
 
-
-                    // Update UI list
                     val index = _searchItems.indexOfFirst {
-                        it.epc.trim().equals(epc.trim(), ignoreCase = true) ||
-                                it.rfid.trim().equals(epc.trim(), ignoreCase = true) ||
-                                it.itemCode.trim().equals(epc.trim(), ignoreCase = true)
+                        it.epc.equals(epc, true) || it.rfid.equals(epc, true) || it.itemCode.equals(epc, true)
                     }
+
                     if (index != -1) {
                         withContext(Dispatchers.Main) {
                             _searchItems[index] = _searchItems[index].copy(
@@ -108,29 +114,24 @@ class SearchViewModel @Inject constructor(
                                 lastSoundId = id
                                 readerManager.playSound(id)
                             }
+
+                            val searchedEpc = _searchItems[index].epc.trim()
+                            val epcMatched = epc.equals(searchedEpc, ignoreCase = true)
+
+                            if (epcMatched && proximity >= 90 && lastBlinkEpc != epc) {
+                                lastBlinkEpc = epc
+                                Log.d("SEARCH", "✅ EPC matched & new: $epc — triggering LED")
+                                lightTag(epc, searchedEpc)  // ✅ Don’t stop inventory
+                            }
                         }
-                    } else {
-                        Log.d("SEARCH_SCAN", "No match found for tag $epc")
                     }
-
-
-                    /*
-                                        // Update UI list
-                                        val index = _searchItems.indexOfFirst { it.epc == epc }
-                                        if (index != -1) {
-                                            withContext(Dispatchers.Main) {
-                                                _searchItems[index] = _searchItems[index].copy(
-                                                    rssi = rssi,
-                                                    proximityPercent = proximity
-                                                )
-                                            }
-                                        }*/
                 } else {
                     delay(100)
                 }
             }
         }
     }
+
     suspend fun getAllBulkItemsFromDb(): List<BulkItem> {
         return bulkRepositoryImpl.getAllBulkItems().first()
     }

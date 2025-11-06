@@ -32,11 +32,13 @@ import androidx.navigation.NavHostController
 import com.loyalstring.rfid.MainActivity
 import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.data.local.entity.SearchItem
+import com.loyalstring.rfid.data.reader.RFIDReaderManager
 import com.loyalstring.rfid.data.reader.ScanKeyListener
 import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.SearchViewModel
+import com.rscja.deviceapi.RFIDWithUHFUART
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 @Composable
@@ -49,6 +51,7 @@ fun SearchScreen(
     val context = LocalContext.current
     val activity = context.findActivity() as? MainActivity
     val lifecycleOwner = LocalLifecycleOwner.current
+     val readerManager: RFIDReaderManager
 
     var isScanning by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
@@ -176,6 +179,20 @@ fun SearchScreen(
         }
     }
 
+    // ✅ Listen for match updates to trigger LED light
+    LaunchedEffect(searchItems) {
+        Log.d("SEARCH", "SearchItems updated: size=${searchItems.size}")
+        searchItems.forEach { Log.d("SEARCH", "Tag=${it.rfid}, Proximity=${it.proximityPercent}") }
+
+        val matchedTag = searchItems.find { it.proximityPercent >= 0 }
+        if (matchedTag != null) {
+            Log.d("SEARCH", "Matched tag found: ${matchedTag.rfid}")
+           // lightTag(matchedTag.rfid)
+        } else {
+            Log.d("SEARCH", "❌ No tag with proximity >= 95")
+        }
+    }
+
     Scaffold(
         topBar = {
             GradientTopBar(
@@ -203,6 +220,7 @@ fun SearchScreen(
                 onScan = {},
                 onGscan = {
                     if (!isScanning) {
+                        //lightTag("535432535432535432535432")
                         val itemsToSearch = when {
                             isUnmatchedList && inputItems.isNotEmpty() -> inputItems
                             !isUnmatchedList && filteredDbItems.isNotEmpty() -> filteredDbItems
@@ -212,6 +230,7 @@ fun SearchScreen(
                         if (itemsToSearch.isNotEmpty()) {
                             searchViewModel.startSearch(itemsToSearch, selectedPower)
                             isScanning = true
+
                             Log.d("SEARCH", "Manual SCAN started (${itemsToSearch.size}) items")
                         } else {
                             Log.d("SEARCH", "⚠️ No items to scan")
@@ -281,6 +300,77 @@ fun SearchScreen(
         }
     }
 }
+private var _reader: RFIDWithUHFUART? = null
+val reader: RFIDWithUHFUART?
+    get() = _reader
+fun lightTag(scannedEpc: String, searchedEpc: String) {
+    try {
+        val reader = _reader ?: return
+
+        if (!scannedEpc.equals(searchedEpc, ignoreCase = true)) return
+
+        // ✅ Apply temporary EPC filter during active inventory
+        val filterApplied = reader.setFilter(
+            RFIDWithUHFUART.Bank_EPC,
+            32,
+            searchedEpc.length * 4,
+            searchedEpc
+        )
+
+        if (filterApplied) {
+            Log.d("RFID", "✅ LED trigger: filter applied for EPC: $searchedEpc")
+
+            // Wait a short time to allow LED blink during ongoing inventory
+            Thread.sleep(200)
+
+            // Clear filter immediately
+            reader.setFilter(0, 0, 0, "")
+            Log.d("RFID", "🔄 Filter cleared after LED blink")
+        } else {
+            Log.d("RFID", "❌ Failed to apply EPC filter for: $searchedEpc")
+        }
+
+    } catch (e: Exception) {
+        Log.e("RFID", "❌ Error lighting tag: ${e.message}", e)
+    }
+}
+
+
+
+
+
+
+
+
+
+/*fun lightTag(epc: String) {
+    try {
+        val reader = _reader ?: return
+
+        // LED indication (example implementation)
+        // Some devices use readData or custom command to blink light
+        val success = reader.readData(
+            "00000000", // Access password (default)
+            RFIDWithUHFUART.Bank_EPC, // EPC memory bank
+            0, // Start address
+            2, // Word count
+            epc, // EPC value for matching
+            RFIDWithUHFUART.Bank_RESERVED, // Target bank
+            4, // Start
+            1  // Count
+        )
+
+        Log.d("RFID", "LED lightTag called for EPC: $epc | Success: $success")
+
+        // Optionally play a sound to indicate match
+        if (success.isEmpty()) {
+            Log.d("RFID", "LED lightTag called for EPC@@: $epc | Success: $success")
+           // playSound(5) // use your soundMap[5] (found2)
+        }
+    } catch (e: Exception) {
+        Log.e("RFID", "Error lighting tag: ${e.message}", e)
+    }
+}*/
 
 
 

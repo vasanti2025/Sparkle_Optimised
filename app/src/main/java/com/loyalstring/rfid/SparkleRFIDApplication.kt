@@ -35,7 +35,7 @@ class SparkleRFIDApplication : Application(), Configuration.Provider {
         applicationScope.launch {
             try {
                 val reader = RFIDWithUHFUART.getInstance()
-                if (reader != null && reader.init()) {
+                if (reader != null && reader.init(this@SparkleRFIDApplication)) {
                     mReader = reader
                     Log.d("SparkleRFID", "RFID Reader initialized successfully")
                 } else {

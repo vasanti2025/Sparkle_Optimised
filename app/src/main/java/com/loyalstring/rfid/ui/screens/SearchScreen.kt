@@ -327,11 +327,11 @@ fun lightTag(scannedEpc: String, searchedEpc: String) {
             reader.setFilter(0, 0, 0, "")
             Log.d("RFID", "🔄 Filter cleared after LED blink")
         } else {
-            Log.d("RFID", "❌ Failed to apply EPC filter for: $searchedEpc")
+            Log.d("RFID", " Failed to apply EPC filter for: $searchedEpc")
         }
 
     } catch (e: Exception) {
-        Log.e("RFID", "❌ Error lighting tag: ${e.message}", e)
+        Log.e("RFID", " Error lighting tag: ${e.message}", e)
     }
 }
 

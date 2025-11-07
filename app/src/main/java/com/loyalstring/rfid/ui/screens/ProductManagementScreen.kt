@@ -302,7 +302,8 @@ fun ProductManagementScreen(
                 onGscan = { /* TODO */ },
                 onReset = { /* TODO */ },
                 isScanning = isScanning,
-                isEditMode=isEditMode
+                isEditMode=isEditMode,
+                isScreen=false
             )
         }
 

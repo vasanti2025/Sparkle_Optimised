@@ -192,7 +192,8 @@ fun ProductListScreen(
                 onGscan = { /* Gscan logic */ },
                 onReset = { /* Reset logic */ },
                 isScanning = isScanning,
-                isEditMode=isEditMode
+                isEditMode=isEditMode,
+                isScreen=false
             )
         }
     ) { innerPadding ->

@@ -203,8 +203,7 @@ fun SearchScreen(
             ScanBottomBar(
                 onSave = {},
                 onList = {},
-                onScan = {},
-                onGscan = {
+                onScan = {
                     if (!isScanning) {
                         val itemsToSearch = when {
                             isUnmatchedList && inputItems.isNotEmpty() -> inputItems
@@ -225,6 +224,9 @@ fun SearchScreen(
                         Log.d("SEARCH", "Manual SCAN stopped")
                     }
                 },
+                onGscan = {
+
+                },
                 onReset = {
                     searchQuery = ""
                     filteredDbItems = emptyList()
@@ -232,7 +234,8 @@ fun SearchScreen(
                     isScanning = false
                 },
                 isScanning = isScanning,
-                isEditMode = false
+                isEditMode = false,
+                isScreen=true
             )
         }
     ) { innerPadding ->

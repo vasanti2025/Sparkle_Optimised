@@ -602,7 +602,8 @@ fun AddProductScreen(
                     updateField("Stone Weight", "")
                 },
                 isScanning = isScanning,
-                isEditMode=isEditMode
+                isEditMode = isEditMode,
+                isScreen = false
             )
         }
     ) { innerPadding ->
@@ -696,7 +697,8 @@ fun ScanBottomBar(
     onGscan: () -> Unit,
     onReset: () -> Unit,
     isScanning: Boolean,
-    isEditMode: Boolean
+    isEditMode: Boolean,
+    isScreen: Boolean
 ) {
 
     // We use a Box to allow the center button to overlap/elevate
@@ -751,7 +753,7 @@ fun ScanBottomBar(
             }*/
             TextButton(onClick = onGscan) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (isScanning) {
+                    if (isScanning && !isScreen) {
                         // Use vector icon when scanning
                         Icon(
                             imageVector = Icons.Default.Close,
@@ -770,7 +772,7 @@ fun ScanBottomBar(
                     Spacer(modifier = Modifier.width(4.dp))
 
                     Text(
-                        text = if (isScanning) "Stop" else "Gscan",
+                        text = if (isScanning && !isScreen) "Stop" else "Gscan",
                         color = if (isScanning) Color.DarkGray else Color.DarkGray,
                         fontSize = 12.sp,
                         fontFamily = poppins
@@ -808,15 +810,61 @@ fun ScanBottomBar(
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_scan),
-                    contentDescription = "Scan",
-                    tint = Color.White,
-                    modifier = Modifier.size(25.dp)
-                )
+                /*   if (isScreen && !isScanning) {
+                       Icon(
+                           painter = painterResource(R.drawable.ic_scan),
+                           contentDescription = "Scan",
+                           tint = Color.White,
+                           modifier = Modifier.size(25.dp)
+                       )
+
+                   }else if (!isScreen) {
+                       Icon(
+                           painter = painterResource(R.drawable.ic_scan),
+                           contentDescription = "Scan",
+                           tint = Color.White,
+                           modifier = Modifier.size(25.dp)
+                       )
+
+                   } else {
+                       Icon(
+                           imageVector = Icons.Default.Close,
+                           contentDescription = "Stop Scan",
+                           tint = Color.White
+                       )
+                   }*/
+
+                if (isScreen) {
+
+                    if (isScanning) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = Color.White,
+                            modifier = Modifier.size(25.dp)
+                        )
+                    } else {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_scan),
+                            contentDescription = "Scan",
+                            tint = Color.White,
+                            modifier = Modifier.size(25.dp)
+                        )
+                    }
+
+                } else {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_scan),
+                        contentDescription = "Scan",
+                        tint = Color.White,
+                        modifier = Modifier.size(25.dp)
+                    )
+
+
+                }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "Scan",
+                    text = if (isScanning && isScreen ) "Stop" else "Scan",
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,

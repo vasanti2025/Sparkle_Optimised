@@ -82,11 +82,17 @@ class SearchViewModel @Inject constructor(
                     val rssi = tag.rssi
                     val proximity = convertRssiToProximity(rssi)
 
-                    val id = when {
+                   /* val id = when {
                         proximity >= 70 -> 1
                         proximity in 61..69 -> 5
                         proximity in 51..59 -> 2
                         proximity in 1..49 -> 4
+                        else -> -1
+                    }*/
+                   val id = when {
+                        proximity in 1..49 -> 4
+                        proximity in 51..75 -> 2
+                        proximity >= 76 -> 5
                         else -> -1
                     }
 

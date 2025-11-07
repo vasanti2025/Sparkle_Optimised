@@ -203,7 +203,8 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
 
                 },
                 isScanning = isScanning,
-                isEditMode=isEditMode
+                isEditMode=isEditMode,
+                isScreen=false
             )
         }
     ) { innerPadding ->

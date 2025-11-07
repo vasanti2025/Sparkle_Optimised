@@ -154,7 +154,8 @@ fun SampleOutScreen(
                     viewModel.stopBarcodeScanner()
                 },
                 isScanning = isScanning,
-                isEditMode = isEditMode
+                isEditMode = isEditMode,
+                isScreen=false
 
             )
         }

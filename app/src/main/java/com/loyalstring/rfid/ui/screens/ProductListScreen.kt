@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -115,6 +116,8 @@ fun ProductListScreen(
     var isEditMode by remember { mutableStateOf(false) }
     val deleteResponse by singleproductViewModel.productDeleetResponse.observeAsState()
     var shouldNavigateBack by remember { mutableStateOf(false) }
+
+    val isLoading by viewModel.isLoading.collectAsState()
 
     LaunchedEffect(shouldNavigateBack) {
         if (shouldNavigateBack) {
@@ -197,16 +200,21 @@ fun ProductListScreen(
             )
         }
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
 
-                .background(Color.White)
         ) {
-            Spacer(Modifier.height(12.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
 
-          /*  OutlinedTextField(
+                    .background(Color.White)
+            ) {
+                Spacer(Modifier.height(12.dp))
+
+                /*  OutlinedTextField(
                 value = searchQuery.value,
                 onValueChange = { searchQuery.value = it },
                 placeholder = { Text("Enter RFID / Item code / Product", fontFamily = poppins) },
@@ -216,396 +224,428 @@ fun ProductListScreen(
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true
             )*/
-            TextField(
-                value = searchQuery.value,
-                onValueChange = { searchQuery.value = it },
-                placeholder = { Text("Enter RFID / Item code / Product", fontFamily = poppins) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                singleLine = true,
-                shape = RoundedCornerShape(5.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color(0xFFF0F0F0),
-                    unfocusedContainerColor = Color(0xFFF0F0F0),
-                    disabledContainerColor = Color(0xFFF0F0F0),
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent
-                )
-            )
-
-
-            Spacer(Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp) // adds spacing between buttons
-            ) {
-                ActionButton(
-                    text = if (isGridView) "List View" else "Grid View",
-                    onClick = { isGridView = !isGridView },
-                    gradient = Brush.horizontalGradient(
-                        colors = listOf(Color(0xFFD32940), Color(0xFF5231A7)) // blue to cyan gradient
-                    ),
-                    backgroundColor = Color.Transparent,
-                    icon = if (isGridView) {
-                        painterResource(id = R.drawable.list_svg)   // 👈 your drawable
-                    } else {
-                        painterResource(id = R.drawable.grid_svg)
-                    }
-                )
-                ActionButton(
-                    text = "Filter",
-                    onClick = { },
-                    gradient = Brush.horizontalGradient(
-                        colors = listOf(Color(0xFFD32940), Color(0xFF5231A7)) // red to purple
-                    ),
-                    icon =  painterResource(id = R.drawable.filter_svg)
-                )
-                ActionButton(
-                    text = "Export Pdf",
-                    onClick = { },
-                    modifier = Modifier.defaultMinSize(minWidth = 120.dp),
-                    gradient = Brush.horizontalGradient(
-                        colors = listOf(Color(0xFFD32940), Color(0xFF5231A7)) // red to purple
-                    ),
-                    icon = painterResource(id = R.drawable.pdf)
+                TextField(
+                    value = searchQuery.value,
+                    onValueChange = { searchQuery.value = it },
+                    placeholder = {
+                        Text(
+                            "Enter RFID / Item code / Product",
+                            fontFamily = poppins
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(5.dp),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color(0xFFF0F0F0),
+                        unfocusedContainerColor = Color(0xFFF0F0F0),
+                        disabledContainerColor = Color(0xFFF0F0F0),
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent
+                    )
                 )
 
-            }
 
+                Spacer(Modifier.height(12.dp))
 
-            Spacer(Modifier.height(12.dp))
-
-            if (isGridView) {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(filteredItems) { item ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    selectedItem = item
-                                    showDialog = true
-                                }
-                                .height(IntrinsicSize.Min),
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, Color.LightGray),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .padding(12.dp)
-                                    .fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(4.dp) // Less vertical spacing
-                            ) {
-                                if (!item.imageUrl.isNullOrEmpty()) {
-                                    val stored = item.imageUrl.trim()
-                                        .trimEnd(',') // remove any trailing commas/spaces
-                                    if (stored.startsWith("/")) {
-                                        val file = File(stored)
-                                        if (file.exists()) file
-                                        else null
-                                    } else {
-                                        stored.split(",")
-                                            .map { it.trim() }
-                                            .filter { it.isNotEmpty() }
-                                            .lastOrNull()
-                                            ?.let {
-
-                                                AsyncImage(
-                                                    model = baseUrl + it,
-                                                    contentDescription = item.itemCode,
-                                                    modifier = Modifier
-                                                        .size(72.dp)
-                                                        .align(Alignment.CenterHorizontally)
-                                                )
-                                            }
-                                    }
-
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Default.Photo,
-                                        contentDescription = item.itemCode,
-                                        tint = Color.Gray,
-                                        modifier = Modifier
-                                            .size(72.dp)
-                                            .align(Alignment.CenterHorizontally)
-                                    )
-                                }
-
-                                // Row: RFID & Item Code
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp) // Better spacing between the two
-                                ) {
-                                    Text(
-                                        text = "RFID: ${item.rfid}",
-                                        fontFamily = poppins,
-                                        fontSize = 9.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Text(
-                                        text = "Item: ${item.itemCode}",
-                                        fontFamily = poppins,
-                                        fontSize = 9.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
-
-
-                                // Row: Gross Wt & Net Wt
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Text(
-                                        text = "G.Wt: ${item.grossWeight}",
-                                        fontFamily = poppins,
-                                        fontSize = 9.sp,
-                                        maxLines = 1,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Text(
-                                        text = "N.Wt: ${item.netWeight}",
-                                        fontFamily = poppins,
-                                        fontSize = 9.sp,
-                                        maxLines = 1,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-
-            } else {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-
-                        .background(Color(0xFF2E2E2E)),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp) // adds spacing between buttons
                 ) {
-                    Text(
-                        "S.No",
-                        Modifier.width(40.dp),
-                        color = Color.White,
-                        textAlign = TextAlign.Start,
-                        fontFamily = poppins,
-                        fontSize = 12.sp,
-                        maxLines = 1
-                    )
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .horizontalScroll(scrollState),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        listOf(
-                            "Product Name" to 120.dp,
-                            "Item code" to 70.dp,
-                            "RFID" to 60.dp,
-                            "G.wt" to 60.dp,
-                            "S.wt" to 60.dp,
-                            "D.wt" to 60.dp,
-                            "N.wt" to 60.dp,
-                            "Category" to 70.dp,
-                            "Design" to 60.dp,
-                            "Purity" to 60.dp,
-                            "Making/g" to 80.dp,
-                            "Making%" to 80.dp,
-                            "Fix Making" to 80.dp,
-                            "Fix Wastage" to 80.dp,
-                            "S Amt" to 60.dp,
-                            "D Amt" to 60.dp,
-                            "SKU" to 70.dp,
-                            "EPC" to 160.dp,
-                            "Vendor" to 80.dp
-                           // "TID" to 90.dp
-                        ).forEach { (label, width) ->
-                            Text(
-                                label,
-                                Modifier.width(width),
-                                color = Color.White,
-                                textAlign = TextAlign.Start,
-                                fontFamily = poppins,
-                                fontSize = 12.sp,
-                                maxLines = 1
-                            )
+                    ActionButton(
+                        text = if (isGridView) "List View" else "Grid View",
+                        onClick = { isGridView = !isGridView },
+                        gradient = Brush.horizontalGradient(
+                            colors = listOf(
+                                Color(0xFFD32940),
+                                Color(0xFF5231A7)
+                            ) // blue to cyan gradient
+                        ),
+                        backgroundColor = Color.Transparent,
+                        icon = if (isGridView) {
+                            painterResource(id = R.drawable.list_svg)   // 👈 your drawable
+                        } else {
+                            painterResource(id = R.drawable.grid_svg)
                         }
-                    }
-                    Text(
-                        "Edit",
-                        Modifier.width(35.dp),
-                        color = Color.White,
-                        textAlign = TextAlign.Start,
-                        fontFamily = poppins,
-                        fontSize = 12.sp
                     )
-                    Text(
-                        "Delete",
-                        Modifier.width(55.dp),
-                        color = Color.White,
-                        textAlign = TextAlign.Start,
-                        fontFamily = poppins,
-                        fontSize = 12.sp
+                    ActionButton(
+                        text = "Filter",
+                        onClick = { },
+                        gradient = Brush.horizontalGradient(
+                            colors = listOf(Color(0xFFD32940), Color(0xFF5231A7)) // red to purple
+                        ),
+                        icon = painterResource(id = R.drawable.filter_svg)
                     )
+                    ActionButton(
+                        text = "Export Pdf",
+                        onClick = { },
+                        modifier = Modifier.defaultMinSize(minWidth = 120.dp),
+                        gradient = Brush.horizontalGradient(
+                            colors = listOf(Color(0xFFD32940), Color(0xFF5231A7)) // red to purple
+                        ),
+                        icon = painterResource(id = R.drawable.pdf)
+                    )
+
                 }
 
-                LazyColumn(
-                    contentPadding = PaddingValues(vertical = 2.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    itemsIndexed(filteredItems) { index, item ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "${index + 1}",
-                                Modifier
-                                    .width(40.dp)
-                                    .padding(5.dp),
-                                textAlign = TextAlign.Start,
-                                fontFamily = poppins,
-                                fontSize = 12.sp
-                            )
 
-                            Row(
+                Spacer(Modifier.height(12.dp))
+
+                if (isGridView) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        contentPadding = PaddingValues(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(filteredItems) { item ->
+                            Card(
                                 modifier = Modifier
-                                    .weight(1f)
+                                    .fillMaxWidth()
                                     .clickable {
                                         selectedItem = item
                                         showDialog = true
                                     }
-                                    .horizontalScroll(scrollState),
+                                    .height(IntrinsicSize.Min),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, Color.LightGray),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .padding(12.dp)
+                                        .fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp) // Less vertical spacing
+                                ) {
+                                    if (!item.imageUrl.isNullOrEmpty()) {
+                                        val stored = item.imageUrl.trim()
+                                            .trimEnd(',') // remove any trailing commas/spaces
+                                        if (stored.startsWith("/")) {
+                                            val file = File(stored)
+                                            if (file.exists()) file
+                                            else null
+                                        } else {
+                                            stored.split(",")
+                                                .map { it.trim() }
+                                                .filter { it.isNotEmpty() }
+                                                .lastOrNull()
+                                                ?.let {
+
+                                                    AsyncImage(
+                                                        model = baseUrl + it,
+                                                        contentDescription = item.itemCode,
+                                                        modifier = Modifier
+                                                            .size(72.dp)
+                                                            .align(Alignment.CenterHorizontally)
+                                                    )
+                                                }
+                                        }
+
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.Photo,
+                                            contentDescription = item.itemCode,
+                                            tint = Color.Gray,
+                                            modifier = Modifier
+                                                .size(72.dp)
+                                                .align(Alignment.CenterHorizontally)
+                                        )
+                                    }
+
+                                    // Row: RFID & Item Code
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp) // Better spacing between the two
+                                    ) {
+                                        Text(
+                                            text = "RFID: ${item.rfid}",
+                                            fontFamily = poppins,
+                                            fontSize = 9.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Text(
+                                            text = "Item: ${item.itemCode}",
+                                            fontFamily = poppins,
+                                            fontSize = 9.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+
+
+                                    // Row: Gross Wt & Net Wt
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(
+                                            text = "G.Wt: ${item.grossWeight}",
+                                            fontFamily = poppins,
+                                            fontSize = 9.sp,
+                                            maxLines = 1,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Text(
+                                            text = "N.Wt: ${item.netWeight}",
+                                            fontFamily = poppins,
+                                            fontSize = 9.sp,
+                                            maxLines = 1,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+
+                            .background(Color(0xFF2E2E2E)),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "S.No",
+                            Modifier.width(40.dp),
+                            color = Color.White,
+                            textAlign = TextAlign.Start,
+                            fontFamily = poppins,
+                            fontSize = 12.sp,
+                            maxLines = 1
+                        )
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .horizontalScroll(scrollState),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            listOf(
+                                "Product Name" to 120.dp,
+                                "Item code" to 70.dp,
+                                "RFID" to 60.dp,
+                                "G.wt" to 60.dp,
+                                "S.wt" to 60.dp,
+                                "D.wt" to 60.dp,
+                                "N.wt" to 60.dp,
+                                "Category" to 70.dp,
+                                "Design" to 60.dp,
+                                "Purity" to 60.dp,
+                                "Making/g" to 80.dp,
+                                "Making%" to 80.dp,
+                                "Fix Making" to 80.dp,
+                                "Fix Wastage" to 80.dp,
+                                "S Amt" to 60.dp,
+                                "D Amt" to 60.dp,
+                                "SKU" to 70.dp,
+                                "EPC" to 160.dp,
+                                "Vendor" to 80.dp
+                                // "TID" to 90.dp
+                            ).forEach { (label, width) ->
+                                Text(
+                                    label,
+                                    Modifier.width(width),
+                                    color = Color.White,
+                                    textAlign = TextAlign.Start,
+                                    fontFamily = poppins,
+                                    fontSize = 12.sp,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                        Text(
+                            "Edit",
+                            Modifier.width(35.dp),
+                            color = Color.White,
+                            textAlign = TextAlign.Start,
+                            fontFamily = poppins,
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            "Delete",
+                            Modifier.width(55.dp),
+                            color = Color.White,
+                            textAlign = TextAlign.Start,
+                            fontFamily = poppins,
+                            fontSize = 12.sp
+                        )
+                    }
+
+                    LazyColumn(
+                        contentPadding = PaddingValues(vertical = 2.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        itemsIndexed(filteredItems) { index, item ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                listOf(
-                                    item.productName to 120.dp,
-                                    item.itemCode to 70.dp,
-                                    item.rfid to 60.dp,
-                                    item.grossWeight to 60.dp,
-                                    item.stoneWeight to 60.dp,
-                                    item.diamondWeight to 60.dp,
-                                    item.netWeight to 60.dp,
-                                    item.category to 70.dp,
-                                    item.design to 60.dp,
-                                    item.purity to 60.dp,
-                                    item.makingPerGram to 80.dp,
-                                    item.makingPercent to 80.dp,
-                                    item.fixMaking to 80.dp,
-                                    item.fixWastage to 80.dp,
-                                    item.stoneAmount to 60.dp,
-                                    item.diamondAmount to 60.dp,
-                                    item.sku to 70.dp,
-                                    (
-                                            (item.uhfTagInfo?.epc ?: item.epc)?.takeIf {
-                                                !it.contains(
-                                                    "temp",
-                                                    ignoreCase = true
-                                                )
-                                            } ?: ""
-                                            ) to 160.dp,
-                                    item.vendor to 80.dp
-                                  //  (item.uhfTagInfo?.epc ?: item.epc) to 90.dp
-                                ).forEach { (value, width) ->
-                                    Text(
-                                        value?.ifBlank { "-" } ?: "-",
-                                        Modifier.width(width),
-                                        fontSize = 10.sp,
-                                        textAlign = TextAlign.Start,
-                                        fontFamily = poppins,
-                                        maxLines = 1
+                                Text(
+                                    "${index + 1}",
+                                    Modifier
+                                        .width(40.dp)
+                                        .padding(5.dp),
+                                    textAlign = TextAlign.Start,
+                                    fontFamily = poppins,
+                                    fontSize = 12.sp
+                                )
+
+                                Row(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
+                                            selectedItem = item
+                                            showDialog = true
+                                        }
+                                        .horizontalScroll(scrollState),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    listOf(
+                                        item.productName to 120.dp,
+                                        item.itemCode to 70.dp,
+                                        item.rfid to 60.dp,
+                                        item.grossWeight to 60.dp,
+                                        item.stoneWeight to 60.dp,
+                                        item.diamondWeight to 60.dp,
+                                        item.netWeight to 60.dp,
+                                        item.category to 70.dp,
+                                        item.design to 60.dp,
+                                        item.purity to 60.dp,
+                                        item.makingPerGram to 80.dp,
+                                        item.makingPercent to 80.dp,
+                                        item.fixMaking to 80.dp,
+                                        item.fixWastage to 80.dp,
+                                        item.stoneAmount to 60.dp,
+                                        item.diamondAmount to 60.dp,
+                                        item.sku to 70.dp,
+                                        (
+                                                (item.uhfTagInfo?.epc ?: item.epc)?.takeIf {
+                                                    !it.contains(
+                                                        "temp",
+                                                        ignoreCase = true
+                                                    )
+                                                } ?: ""
+                                                ) to 160.dp,
+                                        item.vendor to 80.dp
+                                        //  (item.uhfTagInfo?.epc ?: item.epc) to 90.dp
+                                    ).forEach { (value, width) ->
+                                        Text(
+                                            value?.ifBlank { "-" } ?: "-",
+                                            Modifier.width(width),
+                                            fontSize = 10.sp,
+                                            textAlign = TextAlign.Start,
+                                            fontFamily = poppins,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+
+                                IconButton(onClick = {
+                                    try {
+                                        val currentEntry = navController.currentBackStackEntry
+                                        currentEntry?.savedStateHandle?.set("item", item)
+                                        navController.navigate(Screens.EditProductScreen.route)
+                                    } catch (e: Exception) {
+                                        Log.e("NAVIGATION", "BackStackEntry error: ${e.message}")
+                                    }
+                                }, modifier = Modifier.width(30.dp)) {
+                                    Icon(
+                                        painter = painterResource(id = com.loyalstring.rfid.R.drawable.ic_edit_svg),
+                                        contentDescription = "Edit",
+                                        tint = Color.DarkGray
                                     )
                                 }
-                            }
+                                IconButton(
+                                    onClick = {
+                                        selectedItem = item
+                                        showConfirmDelete = true
+                                    },
 
-                            IconButton(onClick = {
-                                try {
-                                    val currentEntry = navController.currentBackStackEntry
-                                    currentEntry?.savedStateHandle?.set("item", item)
-                                    navController.navigate(Screens.EditProductScreen.route)
-                                } catch (e: Exception) {
-                                    Log.e("NAVIGATION", "BackStackEntry error: ${e.message}")
+
+                                    // onClick = { /* Delete */ },
+                                    modifier = Modifier.width(50.dp)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(id = com.loyalstring.rfid.R.drawable.ic_delete_svg),
+                                        contentDescription = "Delete",
+                                        tint = Color.DarkGray
+                                    )
                                 }
-                            }, modifier = Modifier.width(30.dp)) {
-                                Icon(
-                                    painter = painterResource(id = com.loyalstring.rfid.R.drawable.ic_edit_svg),
-                                    contentDescription = "Edit",
-                                    tint = Color.DarkGray
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    selectedItem = item
-                                    showConfirmDelete = true
-                                },
-
-
-                               // onClick = { /* Delete */ },
-                                modifier = Modifier.width(50.dp)
-                            ) {
-                                Icon(
-                                    painter = painterResource(id = com.loyalstring.rfid.R.drawable.ic_delete_svg),
-                                    contentDescription = "Delete",
-                                    tint = Color.DarkGray
-                                )
                             }
                         }
                     }
                 }
-            }
-            if (showDialog && selectedItem != null) {
-                ItemDetailsDialog(item = selectedItem!!, onDismiss = { showDialog = false })
-            }
-            // existing product details popup
-            if (showDialog && selectedItem != null) {
-                ItemDetailsDialog(item = selectedItem!!, onDismiss = { showDialog = false })
-            }
+                if (showDialog && selectedItem != null) {
+                    ItemDetailsDialog(item = selectedItem!!, onDismiss = { showDialog = false })
+                }
+                // existing product details popup
+                if (showDialog && selectedItem != null) {
+                    ItemDetailsDialog(item = selectedItem!!, onDismiss = { showDialog = false })
+                }
 
 // ✅ add confirmation popup here
-            ConfirmDeleteDialog(
-                visible = showConfirmDelete,
-                productName = selectedItem?.productName,
-                onConfirm = {
-                    val id = selectedItem?.id ?: 0
-                    val clientCode = employee?.clientCode
-                    if (id > 0) {
-                        //deletingItemId = id // ✅ keep id safe
-                        singleproductViewModel.deleetProduct(
-                            listOf(
-                                ProductDeleteModelReq(
-                                    Id = id,
-                                    ClientCode = clientCode.toString()
+                ConfirmDeleteDialog(
+                    visible = showConfirmDelete,
+                    productName = selectedItem?.productName,
+                    onConfirm = {
+                        val id = selectedItem?.id ?: 0
+                        val clientCode = employee?.clientCode
+                        if (id > 0) {
+                            //deletingItemId = id // ✅ keep id safe
+                            singleproductViewModel.deleetProduct(
+                                listOf(
+                                    ProductDeleteModelReq(
+                                        Id = id,
+                                        ClientCode = clientCode.toString()
+                                    )
                                 )
                             )
-                        )
+                        }
+                        showConfirmDelete = false
+                        selectedItem = null
+                    },
+                    onDismiss = {
+                        showConfirmDelete = false
                     }
-                    showConfirmDelete = false
-                    selectedItem = null
-                },
-                onDismiss = {
-                    showConfirmDelete = false
-                }
-            )
+                )
 
+            }
+        }
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0x88000000)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "Loading products...",
+                        color = Color.White,
+                        fontFamily = poppins,
+                        fontSize = 14.sp
+                    )
+                }
+            }
         }
     }
 }

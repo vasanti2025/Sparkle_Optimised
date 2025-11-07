@@ -11,12 +11,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+
+
 @HiltViewModel
 class ProductListViewModel @Inject constructor(
     repository: BulkRepository
 ) : ViewModel() {
-
-  //  val productList: Flow<List<BulkItem>> = repository.getAllBulkItems()
 
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading
@@ -26,11 +26,15 @@ class ProductListViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            repository.getAllBulkItems().collect { items ->
-                _productList.value = items
+            try {
+                _isLoading.value = true
+                repository.getAllBulkItems().collect { items ->
+                    _productList.value = items
+                    _isLoading.value = false
+                }
+            } catch (e: Exception) {
                 _isLoading.value = false
             }
         }
     }
-
 }

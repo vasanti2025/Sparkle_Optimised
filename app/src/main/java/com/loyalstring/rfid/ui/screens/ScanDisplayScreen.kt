@@ -29,6 +29,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -159,7 +160,7 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
             }
         )
     }
-
+    val isLoading by productListViewModel.isLoading.collectAsState()
     val allItems by productListViewModel.productList.collectAsState(initial = emptyList())
     // incoming filter from previous screen (branch/box/counter/exhibition)
     val filterTypeName = navController.previousBackStackEntry
@@ -446,122 +447,148 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
             }
         }
     ) { innerPadding ->
-        Column(Modifier.padding(innerPadding)) {
-            FilterRow(
-                selectedCategories,
-                selectedProducts,
-                selectedDesigns,
-                onCategoryClick = {
-                    filterType = "Category"
-                    // entering filter dialog resets drill-down navigation
-                    currentLevel = "Category"
-                    currentCategory = null
-                    currentProduct = null
-                    currentDesign = null
-                    showDialog = true
-                },
-                onProductClick = {
-                    if (selectedCategories.isNotEmpty() || allCategories.isNotEmpty()) {
-                        filterType = "Product"
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+        ) {
+            Column(Modifier.padding(innerPadding)) {
+                FilterRow(
+                    selectedCategories,
+                    selectedProducts,
+                    selectedDesigns,
+                    onCategoryClick = {
+                        filterType = "Category"
                         // entering filter dialog resets drill-down navigation
                         currentLevel = "Category"
                         currentCategory = null
                         currentProduct = null
                         currentDesign = null
                         showDialog = true
-                    } else Toast.makeText(context, "Select category first", Toast.LENGTH_SHORT)
-                        .show()
-                },
-                onDesignClick = {
-                    if (selectedProducts.isNotEmpty() || allProducts.isNotEmpty()) {
-                        filterType = "Design"
-                        currentLevel = "Category"
-                        currentCategory = null
-                        currentProduct = null
-                        currentDesign = null
-                        showDialog = true
-                    } else Toast.makeText(context, "Select product first", Toast.LENGTH_SHORT)
-                        .show()
-                }
-            )
+                    },
+                    onProductClick = {
+                        if (selectedCategories.isNotEmpty() || allCategories.isNotEmpty()) {
+                            filterType = "Product"
+                            // entering filter dialog resets drill-down navigation
+                            currentLevel = "Category"
+                            currentCategory = null
+                            currentProduct = null
+                            currentDesign = null
+                            showDialog = true
+                        } else Toast.makeText(context, "Select category first", Toast.LENGTH_SHORT)
+                            .show()
+                    },
+                    onDesignClick = {
+                        if (selectedProducts.isNotEmpty() || allProducts.isNotEmpty()) {
+                            filterType = "Design"
+                            currentLevel = "Category"
+                            currentCategory = null
+                            currentProduct = null
+                            currentDesign = null
+                            showDialog = true
+                        } else Toast.makeText(context, "Select product first", Toast.LENGTH_SHORT)
+                            .show()
+                    }
+                )
 
-            TableHeader(currentLevel)
+                TableHeader(currentLevel)
 
-            // ---------- L A Z Y   C O L U M N   (drill-down + multi-select friendly) ----------
-            LazyColumn(modifier = Modifier.weight(1f)) {
-                when (currentLevel) {
-                    "Category" -> {
-                        val grouped = displayItems.groupBy { it.category ?: "Unknown" }
-                        grouped.forEach { (label, items) ->
-                            item {
-                                TableDataRow(TableRow(label, items), currentLevel) {
-                                    // drill down to product for the chosen category (single-select drill)
-                                    currentCategory = label
-                                    selectedCategories.clear()
-                                    selectedCategories.add(label)
-                                    selectedProducts.clear()
-                                    selectedDesigns.clear()
-                                    currentLevel = "Product"
+                // ---------- L A Z Y   C O L U M N   (drill-down + multi-select friendly) ----------
+                LazyColumn(modifier = Modifier.weight(1f)) {
+                    when (currentLevel) {
+                        "Category" -> {
+                            val grouped = displayItems.groupBy { it.category ?: "Unknown" }
+                            grouped.forEach { (label, items) ->
+                                item {
+                                    TableDataRow(TableRow(label, items), currentLevel) {
+                                        // drill down to product for the chosen category (single-select drill)
+                                        currentCategory = label
+                                        selectedCategories.clear()
+                                        selectedCategories.add(label)
+                                        selectedProducts.clear()
+                                        selectedDesigns.clear()
+                                        currentLevel = "Product"
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    "Product" -> {
-                        val grouped = displayItems
-                            .filter { selectedCategories.isEmpty() || it.category in selectedCategories }
-                            .groupBy { it.productName ?: "Unknown" }
+                        "Product" -> {
+                            val grouped = displayItems
+                                .filter { selectedCategories.isEmpty() || it.category in selectedCategories }
+                                .groupBy { it.productName ?: "Unknown" }
 
-                        grouped.forEach { (label, items) ->
-                            item {
-                                TableDataRow(TableRow(label, items), currentLevel) {
-                                    // when clicking product row, drill to design level
-                                    currentProduct = label
-                                    if (!selectedProducts.contains(label)) selectedProducts.add(
-                                        label
-                                    )
-                                    selectedDesigns.clear()
-                                    currentLevel = "Design"
+                            grouped.forEach { (label, items) ->
+                                item {
+                                    TableDataRow(TableRow(label, items), currentLevel) {
+                                        // when clicking product row, drill to design level
+                                        currentProduct = label
+                                        if (!selectedProducts.contains(label)) selectedProducts.add(
+                                            label
+                                        )
+                                        selectedDesigns.clear()
+                                        currentLevel = "Design"
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    "Design" -> {
-                        val grouped = displayItems
-                            .filter {
+                        "Design" -> {
+                            val grouped = displayItems
+                                .filter {
+                                    (selectedCategories.isEmpty() || it.category in selectedCategories) &&
+                                            (selectedProducts.isEmpty() || it.productName in selectedProducts)
+                                }
+                                .groupBy { it.design ?: "Unknown" }
+
+                            grouped.forEach { (label, items) ->
+                                item {
+                                    TableDataRow(TableRow(label, items), currentLevel) {
+                                        currentDesign = label
+                                        if (!selectedDesigns.contains(label)) selectedDesigns.add(
+                                            label
+                                        )
+                                        currentLevel = "DesignItems"
+                                    }
+                                }
+                            }
+                        }
+
+                        "DesignItems" -> {
+                            val itemsList = displayItems.filter {
                                 (selectedCategories.isEmpty() || it.category in selectedCategories) &&
-                                        (selectedProducts.isEmpty() || it.productName in selectedProducts)
+                                        (selectedProducts.isEmpty() || it.productName in selectedProducts) &&
+                                        (selectedDesigns.isEmpty() || it.design in selectedDesigns)
                             }
-                            .groupBy { it.design ?: "Unknown" }
-
-                        grouped.forEach { (label, items) ->
-                            item {
-                                TableDataRow(TableRow(label, items), currentLevel) {
-                                    currentDesign = label
-                                    if (!selectedDesigns.contains(label)) selectedDesigns.add(label)
-                                    currentLevel = "DesignItems"
+                            items(
+                                itemsList,
+                                key = {
+                                    it.epc ?: it.itemCode ?: it.design ?: it.hashCode().toString()
+                                }) { item ->
+                                DesignItemRow(item) { clickedItem ->
+                                    selectedItem = clickedItem
+                                    showItemDialog = true
                                 }
                             }
                         }
                     }
-
-                    "DesignItems" -> {
-                        val itemsList = displayItems.filter {
-                            (selectedCategories.isEmpty() || it.category in selectedCategories) &&
-                                    (selectedProducts.isEmpty() || it.productName in selectedProducts) &&
-                                    (selectedDesigns.isEmpty() || it.design in selectedDesigns)
-                        }
-                        items(itemsList, key = { it.epc ?: it.itemCode ?: it.design ?: it.hashCode().toString() }) { item ->
-                            DesignItemRow(item) { clickedItem ->
-                                selectedItem = clickedItem
-                                showItemDialog = true
-                            }
-                        }
-                    }
+                }
+                // -----------------------------------------------------------------------------------
+            }
+        }
+        // 🔹 Loader overlay (TOP LEVEL)
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0x88000000)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = Color.White, strokeWidth = 3.dp)
+                    Spacer(Modifier.height(8.dp))
+                    Text("Loading products...", color = Color.White, fontFamily = poppins)
                 }
             }
-            // -----------------------------------------------------------------------------------
         }
     }
     if (showEmailDialog) {

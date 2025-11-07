@@ -136,7 +136,8 @@ dependencies {
     implementation("com.sun.mail:android-activation:1.6.7")
 
     implementation ("com.google.android.gms:play-services-location:21.3.0")
-// WorkManager (periodic background tasks)
+    implementation ("androidx.paging:paging-runtime:3.2.0") // or latest
+    // WorkManager (periodic background tasks)
 
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.hilt.work)

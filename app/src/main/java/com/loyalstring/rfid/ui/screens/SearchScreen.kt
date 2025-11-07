@@ -116,10 +116,33 @@ fun SearchScreen(
     }
 
     // ✅ Which list to display
-    val filteredItems by remember(searchItems, filteredDbItems, isScanning, isUnmatchedList, searchQuery) {
+    val filteredItems by remember(
+        searchItems,
+        filteredDbItems,
+        inputItems,
+        isScanning,
+        isUnmatchedList,
+        searchQuery
+    ) {
         derivedStateOf {
             when {
-                isUnmatchedList -> searchItems
+                // ✅ Unmatched tab logic
+                isUnmatchedList -> {
+                    // Case 1: scanning → show live progress
+                    if (isScanning) searchItems
+                    // Case 2: searching → filter within unmatched list
+                    else if (searchQuery.isNotBlank()) {
+                        inputItems.filter {
+                            it.itemCode?.contains(searchQuery, true) == true ||
+                                    it.rfid?.contains(searchQuery, true) == true ||
+                                    it.epc?.contains(searchQuery, true) == true
+                        }.map { it.toSearchItem() }
+                    }
+                    // Case 3: nothing typed → show all unmatched
+                    else inputItems.map { it.toSearchItem() }
+                }
+
+                // ✅ Non-unmatched mode (normal / all-items tab)
                 isScanning -> searchItems
                 searchQuery.isNotBlank() -> filteredDbItems.map { it.toSearchItem() }
                 else -> emptyList()

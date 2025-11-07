@@ -261,7 +261,7 @@ class BulkViewModel @Inject constructor(
     private var isDataLoaded = false
 
     init {
-        // Lazy load data only when needed instead of immediately
+        /*// Lazy load data only when needed instead of immediately
         viewModelScope.launch {
             bulkRepository.getAllBulkItems().collect { items ->
                 _allItems = items
@@ -271,6 +271,13 @@ class BulkViewModel @Inject constructor(
                 }
                 _scannedFilteredItems.value = items
                 isDataLoaded = true
+            }
+        }*/
+        viewModelScope.launch {
+            bulkRepository.getAllBulkItems().collect { items ->
+                _allItems = items
+                preloadFilters(_allItems)
+                _scannedFilteredItems.value = items
             }
         }
     }
@@ -1163,114 +1170,6 @@ class BulkViewModel @Inject constructor(
                     val updatedItem = if (tagType == "webreusable") {
                         if (!item.rfid.isNullOrBlank()) {
                             if (item.epc.isNullOrBlank()) {
-                                val mappedEpc = syncedRFIDMap!![item.rfid.toString()]
-                                if (!mappedEpc.isNullOrBlank()) {
-                                    item.epc = mappedEpc
-                                    Log.d("SYNC", "EPC filled for RFID: ${item.rfid} -> $mappedEpc")
-                                }
-                            }
-                            item
-                        } else null
-                    } else {
-                        if (!item.itemCode.isNullOrBlank()) {
-                            val hexValue = item.itemCode.toByteArray()
-                                .joinToString("") { String.format("%02X", it) }
-                            item.copy(rfid = item.itemCode, epc = hexValue, tid = hexValue)
-                        } else null
-                    }
-
-                    if (updatedItem != null) {
-                        processedItems.add(updatedItem)
-                    }
-
-                    processed++
-                    val now = System.currentTimeMillis()
-                    if (now - lastUpdate > 500) {
-                        val progress = processed.toFloat() / total
-                        withContext(Dispatchers.Main) {
-                            _syncProgress.value = progress
-                            _syncStatusText.value = "Processing $processed of $total"
-                        }
-                        lastUpdate = now
-                    }
-
-                    if (processedItems.size >= 100) {
-                        bulkRepository.insertBulkItems(processedItems.toList())
-                        processedItems.clear()
-                    }
-                }
-
-                if (processedItems.isNotEmpty()) {
-                    bulkRepository.insertBulkItems(processedItems)
-                }
-
-                withContext(Dispatchers.Main) {
-                    _toastMessage.emit("✅ Synced $total items successfully!")
-                    _syncStatusText.value = "Sync completed!"
-                }
-
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    _syncStatusText.value = "Sync failed: ${e.localizedMessage}"
-                    _toastMessage.emit("❌ Sync failed: ${e.localizedMessage}")
-                }
-                Log.e("SYNC", "Error syncing items", e)
-            } finally {
-                withContext(Dispatchers.Main) {
-                    _isLoading.value = false
-                }
-            }
-        }
-    }
-  /*  fun syncItems() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                Log.d("SYNC", "syncItems called")
-
-                withContext(Dispatchers.Main) {
-                    _isLoading.value = true
-                    _syncStatusText.value = "Downloading data from server..."
-                    _syncProgress.value = 0f
-                }
-
-                val clientCode = employee?.clientCode ?: run {
-                    withContext(Dispatchers.Main) { _isLoading.value = false }
-                    return@launch
-                }
-
-                val request = ClientCodeRequest(clientCode)
-                val tagType = userPreferences.getClient()?.rfidType?.trim()?.lowercase() ?: "webreusable"
-
-                // Stage 1: Download items
-                val response = bulkRepository.syncBulkItemsFromServer(request)
-
-                // Stage 2: Filter active items
-                val bulkItems = response.asSequence()
-                    .filter { (it.status == "ApiActive" || it.status == "Active") && (!it.rfidCode.isNullOrBlank() || !it.itemCode.isNullOrBlank()) }
-                    .map { it.toBulkItem() }
-                    .toList()
-
-                val total = bulkItems.size
-                bulkRepository.clearAllItems()
-
-                if (total == 0) {
-                    withContext(Dispatchers.Main) {
-                        _syncProgress.value = 1f
-                        _syncStatusText.value = "No items to sync"
-                        _isLoading.value = false
-                    }
-                    return@launch
-                }
-
-                // Stage 3: Process each item
-                val processedItems = mutableListOf<BulkItem>()
-                var processed = 0
-                var lastUpdate = System.currentTimeMillis()
-
-                for (item in bulkItems) {
-                    val updatedItem = if (tagType == "webreusable") {
-                        if (!item.rfid.isNullOrBlank()) {
-                            if (item.epc.isNullOrBlank()) {
                                 item.epc = syncAndMapRow(item.rfid!!)
                             }
                             item
@@ -1325,7 +1224,9 @@ class BulkViewModel @Inject constructor(
                 }
             }
         }
-    }*/
+    }
+
+
     fun setRfidForAllTags(scanned: String) {
         val updatedMap = mutableMapOf<Int, String>()
         scannedTags.value.forEachIndexed { index, _ ->

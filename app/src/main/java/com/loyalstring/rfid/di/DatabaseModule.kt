@@ -8,6 +8,7 @@ import com.loyalstring.rfid.data.local.dao.EpcDao
 import com.loyalstring.rfid.data.local.dao.LocationDao
 import com.loyalstring.rfid.data.local.dao.OrderItemDao
 import com.loyalstring.rfid.data.local.dao.TransferTypeDao
+import com.loyalstring.rfid.data.local.dao.UserPermissionDao
 import com.loyalstring.rfid.data.local.db.AppDatabase
 import dagger.Module
 import dagger.Provides
@@ -60,4 +61,6 @@ object DatabaseModule {
     fun provideSettingDao(db: AppDatabase): LocationDao {
         return db.locationDao()
     }
+    @Provides
+    fun provideUserPermissionDao(db: AppDatabase): UserPermissionDao = db.userPermissionDao()
 }

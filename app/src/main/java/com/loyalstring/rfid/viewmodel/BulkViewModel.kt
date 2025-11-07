@@ -261,18 +261,18 @@ class BulkViewModel @Inject constructor(
     private var isDataLoaded = false
 
     init {
-        // Lazy load data only when needed instead of immediately
-        /*   viewModelScope.launch {
-               bulkRepository.getAllBulkItems().collect { items ->
-                   _allItems = items
-                   if (isDataLoaded) {
-                       // Only preload filters after first load to avoid blocking initial composition
-                       preloadFilters(_allItems)
-                   }
-                   _scannedFilteredItems.value = items
-                   isDataLoaded = true
-               }
-           }*/
+        /*// Lazy load data only when needed instead of immediately
+        viewModelScope.launch {
+            bulkRepository.getAllBulkItems().collect { items ->
+                _allItems = items
+                if (isDataLoaded) {
+                    // Only preload filters after first load to avoid blocking initial composition
+                    preloadFilters(_allItems)
+                }
+                _scannedFilteredItems.value = items
+                isDataLoaded = true
+            }
+        }*/
         viewModelScope.launch {
             bulkRepository.getAllBulkItems().collect { items ->
                 _allItems = items
@@ -459,10 +459,10 @@ class BulkViewModel @Inject constructor(
         }
     }
 
-    fun computeScanResults(
+    suspend fun computeScanResults(
         filteredItems: List<BulkItem>,
         stayVisibleInUnmatched: Boolean = false
-    ) {
+    ) = withContext(Dispatchers.Default) {
         val matched = mutableListOf<BulkItem>()
         val unmatched = mutableListOf<BulkItem>()
         val scannedEpcSet = scannedEpcList.map { it.trim().uppercase() }.toSet()
@@ -485,11 +485,16 @@ class BulkViewModel @Inject constructor(
             }
         }
 
-        _matchedItems.clear()
-        _matchedItems.addAll(matched)
-
-        _unmatchedItems.clear()
-        _unmatchedItems.addAll(unmatched)
+        withContext(Dispatchers.Main) {
+            _matchedItems.clear()
+            //_matchedItems.addAll(matched)
+            matched.chunked(2000).forEach { chunk ->
+                _matchedItems.addAll(chunk)
+                delay(1)
+            }
+            _unmatchedItems.clear()
+            _unmatchedItems.addAll(unmatched)
+        }
 
         // Keep base list stable; do not remap entire list here
         _scannedFilteredItems.value = filteredItems
@@ -539,7 +544,9 @@ class BulkViewModel @Inject constructor(
 
     fun stopScanningAndCompute() {
         stopScanning()
-        computeScanResults(_filteredSource)
+        viewModelScope.launch {
+            computeScanResults(_filteredSource)
+        }
     }
 
 
@@ -1117,11 +1124,12 @@ class BulkViewModel @Inject constructor(
     fun syncItems() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                Log.d("Sync", "syncItems called")
+                Log.d("SYNC", "syncItems called")
+
                 withContext(Dispatchers.Main) {
                     _isLoading.value = true
+                    _syncStatusText.value = "Downloading data from server..."
                     _syncProgress.value = 0f
-                    _syncStatusText.value = "Starting sync..."
                 }
 
                 val clientCode = employee?.clientCode ?: run {
@@ -1129,15 +1137,15 @@ class BulkViewModel @Inject constructor(
                     return@launch
                 }
 
-                withContext(Dispatchers.Main) {
-                    _syncStatusText.value = "Fetching data..."
-                }
+                val request = ClientCodeRequest(clientCode)
+                val tagType = userPreferences.getClient()?.rfidType?.trim()?.lowercase() ?: "webreusable"
 
-                val response = bulkRepository.syncBulkItemsFromServer(ClientCodeRequest(clientCode))
+                // Stage 1: Download items
+                val response = bulkRepository.syncBulkItemsFromServer(request)
 
-                // Use sequence for memory-efficient lazy filtering
+                // Stage 2: Filter active items
                 val bulkItems = response.asSequence()
-                    .filter { (it.status == "ApiActive" || it.status == "Active") && !it.rfidCode.isNullOrBlank() }
+                    .filter { (it.status == "ApiActive" || it.status == "Active") && (!it.rfidCode.isNullOrBlank() || !it.itemCode.isNullOrBlank()) }
                     .map { it.toBulkItem() }
                     .toList()
 
@@ -1153,30 +1161,55 @@ class BulkViewModel @Inject constructor(
                     return@launch
                 }
 
-                var inserted = 0
-                var lastProgressUpdate = System.currentTimeMillis()
+                // Stage 3: Process each item
+                val processedItems = mutableListOf<BulkItem>()
+                var processed = 0
+                var lastUpdate = System.currentTimeMillis()
 
-                while (inserted < total) {
-                    val end = minOf(inserted + 100, total)
-                    val batch = bulkItems.subList(inserted, end)
-                    bulkRepository.insertBulkItems(batch)
-                    inserted = end
+                for (item in bulkItems) {
+                    val updatedItem = if (tagType == "webreusable") {
+                        if (!item.rfid.isNullOrBlank()) {
+                            if (item.epc.isNullOrBlank()) {
+                                item.epc = syncAndMapRow(item.rfid!!)
+                            }
+                            item
+                        } else null
+                    } else {
+                        if (!item.itemCode.isNullOrBlank()) {
+                            val hexValue = item.itemCode.toByteArray()
+                                .joinToString("") { String.format("%02X", it) }
+                            item.copy(rfid = item.itemCode, epc = hexValue, tid = hexValue)
+                        } else null
+                    }
 
-                    // Update UI only every ~500ms
+                    if (updatedItem != null) {
+                        processedItems.add(updatedItem)
+                    }
+
+                    processed++
                     val now = System.currentTimeMillis()
-                    if (now - lastProgressUpdate > 500) {
-                        val progress = inserted.toFloat() / total
+                    if (now - lastUpdate > 500) {
+                        val progress = processed.toFloat() / total
                         withContext(Dispatchers.Main) {
                             _syncProgress.value = progress
-                            _syncStatusText.value = "Syncing... $inserted of $total"
+                            _syncStatusText.value = "Processing $processed of $total"
                         }
-                        lastProgressUpdate = now
+                        lastUpdate = now
                     }
+
+                    if (processedItems.size >= 100) {
+                        bulkRepository.insertBulkItems(processedItems.toList())
+                        processedItems.clear()
+                    }
+                }
+
+                if (processedItems.isNotEmpty()) {
+                    bulkRepository.insertBulkItems(processedItems)
                 }
 
                 withContext(Dispatchers.Main) {
                     _toastMessage.emit("✅ Synced $total items successfully!")
-                    _syncStatusText.value = "Sync completed successfully!"
+                    _syncStatusText.value = "Sync completed!"
                 }
 
             } catch (e: Exception) {
@@ -1184,12 +1217,15 @@ class BulkViewModel @Inject constructor(
                     _syncStatusText.value = "Sync failed: ${e.localizedMessage}"
                     _toastMessage.emit("❌ Sync failed: ${e.localizedMessage}")
                 }
-                Log.e("Sync", "Error: ${e.localizedMessage}", e)
+                Log.e("SYNC", "Error syncing items", e)
             } finally {
-                withContext(Dispatchers.Main) { _isLoading.value = false }
+                withContext(Dispatchers.Main) {
+                    _isLoading.value = false
+                }
             }
         }
     }
+
 
     fun setRfidForAllTags(scanned: String) {
         val updatedMap = mutableMapOf<Int, String>()

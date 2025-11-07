@@ -40,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,6 +70,7 @@ import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
 import com.loyalstring.rfid.viewmodel.StockTransferViewModel
+import com.loyalstring.rfid.viewmodel.UserPermissionViewModel
 import kotlinx.coroutines.launch
 
 @SuppressLint("UnrememberedMutableState")
@@ -80,11 +82,14 @@ fun StockTransferScreen(
     val context = LocalContext.current
     val viewModel: StockTransferViewModel = hiltViewModel()
     val singleProductViewModel: SingleProductViewModel = hiltViewModel()
+    val userPermissionViewModel: UserPermissionViewModel = hiltViewModel()
 
     val transferTypes by viewModel.transferTypes.collectAsState()
     val filteredItems by viewModel.filteredBulkItems.collectAsState()
     var showBottomBar by remember { mutableStateOf(false) }
     var shouldNavigateBack by remember { mutableStateOf(false) }
+    var showDialog by remember { mutableStateOf(false) }
+
 
     LaunchedEffect(shouldNavigateBack) {
         if (shouldNavigateBack) {
@@ -94,15 +99,16 @@ fun StockTransferScreen(
     }
 
     val selectedItems = remember { mutableStateListOf<Int>() }
-    val removeSelectedItems = remember { mutableStateListOf<Int>() }
 
     val selectAllTransferChecked by derivedStateOf {
         selectedItems.size == filteredItems.size && filteredItems.isNotEmpty()
     }
 
-    var selectedPower by remember { mutableStateOf(UserPreferences.getInstance(context).getInt(
-        UserPreferences.KEY_STOCK_TRANSFER_COUNT)) }
-    remember { mutableStateOf(10) }
+    var selectedPower by remember {
+        mutableIntStateOf(UserPreferences.getInstance(context).getInt(
+            UserPreferences.KEY_STOCK_TRANSFER_COUNT))
+    }
+    remember { mutableIntStateOf(10) }
 
     var selectedTransferType by remember { mutableStateOf("Transfer Type") }
     var selectedFrom by remember { mutableStateOf("From") }
@@ -117,10 +123,36 @@ fun StockTransferScreen(
     val boxes by remember { derivedStateOf { singleProductViewModel.boxes } }
     val packets by remember { derivedStateOf { singleProductViewModel.packets } }
 
+    val categoryFilters by viewModel.categoryFilters.collectAsState()
+    val productFilters by viewModel.productFilters.collectAsState()
+    val designFilters by viewModel.designFilters.collectAsState()
+
+    var selectedTab by remember { mutableStateOf<String?>(null) }
+    var showFilterDialog by remember { mutableStateOf(false) }
+    var filterType by remember { mutableStateOf("") }
+
     val transferredItems = remember { mutableStateListOf<BulkItem>() }
+    val accessibleBranches = remember { mutableStateListOf<String>() }
 
 
 
+    val filterTabs = listOf("Category", "Product", "Design")
+
+    val categories by viewModel.distinctCategories.collectAsState()
+    val products by viewModel.distinctProducts.collectAsState()
+    val designs by viewModel.distinctDesigns.collectAsState()
+
+    LaunchedEffect(selectedFrom) {
+        viewModel.extractCategoryProductDesignFromFiltered()
+    }
+
+    LaunchedEffect(selectedTransferType) {
+        if (viewModel.getTransferTypeId(selectedTransferType) == 15) {
+            val branches = userPermissionViewModel.getAccessibleBranches()
+            accessibleBranches.clear()
+            accessibleBranches.addAll(branches)
+        }
+    }
 
     val (fromType, toType) = remember(selectedTransferType) {
         selectedTransferType.split(" to ", ignoreCase = true).map { it.trim().lowercase() }.let {
@@ -135,19 +167,27 @@ fun StockTransferScreen(
     96.dp
 
 
-    val fromOptions = when (fromType) {
-        "counter" -> counters.mapNotNull { it.CounterName }
-        "box" -> boxes.mapNotNull { it.BoxName }
-        "branch" -> branches.mapNotNull { it.BranchName }
-        "packet" -> packets.mapNotNull { it.PacketName }
+    val transferTypeId = viewModel.getTransferTypeId(selectedTransferType)
+
+    val fromOptions = when {
+        // 🔥 Branch to Branch special case
+        transferTypeId == 15 && fromType == "branch" -> accessibleBranches.map { it }
+
+        fromType == "counter" -> counters.map { it.CounterName }
+        fromType == "box" -> boxes.map { it.BoxName }
+        //fromType == "branch" -> branches.map { it.BranchName }
+        fromType == "packet" -> packets.map { it.PacketName }
         else -> emptyList()
     }
 
-    val toOptions = when (toType) {
-        "counter" -> counters.mapNotNull { it.CounterName }
-        "box" -> boxes.mapNotNull { it.BoxName }
-        "branch" -> branches.mapNotNull { it.BranchName }
-        "packet" -> packets.mapNotNull { it.PacketName }
+    val toOptions = when {
+        // 🔥 Branch to Branch special case
+        transferTypeId == 15 && toType == "branch" -> accessibleBranches.map { it }
+
+        toType == "counter" -> counters.map { it.CounterName }
+        toType == "box" -> boxes.map { it.BoxName }
+       // toType == "branch" -> branches.map { it.BranchName }
+        toType == "packet" -> packets.map { it.PacketName }
         else -> emptyList()
     }.filter { it != selectedFrom || fromType != toType }
 
@@ -161,6 +201,7 @@ fun StockTransferScreen(
             viewModel.fetchCounterNames()
             viewModel.fetchBoxNames()
             viewModel.fetchBranchNames()
+
         }
     }
     LaunchedEffect(Unit) {
@@ -228,6 +269,16 @@ fun StockTransferScreen(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
+
+            HorizontalCategoryScroll(
+                items = listOf("Category", "Product", "Design"),
+                selectedItem = selectedTab,
+                onItemClick = { selected ->
+                    selectedTab = selected
+                    filterType = selected
+                    showFilterDialog = true
+                }
+            )
 
 
 
@@ -304,8 +355,7 @@ fun StockTransferScreen(
                 }
             }
 
-
-            // ---------------- Transfer SECTION rows (filteredItems) ----------------
+            //---------------- Transfer SECTION rows (filteredItems) ----------------//
             LazyColumn(modifier = Modifier.weight(1f, false)) {
                 itemsIndexed(filteredItems) { index, item ->
                     Row(
@@ -357,11 +407,20 @@ fun StockTransferScreen(
 
                         Box(modifier = Modifier.width(90.dp), contentAlignment = Alignment.Center) {
                             Checkbox(
-                                checked = selectedItems.contains(index),
-                                onCheckedChange = {
-                                    if (it) selectedItems.add(index) else selectedItems.remove(index)
+                                checked = false,
+                                onCheckedChange = { checked ->
+                                    if (checked) {
+                                        val itemsToReturn = transferredItems.toList()
+
+                                        // ✅ Add them back to first list
+                                        viewModel.addBackToFiltered(itemsToReturn)
+
+                                        // ✅ Clear from transferred list
+                                        transferredItems.clear()
+                                    }
                                 }
                             )
+
                         }
                     }
                 }
@@ -457,12 +516,17 @@ fun StockTransferScreen(
                           }*/
                         showBottomBar = true
 
-                        transferredItems.addAll(selectedItems.mapNotNull {
-                            filteredItems.getOrNull(
-                                it
-                            )
-                        })
+                        // ✅ Collect the selected items
+                        val itemsToTransfer = selectedItems.mapNotNull { filteredItems.getOrNull(it) }
 
+                        // ✅ Add them to transferred list
+                        transferredItems.addAll(itemsToTransfer)
+
+                        // ✅ Remove them from first list (filteredItems)
+                        viewModel.removeTransferredItems(itemsToTransfer)
+
+                        // ✅ Clear selected indexes
+                        selectedItems.clear()
                     },
                     icon = painterResource(id = R.drawable.stock_transfer_svg),
                     text = "",
@@ -578,13 +642,13 @@ fun StockTransferScreen(
                                 checked = false,
                                 onCheckedChange = { checked ->
                                     if (checked) {
-                                        // 🔥 Move only this item back
-                                        transferredItems.removeAt(index)
-                                        // filteredItems.add(removed) <-- add back to transfer list
+                                        val removedItem = transferredItems.removeAt(index)
+                                        viewModel.addBackToFiltered(listOf(removedItem))
                                     }
                                 },
                                 modifier = Modifier.size(22.dp)
                             )
+
                         }
                     }
                 }
@@ -599,22 +663,78 @@ fun StockTransferScreen(
             val transferredNet = transferredItems.sumOf {
                 it.netWeight?.toDoubleOrNull() ?: 0.0
             }
-
-            Row(
+// 📦 Summary Row
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("Qty: ${transferredItems.size}", fontSize = 13.sp, fontFamily = poppins)
-                Text("T G.WT: $transferredGross", fontSize = 13.sp, fontFamily = poppins)
-                Text("T N.WT: $transferredNet", fontSize = 13.sp, fontFamily = poppins)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Qty : ${selectedItems.size}",
+                        fontSize = 14.sp,
+                        fontFamily = poppins,
+                        color = Color(0xFF3C3C3C)
+                    )
+                    Text(
+                        text = "T G.wt : %.3f".format(totalGrossWeight),
+                        fontSize = 14.sp,
+                        fontFamily = poppins,
+                        color = Color(0xFF3C3C3C)
+                    )
+                    Text(
+                        text = "T N.wt : %.3f".format(totalNetWeight),
+                        fontSize = 14.sp,
+                        fontFamily = poppins,
+                        color = Color(0xFF3C3C3C)
+                    )
+
+                    GradientButton(
+                            onClick = {
+                                showDialog = true
+                            },
+                            icon = painterResource(id = R.drawable.list_svg),
+                            text = "",
+                        modifier = Modifier.weight(1f).size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    GradientButton(
+                            onClick = {
+                                viewModel.filterBulkItemsByFrom(viewModel.currentFrom.value, selectedFrom)
+                            },
+                            icon = painterResource(id = R.drawable.ic_reset),
+                            text = "",
+                            modifier = Modifier.weight(1f).size(20.dp)
+                     )
+                    }
+
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                //  Full-width buttons
+
             }
+            if (showDialog) {
+                TransferDetailsDialog(
+                    transferredBy = employee?.firstName +" "+ employee?.lastName,
+                    employees = listOf("John", "Alice", "Mike"),
+                    onDismiss = { showDialog = false },
+                    onConfirm = { transferredBy, transferredTo, remark ->
+                        // handle confirm logic
+                    }
+                )
+            }
+
 
             if (showTransferDialog) {
                 TransferTypeDialog(
-                    transferTypes = transferTypes.mapNotNull { it.TransferType },
+                    transferTypes = transferTypes.map { it.TransferType },
                     onSelect = { selected ->
                         selectedTransferType = selected
                         viewModel.onTransferTypeSelected(selected)
@@ -633,6 +753,7 @@ fun StockTransferScreen(
                     onSelect = {
                         selectedFrom = it
                         viewModel.filterBulkItemsByFrom(viewModel.currentFrom.value, it)
+                        viewModel.extractCategoryProductDesignFromFiltered() // 🔥 new line
                         selectedItems.clear()
                     },
                     onDismiss = { showFromDialog = false }
@@ -648,14 +769,105 @@ fun StockTransferScreen(
                 )
             }
 
+            if (showFilterDialog) {
+                val options = when (filterType) {
+                    "Category" -> categoryFilters
+                    "Product" -> productFilters
+                    "Design" -> designFilters
+                    else -> emptyList()
+                }
+
+                FilterSelectionDialogST(
+                    title = "Select $filterType",
+                    options = options,
+                    onSelect = { selectedValue ->
+                        when (filterType) {
+                            "Category" -> {
+                                viewModel.filterItemsByCategory(selectedValue)
+                            }
+                            "Product" -> {
+                                viewModel.filterItemsByProduct(selectedValue)
+                            }
+                            "Design" -> {
+                                viewModel.filterItemsByDesign(selectedValue)
+                            }
+                        }
+                        selectedTab = filterType
+                        selectedItems.clear()
+                        showFilterDialog = false
+                    },
+                    onDismiss = { showFilterDialog = false }
+                )
+
+            }
+
+
+
+
 
         }
     }
 }
 
 @Composable
+fun FilterSelectionDialogST(
+    title: String,
+    options: List<String>,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.White, RoundedCornerShape(12.dp))
+                .padding(8.dp)
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(title, fontSize = 12.sp, color = Color.Black, fontFamily = poppins)
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_close),
+                        contentDescription = "Close",
+                        tint = Color.Gray
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            LazyColumn {
+                items(options) { option ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(option) }
+                            .background(Color(0xFFF5F5F5), RoundedCornerShape(8.dp))
+                            .padding(6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(option, color = Color.Black, fontSize = 9.sp)
+                        Icon(
+                            painter = painterResource(R.drawable.ic_add_custom),
+                            contentDescription = null,
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
 fun TransferDetailsDialog(
-    transferredBy: String = "Admin",
+    transferredBy: String = "",
     employees: List<String> = listOf("Emp1", "Emp2", "Emp3"),
     onDismiss: () -> Unit,
     onConfirm: (String, String, String) -> Unit
@@ -668,16 +880,15 @@ fun TransferDetailsDialog(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color.White, RoundedCornerShape(16.dp))
-                .padding(16.dp)
+                .background(Color.White, RoundedCornerShape(8.dp))
+                .padding(8.dp)
         ) {
             // Gradient header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(
-                        Brush.horizontalGradient(listOf(Color(0xFFE5203F), Color(0xFF2F1EFA))),
-                        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                       BackgroundGradient,
                     )
                     .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -697,7 +908,7 @@ fun TransferDetailsDialog(
             DropdownField(
                 label = "Transferred by",
                 value = selectedTransferredBy,
-                options = listOf("Admin", "Manager"),
+                options = listOf(""),
                 onValueChange = { selectedTransferredBy = it }
             )
 
@@ -937,7 +1148,6 @@ fun SelectionDialog(
 
 @Composable
 fun BottomActionBar(navController: NavHostController) {
-    var showDialog by remember { mutableStateOf(false) }
     var showStockIn by remember { mutableStateOf(false) }
     var showStockOut by remember { mutableStateOf(false) }
 
@@ -962,7 +1172,7 @@ fun BottomActionBar(navController: NavHostController) {
                 ActionButton(
                     text = "Transfer",
                     icon = painterResource(R.drawable.stock_transfer_svg),
-                    onClick = { showDialog = true }
+                    onClick = {  }
                 )
                 ActionButton(
                     text = "InRequest",
@@ -975,15 +1185,7 @@ fun BottomActionBar(navController: NavHostController) {
                     onClick = { navController.navigate(Screens.StockOutScreen.route)} // ✅ open StockOutScreen
                 )
 
-                if (showDialog) {
-                    TransferDetailsDialog(
-                        employees = listOf("John", "Alice", "Mike"),
-                        onDismiss = { showDialog = false },
-                        onConfirm = { transferredBy, transferredTo, remark ->
-                            // handle confirm logic
-                        }
-                    )
-                }
+
             }
         }
     }
@@ -1050,10 +1252,10 @@ fun GradientDropdownButton(
 }
 
 
-
 @Composable
 fun HorizontalCategoryScroll(
     items: List<String>,
+    selectedItem: String?,
     onItemClick: (String) -> Unit
 ) {
     val listState = rememberLazyListState()
@@ -1080,12 +1282,16 @@ fun HorizontalCategoryScroll(
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             items(items) { item ->
+                val isSelected = item == selectedItem
                 Button(
                     onClick = { onItemClick(item) },
                     shape = RoundedCornerShape(10),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isSelected) Color(0xFF3B363E) else Color(0xFFEAEAEA),
+                        contentColor = if (isSelected) Color.White else Color.Black
+                    )
                 ) {
-                    Text(item, color = Color.Black, fontSize = 12.sp, fontFamily = poppins)
+                    Text(item, fontSize = 12.sp, fontFamily = poppins)
                 }
             }
         }
@@ -1100,7 +1306,6 @@ fun HorizontalCategoryScroll(
         }
     }
 }
-
 @Composable
 fun GradientButton(
     onClick: () -> Unit,

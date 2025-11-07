@@ -302,12 +302,10 @@ class OrderViewModel @Inject constructor(
                 } else {
                     val localData = repository.getAllItemCodeFromRoom(request)
                     _itemCodeResponse.value = localData
-                    Log.e("OrderViewModel", "Response error: ${response.code()}")
                 }
             } catch (e: Exception) {
                 val localData = repository.getAllItemCodeFromRoom(request)
                 _itemCodeResponse.value = localData
-                Log.e("OrderViewModel", "Exception: ${e.message}")
             }
             finally {
                 isItemCodeLoading.value = false

@@ -32,11 +32,13 @@ import androidx.navigation.NavHostController
 import com.loyalstring.rfid.MainActivity
 import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.data.local.entity.SearchItem
+import com.loyalstring.rfid.data.reader.RFIDReaderManager
 import com.loyalstring.rfid.data.reader.ScanKeyListener
 import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.SearchViewModel
+import com.rscja.deviceapi.RFIDWithUHFUART
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 @Composable
@@ -49,16 +51,16 @@ fun SearchScreen(
     val context = LocalContext.current
     val activity = context.findActivity() as? MainActivity
     val lifecycleOwner = LocalLifecycleOwner.current
+     val readerManager: RFIDReaderManager
 
     var isScanning by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var allDbItems by remember { mutableStateOf<List<BulkItem>>(emptyList()) }
     var filteredDbItems by remember { mutableStateOf<List<BulkItem>>(emptyList()) }
 
-    val selectedPower by remember {
-        mutableStateOf(
-            UserPreferences.getInstance(context).getInt(UserPreferences.KEY_SEARCH_COUNT)
-        )
+    var selectedPower by remember {
+        mutableIntStateOf(UserPreferences.getInstance(context).getInt(
+            UserPreferences.KEY_SEARCH_COUNT))
     }
 
     // ✅ Explicit unmatched flag
@@ -190,8 +192,12 @@ fun SearchScreen(
                         )
                     }
                 },
-                showCounter = false
-            )
+                showCounter = true,
+                selectedCount = selectedPower,
+                onCountSelected = {
+                    selectedPower = it
+
+                }            )
         },
         bottomBar = {
             ScanBottomBar(

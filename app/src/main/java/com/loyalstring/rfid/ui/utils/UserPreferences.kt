@@ -199,5 +199,8 @@ class UserPreferences @Inject constructor(
     fun setAutoSyncEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_LOCATION_SYNC, enabled).apply()
     }
+    fun contains(key: String): Boolean {
+        return prefs.contains(key)
+    }
 }
 

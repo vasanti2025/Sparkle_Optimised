@@ -179,7 +179,7 @@ fun ProductListScreen(
                         )
                     }
                 },
-                showCounter = true,
+                showCounter = false,
                 selectedCount = selectedCount,
                 onCountSelected = { selectedCount = it }
             )

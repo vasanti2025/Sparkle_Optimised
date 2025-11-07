@@ -31,9 +31,13 @@ enum class Screens(val route: String) {
     LocationListScreen("location_list"),
     StockInScreen("stock_in"),
     StockOutScreen("stock_out"),
+    StockTransferDetailScreen("stock_transfer_detail"),
     DeliveryChalan("delivery_chalan"),
     StockTransferDetailScreen("stock_transfer_detail"),
     SearchMenuScreen("search_screen"),
+    SearchScreen("search_screen/{mode}"),
+    DeliveryChalan("delivery_chalan"),
+    SampleOutScreen("sample_out"),
     SearchScreen("search_screen/{mode}"),
     DeliveryChallanListScreen("delivery_challan_list_screen")
 
@@ -117,7 +121,7 @@ val listOfNavItems = listOf<NavItems>(
         title = "Sample Out",
         unselectedIcon= Icons.Outlined.FavoriteBorder,
         selectedIcon = ( R.drawable.sample_out_gr_svg),
-        route = ""
+        route = "sample_out"
 
     ),NavItems(
         title = "Settings",

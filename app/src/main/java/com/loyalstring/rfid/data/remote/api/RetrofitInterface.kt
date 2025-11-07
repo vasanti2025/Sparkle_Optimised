@@ -54,6 +54,8 @@ import com.loyalstring.rfid.data.model.stockTransfer.StockTransferResponse
 import com.loyalstring.rfid.data.remote.data.DailyRateResponse
 import com.loyalstring.rfid.data.remote.data.EditDataRequest
 import com.loyalstring.rfid.data.remote.data.StockTransferRequest
+import com.loyalstring.rfid.data.remote.data.UserPermissionRequest
+import com.loyalstring.rfid.data.remote.data.UserPermissionResponse
 import com.loyalstring.rfid.data.remote.response.AlllabelResponse
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
@@ -233,6 +235,11 @@ interface RetrofitInterface {
 
     @POST("/api/ProductMaster/CancelStockTransferMasterDetails")
     suspend fun cancelStockTransferDetails(@Body request: CancelStockTransfer): Response<CancelStockTransferResponse>
+
+    @POST("/api/RoleManagement/GetAllUserPermissions-Optimized")
+    suspend fun getAllUserPermissions(@Body request: UserPermissionRequest): Response<List<UserPermissionResponse>>
+
+
     @POST("/api/Invoice/GetAllDeliveryChallan")
     suspend fun getAllChallanList(@Body request: DeliveryChallanRequestList): Response<List<DeliveryChallanResponseList>>
 

@@ -1,5 +1,6 @@
 package com.loyalstring.rfid.viewmodel
 
+import android.annotation.SuppressLint
 import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -19,11 +20,13 @@ import com.loyalstring.rfid.data.remote.data.StockTransferItem
 import com.loyalstring.rfid.data.remote.data.StockTransferRequest
 import com.loyalstring.rfid.repository.BulkRepositoryImpl
 import com.loyalstring.rfid.repository.TransferRepository
+import com.loyalstring.rfid.repository.UserPermissionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -34,7 +37,8 @@ import kotlin.collections.firstOrNull
 @HiltViewModel
 class StockTransferViewModel @Inject constructor(
     private val repository: TransferRepository,
-    private val bulkRepository: BulkRepositoryImpl
+    private val bulkRepository: BulkRepositoryImpl,
+    private val userPermissionRepository: UserPermissionRepository
 ) : ViewModel() {
 
     /** -------------------- State & UI data -------------------- **/
@@ -73,6 +77,23 @@ class StockTransferViewModel @Inject constructor(
 
     private val _errorMessage = MutableLiveData<String>()
     val errorMessage: LiveData<String> = _errorMessage
+
+    private val _allBulkItems = MutableStateFlow<List<BulkItem>>(emptyList())
+    private val allBulkItems: StateFlow<List<BulkItem>> = _allBulkItems.asStateFlow()
+
+    private val _categoryFilters = MutableStateFlow<List<String>>(emptyList())
+    val categoryFilters: StateFlow<List<String>> = _categoryFilters
+
+    private val _productFilters = MutableStateFlow<List<String>>(emptyList())
+    val productFilters: StateFlow<List<String>> = _productFilters
+
+    private val _designFilters = MutableStateFlow<List<String>>(emptyList())
+    val designFilters: StateFlow<List<String>> = _designFilters
+
+
+    val distinctCategories = MutableStateFlow<List<String>>(emptyList())
+    val distinctProducts = MutableStateFlow<List<String>>(emptyList())
+    val distinctDesigns = MutableStateFlow<List<String>>(emptyList())
 
     // Store all API responses with labelled items
     var allStockTransferResponseList: List<StockTransferInOutResponse> = emptyList()
@@ -144,10 +165,38 @@ class StockTransferViewModel @Inject constructor(
             }
         }
     }
+    fun getTransferTypeId(transferTypeName: String): Int {
+        return transferTypes.value
+            .firstOrNull { it.TransferType.equals(transferTypeName, ignoreCase = true) }
+            ?.Id ?: -1
+    }
 
-    /** -------------------- Filter Local Bulk Items -------------------- **/
+
+
+    fun extractCategoryProductDesignFromFiltered() {
+        val currentFiltered = _filteredBulkItems.value
+
+        _categoryFilters.value = currentFiltered
+            .mapNotNull { it.category?.takeIf { name -> name.isNotBlank() } }
+            .distinct()
+
+        _productFilters.value = currentFiltered
+            .mapNotNull { it.productName?.takeIf { name -> name.isNotBlank() } }
+            .distinct()
+
+        _designFilters.value = currentFiltered
+            .mapNotNull { it.design?.takeIf { name -> name.isNotBlank() } }
+            .distinct()
+
+        Log.d("StockTransferVM", "Category filters=${_categoryFilters.value.size}, Product filters=${_productFilters.value.size}, Design filters=${_designFilters.value.size}")
+    }
+
+    /**-------------------- Filter Local Bulk Items --------------------**/
+
     fun filterBulkItemsByFrom(fromType: String, selectedValue: String) = viewModelScope.launch {
         val allItems = bulkRepository.getAllBulkItems().first()
+        _allBulkItems.value = allItems // 🔥 Keep full list in memory
+
         _filteredBulkItems.value = when (fromType.lowercase()) {
             "counter" -> allItems.filter { it.counterName.equals(selectedValue, true) }
             "branch" -> allItems.filter { it.branchName.equals(selectedValue, true) }
@@ -157,8 +206,35 @@ class StockTransferViewModel @Inject constructor(
             else -> allItems
         }
     }
+    fun filterItemsByCategory(category: String) {
+        viewModelScope.launch {
+            _filteredBulkItems.value = _filteredBulkItems.value.filter {
+                it.category.equals(category, ignoreCase = true)
+            }
+            extractCategoryProductDesignFromFiltered()
+        }
+    }
 
-    /** -------------------- ID Fetch Helpers -------------------- **/
+    fun filterItemsByProduct(product: String) {
+        viewModelScope.launch {
+            _filteredBulkItems.value = _filteredBulkItems.value.filter {
+                it.productName.equals(product, ignoreCase = true)
+            }
+            extractCategoryProductDesignFromFiltered()
+        }
+    }
+
+    fun filterItemsByDesign(design: String) {
+        viewModelScope.launch {
+            _filteredBulkItems.value = _filteredBulkItems.value.filter {
+                it.design.equals(design, ignoreCase = true)
+            }
+            extractCategoryProductDesignFromFiltered()
+        }
+    }
+
+
+    /** --------------------ID Fetch Helpers-------------------- **/
     suspend fun getEntityIdByName(type: String, name: String): Int {
         return when (type.lowercase()) {
             "counter" -> bulkRepository.getCounterIdFromName(name)
@@ -169,7 +245,22 @@ class StockTransferViewModel @Inject constructor(
         } ?: 0
     }
 
-    /** -------------------- Submit Stock Transfer -------------------- **/
+
+    fun removeTransferredItems(items: List<BulkItem>) {
+        val currentList = _filteredBulkItems.value.toMutableList()
+        currentList.removeAll(items.toSet())
+        _filteredBulkItems.value = currentList
+    }
+
+    fun addBackToFiltered(items: List<BulkItem>) {
+        val currentList = _filteredBulkItems.value.toMutableList()
+        currentList.addAll(items)
+        _filteredBulkItems.value = currentList
+    }
+
+
+
+    /** --------------------Submit Stock Transfer-------------------- **/
     fun submitStockTransfer(
         clientCode: String,
         stockIds: List<Int>,
@@ -238,6 +329,7 @@ class StockTransferViewModel @Inject constructor(
             }
         }
     }
+    @SuppressLint("NullSafeMutableLiveData")
     fun clearApproveResult() {
         _stApproveRejectResponse.postValue(null)
     }

@@ -31,11 +31,15 @@ object NetWorkRetrofitClient {
     fun provideOkHttpClient(
         loggingInterceptor: HttpLoggingInterceptor
     ): OkHttpClient {
+        val logging = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.NONE
+        }
         return OkHttpClient.Builder()
-            .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS) // ⏱️ connection timeout
-            .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)    // ⏱️ server response read timeout
-            .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)   // ⏱️ client request write timeout
-            .addInterceptor(loggingInterceptor)
+            .addInterceptor(logging)
+            .connectTimeout(5, java.util.concurrent.TimeUnit.MINUTES) // ⏱️ connection timeout
+            .readTimeout(5, java.util.concurrent.TimeUnit.MINUTES)    // ⏱️ server response read timeout
+            .writeTimeout(5, java.util.concurrent.TimeUnit.MINUTES)   // ⏱️ client request write timeout
+           // .addInterceptor(loggingInterceptor)
             .build()
     }
 

@@ -34,7 +34,9 @@ class RFIDReaderManager @Inject constructor(
                 _reader = RFIDWithUHFUART.getInstance()
             }
             initSounds()
-            val success = _reader?.init() ?: false
+            val success = _reader?.init(context
+
+            ) ?: false
             if (success) {
                 Log.d("RFID", "Reader initialized successfully")
             } else {

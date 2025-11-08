@@ -115,40 +115,46 @@ fun SearchScreen(
         }
     }
 
-    // ✅ Which list to display
     val filteredItems by remember(
-        searchItems,
-        filteredDbItems,
-        inputItems,
-        isScanning,
-        isUnmatchedList,
-        searchQuery
+        searchItems, filteredDbItems, isScanning, isUnmatchedList, searchQuery, inputItems
     ) {
         derivedStateOf {
-            when {
-                // ✅ Unmatched tab logic
-                isUnmatchedList -> {
-                    // Case 1: scanning → show live progress
-                    if (isScanning) searchItems
-                    // Case 2: searching → filter within unmatched list
-                    else if (searchQuery.isNotBlank()) {
-                        inputItems.filter {
-                            it.itemCode?.contains(searchQuery, true) == true ||
-                                    it.rfid?.contains(searchQuery, true) == true ||
-                                    it.epc?.contains(searchQuery, true) == true
-                        }.map { it.toSearchItem() }
-                    }
-                    // Case 3: nothing typed → show all unmatched
-                    else inputItems.map { it.toSearchItem() }
-                }
+            try {
+                when {
+                    // --- unmatched mode ---
+                    isUnmatchedList -> {
+                        when {
+                            // 1️⃣ Scanning → show live scanned search results
+                            isScanning -> searchItems
 
-                // ✅ Non-unmatched mode (normal / all-items tab)
-                isScanning -> searchItems
-                searchQuery.isNotBlank() -> filteredDbItems.map { it.toSearchItem() }
-                else -> emptyList()
+                            // 2️⃣ Query typed → filter unmatched items by EPC/ItemCode/RFID
+                            searchQuery.isNotBlank() -> {
+                                inputItems.filter {
+                                    val query = searchQuery.trim()
+                                    (it.itemCode?.contains(query, ignoreCase = true) == true) ||
+                                            (it.rfid?.contains(query, ignoreCase = true) == true) ||
+                                            (it.epc?.contains(query, ignoreCase = true) == true)
+                                }.map { it.toSearchItem() }
+                            }
+
+                            // 3️⃣ Default → show all unmatched items
+                            else -> inputItems.map { it.toSearchItem() }
+                        }
+                    }
+
+                    // --- normal mode ---
+                    isScanning -> searchItems
+                    searchQuery.isNotBlank() -> filteredDbItems.map { it.toSearchItem() }
+                    else -> emptyList()
+                }
+            } catch (e: Exception) {
+                Log.e("SearchScreen", "❌ Error computing filteredItems", e)
+                emptyList()
             }
         }
     }
+
+
 
     // ✅ RFID key listener
     DisposableEffect(lifecycleOwner, activity) {

@@ -467,37 +467,30 @@ class BulkViewModel @Inject constructor(
         val unmatched = mutableListOf<BulkItem>()
         val scannedEpcSet = scannedEpcList.map { it.trim().uppercase() }.toSet()
         _matchedEpcSet.value = scannedEpcSet
-        // Compute matched TIDs too if needed (disabled)
-        // val scannedTidSet = _allScannedTags.value.mapNotNull { it.tid?.trim()?.uppercase() }.toSet() // TID matching disabled
-        // _matchedTidSet.value = scannedTidSet // TID matching disabled
 
-        filteredItems.forEach { item ->
+
+        val safeList = filteredItems.toList()
+
+        safeList.forEach { item ->
             val dbEpc = item.epc?.trim()?.uppercase()
             if (dbEpc != null && scannedEpcSet.contains(dbEpc)) {
                 val updatedItem = item.copy(scannedStatus = "Matched")
                 matched.add(updatedItem)
-                if (stayVisibleInUnmatched) {
-                    unmatched.add(updatedItem)
-                }
+                if (stayVisibleInUnmatched) unmatched.add(updatedItem)
             } else {
                 val updatedItem = item.copy(scannedStatus = "Unmatched")
                 unmatched.add(updatedItem)
             }
         }
 
+
         withContext(Dispatchers.Main) {
             _matchedItems.clear()
-            //_matchedItems.addAll(matched)
-            matched.chunked(2000).forEach { chunk ->
-                _matchedItems.addAll(chunk)
-                delay(1)
-            }
+            _matchedItems.addAll(matched)     // ← atomic update, no delays or chunks
             _unmatchedItems.clear()
             _unmatchedItems.addAll(unmatched)
+            _scannedFilteredItems.value = safeList
         }
-
-        // Keep base list stable; do not remap entire list here
-        _scannedFilteredItems.value = filteredItems
     }
 
 

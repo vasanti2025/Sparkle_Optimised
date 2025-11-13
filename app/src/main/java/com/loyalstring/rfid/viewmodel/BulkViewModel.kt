@@ -463,9 +463,22 @@ class BulkViewModel @Inject constructor(
         filteredItems: List<BulkItem>,
         stayVisibleInUnmatched: Boolean = false
     ) = withContext(Dispatchers.Default) {
+        if (filteredItems.isEmpty()) {
+            // If the list is empty, there's nothing to compute.
+            // This can happen after a reset.
+            _matchedItems.clear()
+            _unmatchedItems.clear()
+            _scannedFilteredItems.value = emptyList()
+            return@withContext
+        }
+
         val matched = mutableListOf<BulkItem>()
         val unmatched = mutableListOf<BulkItem>()
-        val scannedEpcSet = scannedEpcList.map { it.trim().uppercase() }.toSet()
+        val scannedEpcSet = if (scannedEpcList.isNotEmpty()) {
+            scannedEpcList.map { it.trim().uppercase() }.toSet()
+        } else {
+            emptySet()
+        }
         _matchedEpcSet.value = scannedEpcSet
 
 
@@ -485,10 +498,26 @@ class BulkViewModel @Inject constructor(
 
 
         withContext(Dispatchers.Main) {
-            _matchedItems.clear()
-            _matchedItems.addAll(matched)     // ← atomic update, no delays or chunks
-            _unmatchedItems.clear()
-            _unmatchedItems.addAll(unmatched)
+            if (matched.isEmpty() && unmatched.isEmpty()) {
+                _matchedItems.clear()
+                _unmatchedItems.clear()
+                _scannedFilteredItems.value = emptyList()
+                return@withContext
+            }
+
+            if (matched.isNotEmpty()) {
+                _matchedItems.clear()
+                _matchedItems.addAll(matched)     // ← atomic update, no delays or chunks
+            } else {
+                _matchedItems.clear()
+            }
+
+            if (unmatched.isNotEmpty()) {
+                _unmatchedItems.clear()
+                _unmatchedItems.addAll(unmatched)
+            } else {
+                _unmatchedItems.clear()
+            }
             _scannedFilteredItems.value = safeList
         }
     }
@@ -1197,7 +1226,7 @@ class BulkViewModel @Inject constructor(
                 }
 
                 if (processedItems.isNotEmpty()) {
-                    bulkRepository.insertBulkItems(processedItems)
+                    bulkRepository.insertBulkItems(processedItems.toList())
                 }
 
                 withContext(Dispatchers.Main) {
@@ -1236,6 +1265,10 @@ class BulkViewModel @Inject constructor(
 
         val clientCode = employee?.clientCode
 
+        if (tags.isEmpty()) {
+            Log.e("SEND_DATA", "Tags list is empty, skipping sending data.")
+            return
+        }
 
         val data = _rfidMap.value.mapNotNull { (index, rfid) ->
             rfid.let {

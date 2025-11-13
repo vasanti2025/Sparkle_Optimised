@@ -1,8 +1,10 @@
 // ScanDisplayScreen.kt
 package com.loyalstring.rfid.ui.screens
 
+import android.R.bool
 import android.annotation.SuppressLint
 import android.content.Context
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -47,7 +49,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,7 +76,6 @@ import com.loyalstring.rfid.data.model.ClientCodeRequest
 import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.data.reader.ScanKeyListener
 import com.loyalstring.rfid.navigation.GradientTopBar
-import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.ui.utils.GradientButton
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
@@ -88,6 +88,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.math.BigDecimal
 import java.math.RoundingMode
+import kotlinx.coroutines.delay
+
 
 // column widths
 val colCategoryWidth = 72.dp
@@ -269,7 +271,7 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
     var selectedPower by remember { mutableStateOf(UserPreferences.getInstance(context).getInt(
         UserPreferences.KEY_INVENTORY_COUNT)) }
     remember { mutableStateOf("30") }
-
+    var _isResetting by remember { mutableStateOf(false) }
     var isScanning by remember { mutableStateOf(false) }
     var showEmailDialog by remember { mutableStateOf(false) }
     var savedEmails by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -280,6 +282,13 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
 
     LaunchedEffect(Unit) {
         savedEmails = scanDisplayViewModel.getAllEmails()
+    }
+
+    LaunchedEffect(key1 = _isResetting) {
+        if (_isResetting) {
+            delay(1000L) // Add your desired delay here
+            _isResetting = false
+        }
     }
 
     val scannedFiltered by bulkViewModel.scannedFilteredItems
@@ -294,32 +303,40 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
         scannedFiltered
     ) {
         derivedStateOf {
-            navFilteredItems.mapNotNull { original ->
-                val keyEpc = original.epc?.trim()?.uppercase()
-                // val keyTid = original.tid?.trim()?.uppercase() // TID matching disabled
-                val status = if (keyEpc != null && matchedEpcs.contains(keyEpc)) "Matched" else "Unmatched"
-                val withScan = original.copy(scannedStatus = status)
-                if ((selectedCategoriesKey.isEmpty() || withScan.category in selectedCategoriesKey) &&
-                    (selectedProductsKey.isEmpty() || withScan.productName in selectedProductsKey) &&
-                    (selectedDesignsKey.isEmpty() || withScan.design in selectedDesignsKey)
-                ) withScan else null
+            if (navFilteredItems.isEmpty()) {
+                emptyList()
+            } else {
+                navFilteredItems.mapNotNull { original ->
+                    val keyEpc = original.epc?.trim()?.uppercase()
+                    // val keyTid = original.tid?.trim()?.uppercase() // TID matching disabled
+                    val status = if (keyEpc != null && matchedEpcs.contains(keyEpc)) "Matched" else "Unmatched"
+                    val withScan = original.copy(scannedStatus = status)
+                    if ((selectedCategoriesKey.isEmpty() || withScan.category in selectedCategoriesKey) &&
+                        (selectedProductsKey.isEmpty() || withScan.productName in selectedProductsKey) &&
+                        (selectedDesignsKey.isEmpty() || withScan.design in selectedDesignsKey)
+                    ) withScan else null
+                }
             }
         }
     }
 
     // displayItems respects selectedMenu and sticky unmatched ids (existing logic preserved)
     val displayItems = remember(scopeItems, selectedMenu, bulkViewModel.stickyUnmatchedIds) {
-        when (selectedMenu) {
-            MENU_MATCHED -> scopeItems.filter { it.scannedStatus == "Matched" }
-            MENU_UNMATCHED -> {
-                val unmatchedNow = scopeItems.filter { it.scannedStatus == "Unmatched" }
-                val sticky = scopeItems.filter {
-                    val id = it.epc?.trim()?.uppercase()
-                    id != null && bulkViewModel.stickyUnmatchedIds.contains(id)
+        if (scopeItems.isEmpty()) {
+            emptyList()
+        } else {
+            when (selectedMenu) {
+                MENU_MATCHED -> scopeItems.filter { it.scannedStatus == "Matched" }
+                MENU_UNMATCHED -> {
+                    val unmatchedNow = scopeItems.filter { it.scannedStatus == "Unmatched" }
+                    val sticky = scopeItems.filter {
+                        val id = it.epc?.trim()?.uppercase()
+                        id != null && bulkViewModel.stickyUnmatchedIds.contains(id)
+                    }
+                    (unmatchedNow + sticky).distinctBy { it.epc }
                 }
-                (unmatchedNow + sticky).distinctBy { it.epc }
+                else -> scopeItems
             }
-            else -> scopeItems
         }
     }
 
@@ -425,21 +442,30 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
 
                     },
                     onReset = {
-                        bulkViewModel.stopScanningAndCompute()
-                        isScanning = false
+                        Log.d("ScanDisplayScreen", "Calling")
+                        if (!_isResetting) {
+                            Log.d("ScanDisplayScreen", "Called")
+                            _isResetting = true;
+                            isScanning = false
+                            try {
+                                selectedCategories.clear()
+                                selectedProducts.clear()
+                                selectedDesigns.clear()
 
-                        selectedCategories.clear()
-                        selectedProducts.clear()
-                        selectedDesigns.clear()
+                                bulkViewModel.setFilteredItems(allItems) // ✅ reset to full DB
+                                bulkViewModel.resetScanResults()
 
-                        bulkViewModel.setFilteredItems(allItems) // ✅ reset to full DB
-                        bulkViewModel.resetScanResults()
-
-                        selectedMenu = MENU_ALL
-                        currentLevel = "Category"
-                        currentCategory = null
-                        currentProduct = null
-                        currentDesign = null
+                                selectedMenu = MENU_ALL
+                                currentLevel = "Category"
+                                currentCategory = null
+                                currentProduct = null
+                                currentDesign = null
+                                bulkViewModel.stopScanningAndCompute()
+                                Log.d("ScanDisplayScreen", "Completed")
+                            } finally {
+                                Log.d("ScanDisplayScreen", "Finally")
+                            }
+                        }
                     },
                     isScanning = isScanning
 
@@ -1223,10 +1249,11 @@ fun TableHeaderCell(text: String, width: Dp) {
 /* Reused simple TableHeader */
 @Composable
 fun TableHeader(currentLevel: String) {
-    Row(Modifier
-        .fillMaxWidth()
-        .background(Color(0xFF3B363E))
-        .padding(vertical = 2.dp)) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF3B363E))
+            .padding(vertical = 2.dp)) {
         if (currentLevel == "DesignItems") {
             TableHeaderCell("Design", colDesignNameWidth)
             TableHeaderCell("RFID No", colRfidWidth)

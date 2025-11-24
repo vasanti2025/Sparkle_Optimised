@@ -182,13 +182,54 @@ class BulkViewModel @Inject constructor(
 
     private var syncedRFIDMap: Map<String, String>? = null
 
+    private val _isBulkMode = MutableStateFlow(false)
+    val isBulkMode = _isBulkMode.asStateFlow()
+
+    fun setBulkMode(value: Boolean) {
+        _isBulkMode.value = value
+    }
+    private val _pendingSingleIndex = MutableStateFlow<Int?>(null)
+    val pendingSingleIndex = _pendingSingleIndex.asStateFlow()
+
+    // 🔸 add this
+    @Volatile
+    private var pendingIndexBackup: Int? = null
+
+    fun prepareSingleRfidUpdate(index: Int) {
+        Log.d("VM", "Setting pending index = $index")
+        pendingIndexBackup = index        // immediate (no delay, thread-safe)
+        _pendingSingleIndex.value = index // reactive (Compose)
+    }
+
+    fun getPendingSingleIndex(): Int? {
+        val idx = _pendingSingleIndex.value ?: pendingIndexBackup
+        Log.d("VM", "🔍 getPendingSingleIndex(): $idx")
+        return idx
+    }
+
+    fun clearPendingSingleIndex() {
+        Log.d("VM", "🧹 Clearing pending index")
+        _pendingSingleIndex.value = null
+        pendingIndexBackup = null
+    }
+
+    @Volatile
+    private var _lastClickedIndex: Int? = null
+    val lastClickedIndex: Int? get() = _lastClickedIndex
+
+    fun setLastClickedIndex(index: Int) {
+        _lastClickedIndex = index
+        _pendingSingleIndex.value = index
+        Log.d("VM", "✅ setLastClickedIndex = $index")
+    }
 
 
-    // ✅ function to update value at a specific index
-   fun updateRfidForIndex(index: Int, newValue: String) {
-        _rfidMap.value = _rfidMap.value.toMutableMap().apply {
-            this[index] = newValue
-        }
+    fun updateRfidForIndex(index: Int, value: String) {
+        val newMap = _rfidMap.value.toMutableMap()
+        newMap[index] = value
+        _rfidMap.value = newMap
+        Log.d(" _rfidMap.value @@",""+ _rfidMap.value
+        )
     }
 
 
@@ -203,7 +244,7 @@ class BulkViewModel @Inject constructor(
                 .filter { it.branchType?.equals("Exhibition", ignoreCase = true) == true }
                 .mapNotNull { it.branchName }
                 .distinct()
-            
+
             // Update StateFlows on main thread
             withContext(Dispatchers.Main) {
                 _counters.value = counters
@@ -281,7 +322,7 @@ class BulkViewModel @Inject constructor(
             }
         }
     }
-    
+
     // Call this method when user actually needs the data (e.g., when navigating to list screen)
     fun ensureFiltersLoaded() {
         if (!isDataLoaded && _allItems.isNotEmpty()) {
@@ -310,8 +351,8 @@ class BulkViewModel @Inject constructor(
             _isScanning.value = false
             Log.d("RFID", "Scanning stopped by toggle")
         } else {
-           // resetScanResults()
-           // setFilteredItems(_allItems) // or _filteredSource depending on scope
+            // resetScanResults()
+            // setFilteredItems(_allItems) // or _filteredSource depending on scope
             startScanning(selectedPower)
             _isScanning.value = true
             Log.d("RFID", "Scanning started by toggle")
@@ -416,46 +457,46 @@ class BulkViewModel @Inject constructor(
             }
 
 
-        readerManager.startInventoryTag(selectedPower, false)
-        readerManager.playSound(1)
+            readerManager.startInventoryTag(selectedPower, false)
+            readerManager.playSound(1)
 
-        // Build EPC set if not already prepared
-        // Build EPC set if not already prepared
-        if (filteredDbEpcSet.isEmpty()) {
-            filteredDbEpcSet = _filteredSource.mapNotNull { it.epc?.trim()?.uppercase() }.toHashSet()
-            // filteredDbTidSet = _filteredSource.mapNotNull { it.tid?.trim()?.uppercase() }.toHashSet() // TID matching disabled
-        }
+            // Build EPC set if not already prepared
+            // Build EPC set if not already prepared
+            if (filteredDbEpcSet.isEmpty()) {
+                filteredDbEpcSet = _filteredSource.mapNotNull { it.epc?.trim()?.uppercase() }.toHashSet()
+                // filteredDbTidSet = _filteredSource.mapNotNull { it.tid?.trim()?.uppercase() }.toHashSet() // TID matching disabled
+            }
 
-        // Loop: only update matched set; avoid remapping list on main thread per tag
-        scanJob = viewModelScope.launch(Dispatchers.IO) {
-            while (isActive) {
-                val tag = readerManager.readTagFromBuffer()
-                if (tag != null) {
-                    val scannedEpc = tag.epc?.trim()?.uppercase()
-                    // val scannedTid = tag.tid?.trim()?.uppercase() // TID matching disabled
-                    // Track seen EPCs to avoid repeated processing
-                    if (!scannedEpc.isNullOrBlank()) {
-                        scannedEpcList.add(scannedEpc)
-                    }
-
-                    // EPC match
-                    if (!scannedEpc.isNullOrBlank() && filteredDbEpcSet.contains(scannedEpc)) {
-                        val currentE = _matchedEpcSet.value
-                        if (!currentE.contains(scannedEpc)) {
-                            _matchedEpcSet.value = currentE + scannedEpc
+            // Loop: only update matched set; avoid remapping list on main thread per tag
+            scanJob = viewModelScope.launch(Dispatchers.IO) {
+                while (isActive) {
+                    val tag = readerManager.readTagFromBuffer()
+                    if (tag != null) {
+                        val scannedEpc = tag.epc?.trim()?.uppercase()
+                        // val scannedTid = tag.tid?.trim()?.uppercase() // TID matching disabled
+                        // Track seen EPCs to avoid repeated processing
+                        if (!scannedEpc.isNullOrBlank()) {
+                            scannedEpcList.add(scannedEpc)
                         }
-                    }
 
-                    // TID match (disabled)
-                    // if (!scannedTid.isNullOrBlank() && filteredDbTidSet.contains(scannedTid)) {
-                    //     val currentT = _matchedTidSet.value
-                    //     if (!currentT.contains(scannedTid)) {
-                    //         _matchedTidSet.value = currentT + scannedTid
-                    //     }
-                    // }
+                        // EPC match
+                        if (!scannedEpc.isNullOrBlank() && filteredDbEpcSet.contains(scannedEpc)) {
+                            val currentE = _matchedEpcSet.value
+                            if (!currentE.contains(scannedEpc)) {
+                                _matchedEpcSet.value = currentE + scannedEpc
+                            }
+                        }
+
+                        // TID match (disabled)
+                        // if (!scannedTid.isNullOrBlank() && filteredDbTidSet.contains(scannedTid)) {
+                        //     val currentT = _matchedTidSet.value
+                        //     if (!currentT.contains(scannedTid)) {
+                        //         _matchedTidSet.value = currentT + scannedTid
+                        //     }
+                        // }
+                    }
                 }
             }
-        }
         }
     }
 
@@ -1310,6 +1351,11 @@ class BulkViewModel @Inject constructor(
         }
 
 
+    }
+
+    fun findNextEmptyRow(): Int? {
+        val map = rfidMap.value
+        return map.entries.firstOrNull { it.value.isNullOrEmpty() }?.key
     }
 
 

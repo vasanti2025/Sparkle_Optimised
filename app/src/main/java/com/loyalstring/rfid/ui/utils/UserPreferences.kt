@@ -202,5 +202,13 @@ class UserPreferences @Inject constructor(
     fun contains(key: String): Boolean {
         return prefs.contains(key)
     }
+
+    fun saveAppLanguage(langCode: String) {
+        prefs.edit().putString("app_language", langCode).apply()
+    }
+
+    fun getAppLanguage(): String {
+        return prefs.getString("app_language", "en") ?: "en"
+    }
 }
 

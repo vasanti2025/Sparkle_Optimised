@@ -30,6 +30,16 @@ class BarcodeReader @Inject constructor(
         }
     }
 
+    fun startDecode() {
+        try {
+            if (!isOpened) openIfNeeded()
+            barcodeDecoder.startScan()
+            Log.d("BarcodeReader", "🔹 startDecode() called successfully")
+        } catch (e: Exception) {
+            Log.e("BarcodeReader", "❌ Failed to start decode: ${e.message}")
+        }
+    }
+
     fun setOnBarcodeScanned(callback: (String) -> Unit) {
         barcodeDecoder.setDecodeCallback { entity ->
             if (entity.resultCode == BarcodeDecoder.DECODE_SUCCESS) {

@@ -53,6 +53,8 @@ android {
             excludes += "META-INF/NOTICE.md"
         }
     }
+
+
 }
 
 dependencies {

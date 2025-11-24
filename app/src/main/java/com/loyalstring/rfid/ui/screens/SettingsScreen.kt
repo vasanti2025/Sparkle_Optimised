@@ -76,7 +76,6 @@ import android.os.Environment
 import android.util.Log
 import androidx.compose.material3.*
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.delay
 import java.io.File
 
 import android.Manifest
@@ -106,6 +105,7 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 import com.google.android.gms.location.LocationServices
 import com.loyalstring.rfid.data.local.db.AppDatabase
+import com.loyalstring.rfid.worker.LocaleHelper
 import java.util.concurrent.TimeUnit
 
 
@@ -163,6 +163,9 @@ fun SettingsScreen(
         mutableStateOf(userPreferences.isAutoSyncEnabled() ?: true)
     }
     var showLocationList by remember { mutableStateOf(false) }
+
+
+    var showLanguageDialog by remember { mutableStateOf(false) }
 
     // ✅ Ensure default counter values are stored in SharedPreferences
     LaunchedEffect(Unit) {
@@ -390,6 +393,14 @@ fun SettingsScreen(
             subtitle = "Clear data"
         ),
         SettingsMenuItem(
+            key = "language",
+            title = "Language",
+            icon = Icons.Default.Settings,
+            type = SettingType.Action,
+            subtitle = userPreferences.getAppLanguage().uppercase(Locale.getDefault()), // show selected
+            onClick = { /* will handle in MenuItemRow */ }
+        ),
+        SettingsMenuItem(
             key = "Location",
             title = "Location",
             icon = Icons.Default.Settings,
@@ -439,6 +450,7 @@ fun SettingsScreen(
                     onCustomApiClick = { showCustomApiDialog = true },
                     onClearDataClick = { showClearDataConfirm = true },
                     onRatesClick={showRatesEditor=true},
+                    onLanguageClick = { showLanguageDialog = true },
                     onBackupClick={showBackupDialog=true}
                 )
             }
@@ -573,7 +585,76 @@ fun SettingsScreen(
             }
         )
     }
+
+
+    if (showLanguageDialog) {
+        AlertDialog(
+            onDismissRequest = { showLanguageDialog = false },
+            title = { Text("Select Language", fontFamily = poppins) },
+            text = {
+                Column(Modifier.fillMaxWidth()) {
+                    LanguageOption(
+                        label = "English",
+                        selected = userPreferences.getAppLanguage() == "en",
+                        onSelect = {
+                            userPreferences.saveAppLanguage("en")
+                            LocaleHelper.applyLocale(context, "en")
+                            ToastUtils.showToast(context, "Language changed to English")
+                            showLanguageDialog = false
+                            restartApp(context)
+                        }
+                    )
+
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    LanguageOption(
+                        label = "Hindi (हिन्दी)",
+                        selected = userPreferences.getAppLanguage() == "hi",
+                        onSelect = {
+                            userPreferences.saveAppLanguage("hi")
+
+                            // ✅ Apply Hindi locale before restart
+                            LocaleHelper.applyLocale(context, "hi")
+
+                            ToastUtils.showToast(context, "भाषा हिंदी में बदल दी गई है")
+                            showLanguageDialog = false
+                            restartApp(context)
+                        }
+                    )
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showLanguageDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
 }
+
+fun restartApp(context: Context) {
+    val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+    val mainIntent = Intent.makeRestartActivityTask(intent?.component)
+    context.startActivity(mainIntent)
+    Runtime.getRuntime().exit(0)
+}
+
+@Composable
+fun LanguageOption(label: String, selected: Boolean, onSelect: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelect() }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(selected = selected, onClick = onSelect)
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = label, fontFamily = poppins, fontSize = 15.sp)
+    }
+}
+
 
 @SuppressLint("MissingPermission")
 fun getCurrentLocation(activity: Context, onLocationFetched: (String, String, String) -> Unit) {
@@ -1025,10 +1106,12 @@ fun MenuItemRow(
     userPreferences: UserPreferences,
     onAutoSyncClick: () -> Unit,
     onSheetUrlClick: () -> Unit,
-    onCustomApiClick:()-> Unit,
+    onCustomApiClick: () -> Unit,
     onClearDataClick: () -> Unit,
     onRatesClick: () -> Unit,
-    onBackupClick: () -> Unit
+    onLanguageClick: () -> Unit,
+    onBackupClick: () -> Unit,
+
 ) {
     var expanded by remember { mutableStateOf(false) }
     var selectedValue by remember {
@@ -1050,6 +1133,7 @@ fun MenuItemRow(
                     "apis"->onCustomApiClick()
                     "rates"->onRatesClick()
                     "backup"->onBackupClick()
+                    "language" -> onLanguageClick()
                     else -> item.onClick?.invoke()
                 }
             },
@@ -1175,6 +1259,7 @@ fun SheetInputDialog(
             }
         }
     )
+
 
 
 }

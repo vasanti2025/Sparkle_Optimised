@@ -100,7 +100,7 @@ class SearchViewModel @Inject constructor(
                         it.epc.equals(epc, true) || it.rfid.equals(epc, true) || it.itemCode.equals(epc, true)
                     }
 
-                    if (index != -1) {
+                    if (index != -1 && _searchItems.isNotEmpty()) {
                         withContext(Dispatchers.Main) {
                             _searchItems[index] = _searchItems[index].copy(
                                 rssi = rssi,

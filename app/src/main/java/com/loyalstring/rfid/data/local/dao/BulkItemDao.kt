@@ -21,7 +21,11 @@ interface BulkItemDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertSingleItem(item: BulkItem): Long
 
-    @Query("SELECT * FROM bulk_items")
+    //@Query("SELECT * FROM bulk_items")
+    @Query("SELECT id, productName, itemCode, epc, imageUrl, isScanned, counterName, branchName, boxName, branchType, totalQty, totalNetWt, mrp, categoryId, category, productName, design FROM bulk_items")
+    fun getMinimalItemsFlow(): Flow<List<BulkItem>>
+
+    @Query("SELECT id, productName, itemCode, epc, imageUrl, isScanned, counterName, branchName, boxName, branchType, totalQty, totalNetWt, mrp, categoryId, category, productName, design FROM bulk_items")
     fun getAllItemsFlow(): Flow<List<BulkItem>>
 
     @Query("SELECT * FROM bulk_items WHERE epc = :epc LIMIT 1")
@@ -67,9 +71,31 @@ interface BulkItemDao {
     @Query("UPDATE bulk_items SET scannedStatus = ''")
     suspend fun resetAllScannedStatus()
 
+    @Query("DELETE FROM bulk_items WHERE id = :id")
+    suspend fun deleteById(id: Int): Int   // ✅ rows deleted
 
-        @Query("DELETE FROM bulk_items WHERE id = :id")
-        suspend fun deleteById(id: Int): Int   // ✅ rows deleted
+    //@Query("DELETE FROM bulk_items WHERE id = :id")
+    //suspend fun deleteById(id: Int): Int   // ✅ rows deleted
+    // Pagination queries for efficient large dataset handling
+    @Query("SELECT id, productName, itemCode, epc, imageUrl, isScanned, counterName, branchName, boxName, branchType, totalQty, totalNetWt, mrp, categoryId FROM bulk_items ORDER BY id LIMIT :limit OFFSET :offset")
+    suspend fun getMinimalItemsPaged(limit: Int, offset: Int): List<BulkItem>
 
+    @Query("SELECT COUNT(*) FROM bulk_items")
+    suspend fun getTotalItemCount(): Int
+
+    @Query("SELECT id, productName, itemCode, epc, imageUrl, isScanned, counterName, branchName, boxName, branchType, totalQty, totalNetWt, mrp, categoryId FROM bulk_items WHERE scannedStatus = :status ORDER BY id LIMIT :limit OFFSET :offset")
+    suspend fun getItemsByStatusPaged(status: String, limit: Int, offset: Int): List<BulkItem>
+
+    @Query("SELECT COUNT(*) FROM bulk_items WHERE scannedStatus = :status")
+    suspend fun getItemCountByStatus(status: String): Int
+
+
+    /*@Query("DELETE FROM bulk_items WHERE id = :id")
+    suspend fun deleteById(id: Int): Int   // ✅ rows deleted*/
+    @Query("SELECT id, productName, itemCode, epc, imageUrl, isScanned, counterName, branchName, boxName, branchType, totalQty, totalNetWt, mrp, categoryId FROM bulk_items WHERE UPPER(TRIM(epc)) IN (:epcs) ORDER BY id LIMIT :limit OFFSET :offset")
+    suspend fun getItemsByEpcsPaged(epcs: List<String>, limit: Int, offset: Int): List<BulkItem>
+
+    @Query("SELECT COUNT(*) FROM bulk_items WHERE UPPER(TRIM(epc)) IN (:epcs)")
+    suspend fun getItemCountByEpcs(epcs: List<String>): Int
 
 }

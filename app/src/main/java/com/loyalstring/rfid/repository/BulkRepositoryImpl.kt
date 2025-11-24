@@ -37,6 +37,14 @@ class BulkRepositoryImpl @Inject constructor(
         return bulkItemDao.getAllItemsFlow()
     }
 
+    override fun getMinimalItemsFlow(): Flow<List<BulkItem>> {
+        return bulkItemDao.getMinimalItemsFlow()
+    }
+
+    override fun getAllItemsFlow(): Flow<List<BulkItem>> {
+        return bulkItemDao.getAllItemsFlow()
+    }
+
     override fun getAllRFIDTags(): Flow<List<EpcDto>> {
         return epcDao.getAllItemsFlow()
     }
@@ -143,6 +151,31 @@ class BulkRepositoryImpl @Inject constructor(
 
     fun getAllTagsFlow(): Flow<List<EpcDto>> {
         return epcDao.getAllTagsFlow()
+    }
+
+    // Lazy loading methods for efficient large dataset handling
+    suspend fun getMinimalItemsPaged(limit: Int, offset: Int): List<BulkItem> {
+        return bulkItemDao.getMinimalItemsPaged(limit, offset)
+    }
+
+    suspend fun getTotalItemCount(): Int {
+        return bulkItemDao.getTotalItemCount()
+    }
+
+    suspend fun getItemsByStatusPaged(status: String, limit: Int, offset: Int): List<BulkItem> {
+        return bulkItemDao.getItemsByStatusPaged(status, limit, offset)
+    }
+
+    suspend fun getItemCountByStatus(status: String): Int {
+        return bulkItemDao.getItemCountByStatus(status)
+    }
+
+    suspend fun getItemsByEpcsPaged(epcs: List<String>, limit: Int, offset: Int): List<BulkItem> {
+        return bulkItemDao.getItemsByEpcsPaged(epcs, limit, offset)
+    }
+
+    suspend fun getItemCountByEpcs(epcs: List<String>): Int {
+        return bulkItemDao.getItemCountByEpcs(epcs)
     }
 }
 

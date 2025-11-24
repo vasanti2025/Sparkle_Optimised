@@ -12,6 +12,8 @@ interface BulkRepository {
     suspend fun insertBulkItems(items: List<BulkItem>)
     suspend fun insertRFIDTags(items: List<EpcDto>)
     fun getAllBulkItems(): Flow<List<BulkItem>>
+    fun getMinimalItemsFlow(): Flow<List<BulkItem>>
+    fun getAllItemsFlow(): Flow<List<BulkItem>>
     fun getAllRFIDTags(): Flow<List<EpcDto>>
     suspend fun clearAllItems()
     suspend fun clearAllRFID()

@@ -1,10 +1,12 @@
 package com.loyalstring.rfid
 
 import android.app.Application
+import android.content.Context
 import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.loyalstring.rfid.ui.utils.UserPreferences
+import com.loyalstring.rfid.worker.LocaleHelper
 import com.rscja.deviceapi.RFIDWithUHFUART
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -16,6 +18,28 @@ import javax.inject.Inject
 @HiltAndroidApp
 class SparkleRFIDApplication : Application(), Configuration.Provider {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    override fun attachBaseContext(base: Context?) {
+        if (base == null) {
+            super.attachBaseContext(base)
+            return
+        }
+
+        try {
+            val userPrefs = UserPreferences.getInstance(base)
+            val langCode = userPrefs.getAppLanguage().ifBlank { "en" }
+
+            // ✅ Properly wrap context
+            val localizedContext = LocaleHelper.applyLocale(base, langCode)
+
+            super.attachBaseContext(localizedContext)
+            Log.d("AppLocale", "✅ Locale applied: $langCode")
+        } catch (e: Exception) {
+            super.attachBaseContext(base)
+            Log.e("AppLocale", "⚠️ Locale setup failed: ${e.message}")
+        }
+    }
+
 
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
@@ -30,6 +54,7 @@ class SparkleRFIDApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        LocaleHelper.applySavedLocale(this)
         Log.d("StartupTrace", "Application.onCreate start")
 
         applicationScope.launch {

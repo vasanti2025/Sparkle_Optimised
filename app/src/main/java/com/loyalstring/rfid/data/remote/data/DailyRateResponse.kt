@@ -3,7 +3,7 @@ package com.loyalstring.rfid.data.remote.data
 data class DailyRateResponse(val EmployeeCode: String = "",
                              val ClientCode: String = "",
                              val PurityName: String = "",
-                             val CategoryName: String = "",
+                             val CategoryName: String? = null,
                              val FinePercentage: String = "",
                              val PurityId: Int = 0,
                              val CategoryId: Int = 0,

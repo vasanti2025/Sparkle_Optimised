@@ -54,6 +54,7 @@ import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.BulkViewModel
 import com.loyalstring.rfid.viewmodel.OrderViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
+import com.loyalstring.rfid.worker.LocaleHelper
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -66,7 +67,12 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var userPreferences: UserPreferences
     private var scanKeyListener: ScanKeyListener? = null
-
+    override fun attachBaseContext(newBase: Context) {
+        val prefs = UserPreferences.getInstance(newBase)
+        val langCode = prefs.getAppLanguage().ifBlank { "en" }
+        val localizedContext = LocaleHelper.applyLocale(newBase, langCode)
+        super.attachBaseContext(localizedContext)
+    }
     @RequiresApi(Build.VERSION_CODES.R)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

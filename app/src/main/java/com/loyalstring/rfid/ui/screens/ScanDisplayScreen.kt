@@ -433,6 +433,7 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
     val employee = UserPreferences.getInstance(context).getEmployee(Employee::class.java)
     LaunchedEffect(Unit) {
         employee?.clientCode?.let { singleProductViewModel.fetchAllDropdownData(ClientCodeRequest(it)) }
+        //bulkViewModel.getAllItems()
         // Initialize with pagination
         scope.launch {
             bulkViewModel.loadTotalCount()

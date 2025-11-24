@@ -69,6 +69,7 @@ class SearchViewModel @Inject constructor(
             setFastID(false)
             setDynamicDistance(0)
         }
+        
 
         readerManager.startInventoryTag(power, true)
 

@@ -18,8 +18,8 @@ android {
         applicationId = "com.loyalstring.rfid"
         minSdk = 26
         targetSdk = 35
-        versionCode = 37
-        versionName = "1.37"
+        versionCode = 39
+        versionName = "1.39"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -53,6 +53,8 @@ android {
             excludes += "META-INF/NOTICE.md"
         }
     }
+
+
 }
 
 dependencies {

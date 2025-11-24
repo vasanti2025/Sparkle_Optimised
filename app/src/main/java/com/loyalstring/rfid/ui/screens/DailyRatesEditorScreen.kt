@@ -225,15 +225,17 @@ private fun DailyRatesContent(
                         .fillMaxWidth()
                         .padding(vertical = 8.dp)
                 ) {
-                    Text(
-                        text = row.CategoryName,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 12.sp,
-                        fontFamily = poppins,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(start = 4.dp)
-                    )
+                    row.CategoryName?.let {
+                        Text(
+                            text = it,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 12.sp,
+                            fontFamily = poppins,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 4.dp)
+                        )
+                    }
                     Text(
                         text = row.PurityName,
                         fontWeight = FontWeight.Medium,

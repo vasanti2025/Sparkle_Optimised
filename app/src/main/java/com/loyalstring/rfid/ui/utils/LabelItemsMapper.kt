@@ -8,7 +8,7 @@ fun AlllabelResponse.LabelItem.toBulkItem(): BulkItem {
     return BulkItem(
         productName = this.productName,
         itemCode = this.itemCode ?: "",
-        rfid = this.rfidCode ?: "",
+        rfid = this.rfidCode.takeIf { !it.isNullOrBlank() } ?: this.tidNumber.takeIf { !it.isNullOrBlank() } ?: "",
 
         grossWeight = this.grossWt ?: "",
         stoneWeight = this.totalStoneWeight ?: "",
@@ -31,7 +31,7 @@ fun AlllabelResponse.LabelItem.toBulkItem(): BulkItem {
         vendor = this.vendorName ?: "",
         tid = this.tidNumber ?: "",
         id = this.id?:0,
-        epc = this.tidNumber, // or wherever epc is coming from
+        epc = this.tidNumber.takeIf { !it.isNullOrBlank() } ?: this.rfidCode.takeIf { !it.isNullOrBlank() } ?: "", // Prioritize tidNumber for epc, fallback to rfidCode
 
         box = "",
         designCode = "",

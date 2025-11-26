@@ -22,10 +22,10 @@ interface BulkItemDao {
     suspend fun insertSingleItem(item: BulkItem): Long
 
     //@Query("SELECT * FROM bulk_items")
-    @Query("SELECT id, productName, itemCode, epc, imageUrl, isScanned, counterName, branchName, boxName, branchType, totalQty, totalNetWt, mrp, categoryId, category, productName, design FROM bulk_items")
+    @Query("SELECT id, productName, itemCode, rfid, epc, imageUrl, isScanned, counterName, branchName, boxName, branchType, totalQty, totalNetWt, mrp, categoryId, category, productName, design FROM bulk_items")
     fun getMinimalItemsFlow(): Flow<List<BulkItem>>
 
-    @Query("SELECT id, productName, itemCode, epc, imageUrl, isScanned, counterName, branchName, boxName, branchType, totalQty, totalNetWt, mrp, categoryId, category, productName, design FROM bulk_items")
+    @Query("SELECT id, productName, itemCode, rfid, epc, imageUrl, isScanned, counterName, branchName, boxName, branchType, totalQty, totalNetWt, mrp, categoryId, category, productName, design FROM bulk_items")
     fun getAllItemsFlow(): Flow<List<BulkItem>>
 
     @Query("SELECT * FROM bulk_items WHERE epc = :epc LIMIT 1")
@@ -77,13 +77,13 @@ interface BulkItemDao {
     //@Query("DELETE FROM bulk_items WHERE id = :id")
     //suspend fun deleteById(id: Int): Int   // ✅ rows deleted
     // Pagination queries for efficient large dataset handling
-    @Query("SELECT id, productName, itemCode, epc, imageUrl, isScanned, counterName, branchName, boxName, branchType, totalQty, totalNetWt, mrp, categoryId FROM bulk_items ORDER BY id LIMIT :limit OFFSET :offset")
+    @Query("SELECT id, productName, itemCode, epc, imageUrl, isScanned, counterName, branchName, boxName, branchType, totalQty, totalNetWt, mrp, categoryId, rfid, design FROM bulk_items ORDER BY id LIMIT :limit OFFSET :offset")
     suspend fun getMinimalItemsPaged(limit: Int, offset: Int): List<BulkItem>
 
     @Query("SELECT COUNT(*) FROM bulk_items")
     suspend fun getTotalItemCount(): Int
 
-    @Query("SELECT id, productName, itemCode, epc, imageUrl, isScanned, counterName, branchName, boxName, branchType, totalQty, totalNetWt, mrp, categoryId FROM bulk_items WHERE scannedStatus = :status ORDER BY id LIMIT :limit OFFSET :offset")
+    @Query("SELECT id, productName, itemCode, epc, imageUrl, isScanned, counterName, branchName, boxName, branchType, totalQty, totalNetWt, mrp, categoryId, rfid, design FROM bulk_items WHERE scannedStatus = :status ORDER BY id LIMIT :limit OFFSET :offset")
     suspend fun getItemsByStatusPaged(status: String, limit: Int, offset: Int): List<BulkItem>
 
     @Query("SELECT COUNT(*) FROM bulk_items WHERE scannedStatus = :status")

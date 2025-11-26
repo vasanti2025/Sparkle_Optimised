@@ -41,11 +41,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -213,6 +217,13 @@ class BulkViewModel @Inject constructor(
         pendingIndexBackup = null
     }
 
+    // ✅ function to update value at a specific index
+   /*fun updateRfidForIndex(index: Int, newValue: String) {
+        _rfidMap.value = _rfidMap.value.toMutableMap().apply {
+            this[index] = newValue
+        }
+    }*/
+
     @Volatile
     private var _lastClickedIndex: Int? = null
     val lastClickedIndex: Int? get() = _lastClickedIndex
@@ -265,8 +276,17 @@ class BulkViewModel @Inject constructor(
         _syncStatusText.value = ""
     }
 
+    /**
+     * Expose a small API to toggle the existing loading indicator from callers.
+     * Callers should use this to show the shared "please wait" overlay while
+     * performing background computations (e.g., computing unmatched ids).
+     */
+    fun setLoading(flag: Boolean) {
+        _isLoading.value = flag
+    }
+
     fun setFilteredItems(filtered: List<BulkItem>) {
-        _filteredSource = if (filtered.isEmpty()) _allItems else filtered
+        _filteredSource = if (filtered.isEmpty()) _allItems.value else filtered
         // Precompute normalized EPC set for O(1) membership checks
         filteredDbEpcSet = _filteredSource.mapNotNull { it.epc?.trim()?.uppercase() }.toHashSet()
         // filteredDbTidSet = _filteredSource.mapNotNull { it.tid?.trim()?.uppercase() }.toHashSet() // TID matching disabled
@@ -281,22 +301,104 @@ class BulkViewModel @Inject constructor(
     private val _searchItems = mutableStateListOf<BulkItem>()
     val searchItems: SnapshotStateList<BulkItem> get() = _searchItems
 
-    private var _allItems: List<BulkItem> = emptyList()
-    val allItems: List<BulkItem> get() = _allItems
+    private val _allItems = MutableStateFlow<List<BulkItem>>(emptyList())
+    val allItems: StateFlow<List<BulkItem>> = _allItems.asStateFlow()
 
     private val _filteredItems = mutableStateListOf<BulkItem>()
     val filteredItems: List<BulkItem> get() = _filteredItems
+    // Backing set for O(1) membership checks to avoid O(n^2) behavior on large lists
+    private val _filteredUnmatchedIds = MutableStateFlow<List<String>>(emptyList())
+    val filteredUnmatchedIds: StateFlow<List<String>> = _filteredUnmatchedIds
+
+    // Pagination support for large datasets
+    private val _currentPage = MutableStateFlow(0)
+    val currentPage: StateFlow<Int> = _currentPage
 
     private val _stickyUnmatchedIds = mutableStateListOf<String>()
     val stickyUnmatchedIds: List<String> get() = _stickyUnmatchedIds
 
+    private val _pageSize = MutableStateFlow(100) // Default page size for UI
+    val pageSize: StateFlow<Int> = _pageSize
+
+    private val _totalItems = MutableStateFlow(0)
+    val totalItems: StateFlow<Int> = _totalItems
+
+    private val _isLoadingPage = MutableStateFlow(false)
+    val isLoadingPage: StateFlow<Boolean> = _isLoadingPage
+
     fun rememberUnmatched(items: List<BulkItem>) {
         val ids = items.mapNotNull { it.epc?.trim()?.uppercase() }
-        _stickyUnmatchedIds.addAll(ids.filterNot { _stickyUnmatchedIds.contains(it) })
+        val toAdd = ids.filterNot { _filteredUnmatchedIds.value.contains(it) }
+        if (toAdd.isNotEmpty()) {
+            _filteredUnmatchedIds.value = _filteredUnmatchedIds.value.toMutableList().apply { addAll(toAdd) }
+        }
     }
 
     fun clearStickyUnmatched() {
-        _stickyUnmatchedIds.clear()
+        _filteredUnmatchedIds.value = emptyList()
+    }
+
+    // Pagination methods for efficient large dataset handling
+    fun setPageSize(size: Int) {
+        _pageSize.value = size
+        _currentPage.value = 0 // Reset to first page when page size changes
+    }
+
+    fun loadNextPage() {
+        if (_isLoadingPage.value) return
+        val nextPage = _currentPage.value + 1
+        val maxPages = (_totalItems.value + _pageSize.value - 1) / _pageSize.value
+        if (nextPage < maxPages) {
+            loadPage(nextPage)
+        }
+    }
+
+    fun loadPreviousPage() {
+        if (_isLoadingPage.value) return
+        val prevPage = _currentPage.value - 1
+        if (prevPage >= 0) {
+            loadPage(prevPage)
+        }
+    }
+
+    fun loadPage(page: Int) {
+        if (_isLoadingPage.value) return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                _isLoadingPage.value = true
+                val offset = page * _pageSize.value
+                val items = bulkRepository.getMinimalItemsPaged(_pageSize.value, offset)
+                withContext(Dispatchers.Main) {
+                    _allItems.value = items
+                    _currentPage.value = page
+                }
+            } finally {
+                _isLoadingPage.value = false
+            }
+        }
+    }
+
+    suspend fun loadTotalCount() {
+        _totalItems.value = bulkRepository.getTotalItemCount()
+    }
+
+    /**
+     * Add a list of already-normalized EPC ids to the sticky unmatched set.
+     * This is intended for callers that compute the ids off the main thread to avoid
+     * performing large allocations on the UI thread.
+     */
+    fun rememberUnmatchedIds(ids: List<String>) {
+        // Caller is expected to compute normalized ids off the main thread.
+        // We still defensively normalize here, but avoid expensive contains checks
+        // by using the backing set for O(1) membership tests.
+        viewModelScope.launch(Dispatchers.Default) {
+            val current = _filteredUnmatchedIds.value.toMutableSet()
+            val toAdd = ids.filterNot { current.contains(it) }
+            if (toAdd.isNotEmpty()) {
+                current.addAll(toAdd)
+                _filteredUnmatchedIds.value = current.toList()
+            }
+        }
     }
 
     private var isDataLoaded = false
@@ -315,9 +417,9 @@ class BulkViewModel @Inject constructor(
             }
         }*/
         viewModelScope.launch {
-            bulkRepository.getAllBulkItems().collect { items ->
-                _allItems = items
-                preloadFilters(_allItems)
+            bulkRepository.getMinimalItemsFlow().collect { items ->
+                _allItems.value = items
+                preloadFilters(items)
                 _scannedFilteredItems.value = items
             }
         }
@@ -325,8 +427,8 @@ class BulkViewModel @Inject constructor(
 
     // Call this method when user actually needs the data (e.g., when navigating to list screen)
     fun ensureFiltersLoaded() {
-        if (!isDataLoaded && _allItems.isNotEmpty()) {
-            preloadFilters(_allItems)
+        if (!isDataLoaded && _allItems.value.isNotEmpty()) {
+            preloadFilters(_allItems.value)
             isDataLoaded = true
         }
     }
@@ -338,7 +440,7 @@ class BulkViewModel @Inject constructor(
         } else {
             _isScanning.value = true
             resetScanResults()  // 🔑 Always reset before scanning
-            setFilteredItems(_allItems)
+            setFilteredItems(_allItems.value)
             startScanningInventory(selectedPower)
             Log.d("RFID", "Scanning started by toggle")
         }
@@ -351,8 +453,8 @@ class BulkViewModel @Inject constructor(
             _isScanning.value = false
             Log.d("RFID", "Scanning stopped by toggle")
         } else {
-            // resetScanResults()
-            // setFilteredItems(_allItems) // or _filteredSource depending on scope
+           // resetScanResults()
+           // setFilteredItems(_allItems) // or _filteredSource depending on scope
             startScanning(selectedPower)
             _isScanning.value = true
             Log.d("RFID", "Scanning started by toggle")
@@ -513,10 +615,12 @@ class BulkViewModel @Inject constructor(
             return@withContext
         }
 
+        val currentScannedEpcList = scannedEpcList.toList() // Create an immutable copy
+
         val matched = mutableListOf<BulkItem>()
         val unmatched = mutableListOf<BulkItem>()
-        val scannedEpcSet = if (scannedEpcList.isNotEmpty()) {
-            scannedEpcList.map { it.trim().uppercase() }.toSet()
+        val scannedEpcSet = if (currentScannedEpcList.isNotEmpty()) {
+            currentScannedEpcList.map { it.trim().uppercase() }.toSet()
         } else {
             emptySet()
         }
@@ -605,12 +709,110 @@ class BulkViewModel @Inject constructor(
 //        }
     }
 
-    fun stopScanningAndCompute() {
+    /*fun stopScanningAndCompute() {
         stopScanning()
         viewModelScope.launch {
             computeScanResults(_filteredSource)
         }
+    }*/
+
+    // ViewModel-level properties
+    @Volatile
+    private var isComputing = false
+
+    private val computeMutex = Mutex() // optional extra safety
+
+    fun stopScanningAndCompute() {
+        stopScanning()
+
+        // Quick guard: avoid re-entry early
+        if (isComputing) return
+
+        viewModelScope.launch(Dispatchers.Default) {
+            // make sure only one compute runs at a time
+            computeMutex.withLock {
+                if (isComputing) return@withLock
+                isComputing = true
+
+                try {
+                    // snapshot the source to avoid concurrent mutation issues
+                    val snapshot = _filteredSource.toList()
+                    computeScanResultsFast(snapshot)
+                } finally {
+                    // Make sure to reset the flag on Main so any UI consumers see it there
+                    withContext(Dispatchers.Main) {
+                        isComputing = false
+                    }
+                }
+            }
+        }
     }
+
+
+    suspend fun computeScanResultsFast(
+        filteredItems: List<BulkItem>,
+        stayVisibleInUnmatched: Boolean = false
+    ) = withContext(Dispatchers.Default) {
+
+        if (filteredItems.isEmpty()) {
+            _matchedItems.clear()
+            _unmatchedItems.clear()
+            _scannedFilteredItems.value = emptyList()
+            return@withContext
+        }
+
+        // Immutable copy to avoid ConcurrentModificationException
+        val currentScannedList = scannedEpcList.toList()
+
+        // Build EPC set only once (O(n))
+        val scannedEpcSet = currentScannedList.asSequence()
+            .map { it.trim().uppercase() }
+            .toHashSet()
+
+        _matchedEpcSet.value = scannedEpcSet
+
+        val matched = ArrayList<BulkItem>(filteredItems.size / 4) // pre-allocate some memory
+        val unmatched = ArrayList<BulkItem>(filteredItems.size / 2)
+
+        // Avoid calling .copy() unless required → huge performance gain for 3.5 lakh items
+        for (item in filteredItems) {
+            val dbEpc = item.epc?.trim()?.uppercase()
+
+            if (dbEpc != null && scannedEpcSet.contains(dbEpc)) {
+                if (item.scannedStatus != "Matched") {
+                    matched.add(item.copy(scannedStatus = "Matched"))
+                } else {
+                    matched.add(item)
+                }
+                if (stayVisibleInUnmatched) unmatched.add(item)
+            } else {
+                if (item.scannedStatus != "Unmatched") {
+                    unmatched.add(item.copy(scannedStatus = "Unmatched"))
+                } else {
+                    unmatched.add(item)
+                }
+            }
+        }
+
+        // Switch to Main thread only to push final results
+        withContext(Dispatchers.Main) {
+
+            _matchedItems.apply {
+                clear()
+                if (matched.isNotEmpty()) addAll(matched)
+            }
+
+            _unmatchedItems.apply {
+                clear()
+                if (unmatched.isNotEmpty()) addAll(unmatched)
+            }
+
+            // No need to recalculate safeList
+            _scannedFilteredItems.value = filteredItems
+        }
+    }
+
+
 
 
     fun resetProductScanResults() {
@@ -624,6 +826,7 @@ class BulkViewModel @Inject constructor(
             _matchedItems.clear()
             _unmatchedItems.clear()
             scannedEpcList.clear()
+            delay(50) // Allow recomposition to process empty lists
             _matchedEpcSet.value = emptySet()
             // _matchedTidSet.value = emptySet() // TID matching disabled
             _scannedFilteredItems.value = _filteredSource
@@ -636,6 +839,7 @@ class BulkViewModel @Inject constructor(
             _matchedItems.clear()
             _unmatchedItems.clear()
             scannedEpcList.clear()
+            delay(50) // Allow recomposition to process empty lists
             _matchedEpcSet.value = emptySet()
             // _matchedTidSet.value = emptySet() // TID matching disabled
             _scannedFilteredItems.value = _filteredSource
@@ -704,34 +908,34 @@ class BulkViewModel @Inject constructor(
     }
 
     fun getLocalCounters(): List<String> =
-        allItems.mapNotNull { it.counterName?.takeIf { it.isNotBlank() } }.distinct()
+        allItems.value.mapNotNull { it.counterName?.takeIf { it.isNotBlank() } }.distinct()
 
     fun getLocalBranches(): List<String> =
-        allItems.mapNotNull { it.branchName?.takeIf { it.isNotBlank() } }.distinct()
+        allItems.value.mapNotNull { it.branchName?.takeIf { it.isNotBlank() } }.distinct()
 
     fun getLocalBoxes(): List<String> =
-        allItems.mapNotNull { it.boxName?.takeIf { it.isNotBlank() } }.distinct()
+        allItems.value.mapNotNull { it.boxName?.takeIf { it.isNotBlank() } }.distinct()
 
     fun getLocalExhibitions(): List<String> =
-        allItems
+        allItems.value
             .filter { it.branchType?.equals("Exhibition", ignoreCase = true) == true }
             .mapNotNull { it.branchName } // return the branch names
             .distinct()
 
     fun setFilteredItemsByType(type: String, value: String) {
         val filtered = when (type) {
-            "scan display" -> allItems
-            "counter" -> allItems.filter { it.counterName == value }
-            "branch" -> allItems.filter { it.branchName == value }
-            "box" -> allItems.filter { it.boxName == value }
-            "exhibition" -> allItems.filter {
+            "scan display" -> allItems.value
+            "counter" -> allItems.value.filter { it.counterName == value }
+            "branch" -> allItems.value.filter { it.branchName == value }
+            "box" -> allItems.value.filter { it.boxName == value }
+            "exhibition" -> allItems.value.filter {
                 it.branchName == value && it.branchType.equals(
                     "Exhibition",
                     true
                 )
             }
 
-            else -> allItems
+            else -> allItems.value
         }
         _filteredItems.clear()
         _filteredItems.addAll(filtered)
@@ -1116,8 +1320,8 @@ class BulkViewModel @Inject constructor(
 
     fun getAllItems() {
         viewModelScope.launch {
-            bulkRepository.getAllBulkItems().collect { items ->
-                _scannedFilteredItems.value = items // ✅ initialize display list
+            bulkRepository.getAllItemsFlow().collectLatest {
+                _scannedFilteredItems.value = it // ✅ initialize display list
             }
         }
     }
@@ -1139,10 +1343,10 @@ class BulkViewModel @Inject constructor(
     fun getAllItems(context: Context) {
         viewModelScope.launch {
             bulkRepository.getAllBulkItems().collect { items ->
-                _allItems = items
+                _allItems.value = items
                 _scannedFilteredItems.value = items
                 exportToExcel(context, items)
-                preloadFilters(_allItems)
+                preloadFilters(_allItems.value)
             }
         }
     }
@@ -1353,11 +1557,136 @@ class BulkViewModel @Inject constructor(
 
     }
 
+    /*fun loadUnmatchedFast(sourceItems: List<BulkItem>) {
+        viewModelScope.launch(Dispatchers.Default) {
+
+            if (sourceItems.isEmpty()) {
+                withContext(Dispatchers.Main) {
+                    _filteredUnmatchedIds.value = emptyList()
+                    _unmatchedItems.clear()
+                }
+                return@launch
+            }
+
+            // Heavy processing off main thread
+            val epcSet = sourceItems
+                .asSequence()
+                .mapNotNull { it.epc?.trim()?.uppercase() }
+                .toSet()
+
+            val scannedSet = scannedEpcList
+                .asSequence()
+                .mapNotNull { it.trim().uppercase() }
+                .toSet()
+
+            val unmatchedList = sourceItems
+                .asSequence()
+                .filterNot { item ->
+                    val epc = item.epc?.trim()?.uppercase()
+                    epc != null && scannedSet.contains(epc)
+                }
+                .map { it.copy(scannedStatus = "Unmatched") }
+                .toList()
+
+            // Only update UI thread with final result
+            withContext(Dispatchers.Main) {
+
+                // DO NOT push 350k IDs to StateFlow → limit to avoid ANR
+                _filteredUnmatchedIds.value = epcSet
+                    .take(3000)              // safe cap to avoid recomposition storm
+                    .toList()
+
+                _unmatchedItems.clear()
+                _unmatchedItems.addAll(unmatchedList)
+            }
+        }
+    }*/
+
+
+    private val unmatchedMutex = Mutex()      // prevents parallel calls
+    @Volatile private var unmatchedRunning = false
+
+    fun loadUnmatchedFast(sourceItems: List<BulkItem>) {
+        if (unmatchedRunning) return   // avoid multiple fast calls
+
+        viewModelScope.launch(Dispatchers.Default) {
+            unmatchedMutex.withLock {
+                if (unmatchedRunning) return@launch
+                unmatchedRunning = true
+            }
+
+            try {
+                // Use pagination for unmatched items to avoid ANR
+                loadUnmatchedPaged()
+            } catch (t: Throwable) {
+                withContext(Dispatchers.Main) {
+                    setLoading(false)
+                    Log.e("BulkVM", "loadUnmatchedFast error", t)
+                }
+            } finally {
+                unmatchedRunning = false
+            }
+        }
+    }
+
+    private suspend fun loadUnmatchedPaged() {
+        withContext(Dispatchers.IO) {
+            try {
+                // Get scanned EPCs for filtering
+                val scannedEpcs = scannedEpcList.toList()
+                val scannedSet = scannedEpcs.map { it.trim().uppercase() }.toHashSet()
+
+                // Load first page of items and filter unmatched ones
+                val pageSize = 500 // Smaller page size for better performance
+                val allPaged = bulkRepository.getMinimalItemsPaged(pageSize * 3, 0) // Load more to have enough after filtering
+
+                // Filter unmatched items efficiently
+                val unmatchedItems = allPaged.filter { item ->
+                    val epc = item.epc?.trim()?.uppercase()
+                    epc == null || !scannedSet.contains(epc)
+                }.take(pageSize)
+
+                // Mark items as unmatched
+                val processedItems = unmatchedItems.map { item ->
+                    if (item.scannedStatus != "Unmatched") {
+                        item.copy(scannedStatus = "Unmatched")
+                    } else {
+                        item
+                    }
+                }
+
+                // Calculate total unmatched count efficiently
+                val totalItems = bulkRepository.getTotalItemCount()
+                val estimatedUnmatched = maxOf(0, totalItems - scannedEpcs.size)
+
+                withContext(Dispatchers.Main) {
+                    _unmatchedItems.clear()
+                    _unmatchedItems.addAll(processedItems)
+
+                    // Set filtered IDs for UI (limited for performance)
+                    val limitedIds = processedItems
+                        .mapNotNull { it.epc?.trim()?.uppercase() }
+                        .take(1000) // Limit for UI performance
+                        .toList()
+                    _filteredUnmatchedIds.value = limitedIds
+
+                    _totalItems.value = estimatedUnmatched
+                    setLoading(false)
+                }
+            } catch (e: Exception) {
+                Log.e("BulkVM", "Error loading unmatched items", e)
+                withContext(Dispatchers.Main) {
+                    setLoading(false)
+                }
+            }
+        }
+    }
+
+
     fun findNextEmptyRow(): Int? {
         val map = rfidMap.value
         return map.entries.firstOrNull { it.value.isNullOrEmpty() }?.key
     }
-
 
 
 }

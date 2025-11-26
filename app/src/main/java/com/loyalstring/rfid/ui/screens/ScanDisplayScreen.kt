@@ -55,6 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -293,7 +294,11 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
 
     val scannedFiltered by bulkViewModel.scannedFilteredItems
     val matchedEpcs by bulkViewModel.matchedEpcSet.collectAsState(initial = emptySet())
-    // val matchedTids by bulkViewModel.matchedTidSet.collectAsState(initial = emptySet()) // TID matching disabled
+    val currentPage by bulkViewModel.currentPage.collectAsState()
+    val pageSize by bulkViewModel.pageSize.collectAsState()
+    val totalItems by bulkViewModel.totalItems.collectAsState()
+    val isLoadingPage by bulkViewModel.isLoadingPage.collectAsState()
+
     // scopeItems overlay scanned status on filtered base set
     val scopeItems by remember(
         navFilteredItems,
@@ -308,7 +313,6 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
             } else {
                 navFilteredItems.mapNotNull { original ->
                     val keyEpc = original.epc?.trim()?.uppercase()
-                    // val keyTid = original.tid?.trim()?.uppercase() // TID matching disabled
                     val status = if (keyEpc != null && matchedEpcs.contains(keyEpc)) "Matched" else "Unmatched"
                     val withScan = original.copy(scannedStatus = status)
                     if ((selectedCategoriesKey.isEmpty() || withScan.category in selectedCategoriesKey) &&
@@ -321,7 +325,7 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
     }
 
     // displayItems respects selectedMenu and sticky unmatched ids (existing logic preserved)
-    val displayItems = remember(scopeItems, selectedMenu, bulkViewModel.stickyUnmatchedIds) {
+    val displayItems = remember(scopeItems, selectedMenu, bulkViewModel.filteredUnmatchedIds.collectAsState().value) {
         if (scopeItems.isEmpty()) {
             emptyList()
         } else {
@@ -331,7 +335,7 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
                     val unmatchedNow = scopeItems.filter { it.scannedStatus == "Unmatched" }
                     val sticky = scopeItems.filter {
                         val id = it.epc?.trim()?.uppercase()
-                        id != null && bulkViewModel.stickyUnmatchedIds.contains(id)
+                        id != null && bulkViewModel.filteredUnmatchedIds.value.contains(id)
                     }
                     (unmatchedNow + sticky).distinctBy { it.epc }
                 }
@@ -368,12 +372,33 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
         onDispose { activity?.unregisterScanKeyListener() }
     }
 
-    LaunchedEffect(isScanning, allMatched) {
+    /*LaunchedEffect(isScanning, allMatched) {
         if (isScanning && allMatched) {
             bulkViewModel.stopScanningAndCompute()
             isScanning = false
             Toast.makeText(context, "All items matched. Scan stopped.", Toast.LENGTH_SHORT).show()
         }
+    }*/
+
+    LaunchedEffect(Unit) {
+        snapshotFlow { isScanning to allMatched }
+            .collect { (isScanningValue, allMatchedValue) ->
+
+                if (isScanningValue && allMatchedValue) {
+
+                    currentCategory = null
+                    currentProduct = null
+                    currentDesign = null
+                    selectedCategories.clear()
+                    selectedProducts.clear()
+                    selectedDesigns.clear()
+
+                    bulkViewModel.stopScanningAndCompute()
+                    isScanning = false
+
+                    Toast.makeText(context, "All items matched. Scan stopped.", Toast.LENGTH_SHORT).show()
+                }
+            }
     }
 
     LaunchedEffect(isScanning, scopeItems.size) {
@@ -383,11 +408,24 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
         }
     }
 
-    DisposableEffect(Unit) { onDispose { bulkViewModel.stopScanningAndCompute() } }
+    DisposableEffect(Unit) { onDispose { bulkViewModel.stopScanningAndCompute()
+
+    } }
 
     LaunchedEffect(scopeItems) {
         if (isScanning && scopeItems.isNotEmpty() && scopeItems.all { it.scannedStatus == "Matched" }) {
+
+            currentCategory = null
+            currentProduct = null
+            currentDesign = null
+            selectedCategories.clear()
+            selectedProducts.clear()
+            selectedDesigns.clear()
+
+
             bulkViewModel.stopScanningAndCompute()
+            Toast.makeText(context, "All items matched. Scan stopped.", Toast.LENGTH_SHORT).show()
+
             isScanning = false
         }
     }
@@ -395,7 +433,12 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
     val employee = UserPreferences.getInstance(context).getEmployee(Employee::class.java)
     LaunchedEffect(Unit) {
         employee?.clientCode?.let { singleProductViewModel.fetchAllDropdownData(ClientCodeRequest(it)) }
-        bulkViewModel.getAllItems()
+        //bulkViewModel.getAllItems()
+        // Initialize with pagination
+        scope.launch {
+            bulkViewModel.loadTotalCount()
+            bulkViewModel.loadPage(0) // Load first page
+        }
     }
 
     // Avoid feeding UI projection back into VM during scanning to reduce churn
@@ -585,6 +628,8 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
                                         (selectedProducts.isEmpty() || it.productName in selectedProducts) &&
                                         (selectedDesigns.isEmpty() || it.design in selectedDesigns)
                             }
+
+                            // Use pagination for large lists
                             items(
                                 itemsList,
                                 key = {
@@ -595,14 +640,51 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
                                     showItemDialog = true
                                 }
                             }
+
+                            // Load more items when reaching the end (for pagination)
+                            if (itemsList.size >= pageSize && !isLoadingPage) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                scope.launch {
+                                                    bulkViewModel.loadNextPage()
+                                                }
+                                            }
+                                        ) {
+                                            Text("Load More Items")
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Show loading indicator
+                            if (isLoadingPage) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator()
+                                    }
+                                }
+                            }
                         }
                     }
                 }
                 // -----------------------------------------------------------------------------------
             }
         }
-        // 🔹 Loader overlay (TOP LEVEL)
-        if (isLoading) {
+        // 🔹 Loader overlay (TOP LEVEL) - reuse existing shared loader (productListViewModel / bulkViewModel)
+        val bulkIsLoading by bulkViewModel.isLoading.collectAsState()
+        if (isLoading || bulkIsLoading) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -612,7 +694,11 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(color = Color.White, strokeWidth = 3.dp)
                     Spacer(Modifier.height(8.dp))
-                    Text("Loading products...", color = Color.White, fontFamily = poppins)
+                    Text(
+                        if (bulkIsLoading) "Please wait..." else "Loading products...",
+                        color = Color.White,
+                        fontFamily = poppins
+                    )
                 }
             }
         }
@@ -817,18 +903,41 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
                 VerticalMenu { menuItem ->
                     when (menuItem.title) {
                         "UnMatched Items" -> {
-                            selectedMenu = MENU_UNMATCHED
-                            bulkViewModel.rememberUnmatched(scopeItems.filter { it.scannedStatus == "Unmatched" })
+                            scope.launch {
+                                bulkViewModel.setLoading(true)
+                                delay(1000)
+                                bulkViewModel.loadUnmatchedFast(scopeItems)
+                                selectedMenu = MENU_UNMATCHED
+                                currentLevel = "DesignItems"
+                            }
 
-                            // ✅ Always show items when unmatched mode
-                            currentLevel = "DesignItems"
-                            currentCategory = null
-                            currentProduct = null
-                            currentDesign = null
+                            // Compute unmatched ids off the main thread to avoid freezing UI on large lists
+                            /*bulkViewModel.setLoading(true)
+                            scope.launch(Dispatchers.IO) {
+                                val ids = withContext(Dispatchers.Default) {
+                                    scopeItems.asSequence()
+                                        .filter { it.scannedStatus.equals("Unmatched", true) }
+                                        .mapNotNull { it.epc?.trim()?.uppercase() }
+                                        .distinct()
+                                        .toList()
+                                }
+                                // Update ViewModel and UI on the main thread to avoid snapshot mutations from background
+                                //bulkViewModel.rememberUnmatchedIds(ids) // Now updates _filteredUnmatchedIds directly on a background thread
+                                withContext(Dispatchers.Main) { // Move UI updates back to Main thread
+                                    selectedMenu = MENU_UNMATCHED
+                                    // ✅ Always show items when unmatched mode
+                                    currentLevel = "DesignItems"
+                                    currentCategory = null
+                                    currentProduct = null
+                                    currentDesign = null
 
-                            selectedCategories.clear()
-                            selectedProducts.clear()
-                            selectedDesigns.clear()
+                                    selectedCategories.clear()
+                                    selectedProducts.clear()
+                                    selectedDesigns.clear()
+                                    bulkViewModel.setLoading(false)
+                                }
+                            }*/
+
                         }
 
                         "Matched Items" -> {

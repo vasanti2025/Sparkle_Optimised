@@ -780,16 +780,16 @@ class BulkViewModel @Inject constructor(
 
             if (dbEpc != null && scannedEpcSet.contains(dbEpc)) {
                 if (item.scannedStatus != "Matched") {
-                    matched.add(item.copy(scannedStatus = "Matched"))
+                    matched.add(item.copy(scannedStatus = "Matched", rfid = item.rfid ?: item.epc))
                 } else {
-                    matched.add(item)
+                    matched.add(item.copy(rfid = item.rfid ?: item.epc))
                 }
-                if (stayVisibleInUnmatched) unmatched.add(item)
+                if (stayVisibleInUnmatched) unmatched.add(item.copy(rfid = item.rfid ?: item.epc))
             } else {
                 if (item.scannedStatus != "Unmatched") {
-                    unmatched.add(item.copy(scannedStatus = "Unmatched"))
+                    unmatched.add(item.copy(scannedStatus = "Unmatched", rfid = item.rfid ?: item.epc))
                 } else {
-                    unmatched.add(item)
+                    unmatched.add(item.copy(rfid = item.rfid ?: item.epc))
                 }
             }
         }
@@ -1434,6 +1434,9 @@ class BulkViewModel @Inject constructor(
                 var lastUpdate = System.currentTimeMillis()
 
                 for (item in bulkItems) {
+                    val originalRfid = item.rfid // Capture original rfid before potential modification
+                    val originalEpc = item.epc // Capture original epc before potential modification
+
                     val updatedItem = if (tagType == "webreusable") {
                         if (!item.rfid.isNullOrBlank()) {
                             if (item.epc.isNullOrBlank()) {
@@ -1445,9 +1448,11 @@ class BulkViewModel @Inject constructor(
                         if (!item.itemCode.isNullOrBlank()) {
                             val hexValue = item.itemCode.toByteArray()
                                 .joinToString("") { String.format("%02X", it) }
-                            item.copy(rfid = item.itemCode, epc = hexValue, tid = hexValue)
+                            item.copy(rfid = originalRfid ?: item.itemCode, epc = originalEpc ?: hexValue, tid = hexValue)
                         } else null
                     }
+
+                    Log.d("SYNC_ITEM_DEBUG", "Processed Item - ItemCode: ${item.itemCode}, Original RFID: $originalRfid, Original EPC: $originalEpc, Final RFID: ${updatedItem?.rfid}, Final EPC: ${updatedItem?.epc}")
 
                     if (updatedItem != null) {
                         processedItems.add(updatedItem)
@@ -1648,10 +1653,11 @@ class BulkViewModel @Inject constructor(
 
                 // Mark items as unmatched
                 val processedItems = unmatchedItems.map { item ->
+                    Log.d("UNMATCHED_ITEM_DEBUG", "ItemCode: ${item.itemCode}, RFID: ${item.rfid}, EPC: ${item.epc}")
                     if (item.scannedStatus != "Unmatched") {
-                        item.copy(scannedStatus = "Unmatched")
+                        item.copy(scannedStatus = "Unmatched", rfid = item.rfid ?: item.epc)
                     } else {
-                        item
+                        item.copy(rfid = item.rfid ?: item.epc)
                     }
                 }
 

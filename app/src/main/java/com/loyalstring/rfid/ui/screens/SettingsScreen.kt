@@ -47,7 +47,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
+
+import com.loyalstring.rfid.worker.LocaleHelper
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -88,11 +89,13 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.DpOffset
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.os.LocaleListCompat
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
@@ -105,7 +108,8 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 import com.google.android.gms.location.LocationServices
 import com.loyalstring.rfid.data.local.db.AppDatabase
-import com.loyalstring.rfid.worker.LocaleHelper
+import kotlinx.coroutines.delay
+
 import java.util.concurrent.TimeUnit
 
 
@@ -116,6 +120,7 @@ sealed class SettingType {
 }
 
 data class SettingsMenuItem(
+
     val key: String,
     val title: String,
     val icon: ImageVector,
@@ -166,6 +171,23 @@ fun SettingsScreen(
 
 
     var showLanguageDialog by remember { mutableStateOf(false) }
+
+
+
+    LaunchedEffect(Unit) {
+        // Read the active locale from AppCompatDelegate
+        val currentLocales = AppCompatDelegate.getApplicationLocales()
+        val currentLang = if (currentLocales.isEmpty) "en" else currentLocales[0]?.language
+
+        // Wrap Compose context using your LocaleHelper
+        val localizedContext = LocaleHelper.applyLocale(context, currentLang.toString())
+
+        val cfg = localizedContext.resources.configuration
+        Log.d("LangCheck", "SettingsScreen cfg.locales[0] = ${cfg.locales[0].toLanguageTag()}")
+
+        val s = localizedContext.getString(R.string.menu_rates_title)
+        Log.d("LangCheck", "menu_rates_title = $s")
+    }
 
     // ✅ Ensure default counter values are stored in SharedPreferences
     LaunchedEffect(Unit) {
@@ -253,6 +275,12 @@ fun SettingsScreen(
         cancelPeriodicSync(context,LOCATION_SYNC_DATA_WORKER)
     }
 
+
+    val currentLocales = AppCompatDelegate.getApplicationLocales()
+    val currentLang = if (currentLocales.isEmpty) "en" else currentLocales[0]?.language
+    val localizedContext = LocaleHelper.applyLocale(context, currentLang ?: "en")
+
+
     val menuItems = listOf(
         // Counters (first 5)
         SettingsMenuItem(
@@ -282,10 +310,10 @@ fun SettingsScreen(
         // Actions
         SettingsMenuItem(
             "rates",
-            stringResource(id = R.string.menu_rates_title),
+            localizedContext.getString(R.string.menu_rates_title),
             Icons.Default.Settings,
             SettingType.Action,
-            subtitle = stringResource(id = R.string.menu_rates_subtitle)
+            subtitle = localizedContext.getString(R.string.menu_rates_subtitle)
         ) {
             ///  showRatesEditor  = true
             //  navController.navigate(Screens.DailyRatesEditorScreen.route)
@@ -364,10 +392,10 @@ fun SettingsScreen(
         ),
         SettingsMenuItem(
             key = "apis",
-            title = stringResource(id = R.string.menu_apis_title),
+            title = localizedContext.getString( R.string.menu_apis_title),
             icon = Icons.Default.Settings,
             type = SettingType.Action,
-            subtitle = stringResource(id = R.string.menu_apis_subtitle)
+            subtitle = localizedContext.getString(R.string.menu_apis_subtitle)
         ) /*{
             showCustomApiDialog = true
         }*/,
@@ -479,6 +507,7 @@ fun SettingsScreen(
     if (showCustomApiDialog) {
 
         CustomApiDialog(
+            localizedContext=localizedContext,
             onDismiss = { showCustomApiDialog = false },
             onSave = { newApi ->
                 customApi = newApi
@@ -598,13 +627,19 @@ fun SettingsScreen(
                         selected = userPreferences.getAppLanguage() == "en",
                         onSelect = {
                             userPreferences.saveAppLanguage("en")
-                            LocaleHelper.applyLocale(context, "en")
+
+                            val appLocale = LocaleListCompat.forLanguageTags("en")
+                            AppCompatDelegate.setApplicationLocales(appLocale)
+
                             ToastUtils.showToast(context, "Language changed to English")
                             showLanguageDialog = false
-                            restartApp(context)
+                            scope.launch {
+                                delay(300)
+                                restartApp(context)
+                            }
+                          //  restartApp(context)   // optional but tu already use kar raha hai
                         }
                     )
-
 
                     Spacer(modifier = Modifier.height(8.dp))
 
@@ -614,12 +649,36 @@ fun SettingsScreen(
                         onSelect = {
                             userPreferences.saveAppLanguage("hi")
 
-                            // ✅ Apply Hindi locale before restart
-                            LocaleHelper.applyLocale(context, "hi")
+                            val appLocale = LocaleListCompat.forLanguageTags("hi")
+                            AppCompatDelegate.setApplicationLocales(appLocale)
 
                             ToastUtils.showToast(context, "भाषा हिंदी में बदल दी गई है")
                             showLanguageDialog = false
-                            restartApp(context)
+                            scope.launch {
+                                delay(300)
+                                restartApp(context)
+                            }
+                           // restartApp(context)   // optional but safe
+                        }
+                    )
+
+                    // Arabic
+                    LanguageOption(
+                        label = "Arabic (العربية)",
+                        selected = userPreferences.getAppLanguage() == "ar",
+                        onSelect = {
+                            userPreferences.saveAppLanguage("ar")
+
+                            val appLocale = LocaleListCompat.forLanguageTags("ar")
+                            AppCompatDelegate.setApplicationLocales(appLocale)
+
+                            ToastUtils.showToast(context, "تم تغيير اللغة إلى العربية")
+                            showLanguageDialog = false
+
+                            scope.launch {
+                                delay(300)
+                                restartApp(context)
+                            }
                         }
                     )
                 }
@@ -631,9 +690,11 @@ fun SettingsScreen(
         )
     }
 
+
 }
 
 fun restartApp(context: Context) {
+
     val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
     val mainIntent = Intent.makeRestartActivityTask(intent?.component)
     context.startActivity(mainIntent)
@@ -1040,8 +1101,10 @@ private fun ensureStoragePermission(context: Context, activity: Activity): Boole
 
 @Composable
 fun CustomApiDialog(
+    localizedContext: Context,
     onDismiss: () -> Unit,
-    onSave: (String) -> Unit
+    onSave: (String) -> Unit,
+
 ) {
     val context = LocalContext.current
     val userPrefs = remember { UserPreferences.getInstance(context) }
@@ -1056,7 +1119,7 @@ fun CustomApiDialog(
         confirmButton = {},
         title = {
             Text(
-                text = stringResource(R.string.dialog_custom_api_title),
+                text = localizedContext.getString(R.string.dialog_custom_api_title),
                 fontSize = 16.sp,
                 fontFamily = poppins,
                 fontWeight = FontWeight.Bold,
@@ -1069,7 +1132,7 @@ fun CustomApiDialog(
                     onValueChange = { input = it },
                     label = {
                         Text(
-                            text = stringResource(R.string.hint_custom_api),
+                            text = localizedContext.getString(R.string.hint_custom_api),
                             fontSize = 14.sp,
                             fontFamily = poppins
                         )
@@ -1081,7 +1144,7 @@ fun CustomApiDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 GradientButton(
-                    text = stringResource(R.string.button_save),
+                    text = localizedContext.getString(R.string.button_save),
                     onClick = {
                         if (input.isNotBlank()) {
                             userPrefs.saveCustomApi(input)  // ✅ Save in SharedPreferences

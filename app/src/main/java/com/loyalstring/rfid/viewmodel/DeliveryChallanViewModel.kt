@@ -135,7 +135,7 @@ class DeliveryChallanViewModel @Inject constructor(
         }
     }
 
-    fun fetchCustomerTunch(clientCode: String, employeeId: Int) {
+    fun fetchCustomerTunch(clientCode: String, employeeId: Int?) {
         viewModelScope.launch {
             _loading.value = true
             _error.value = null

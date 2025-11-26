@@ -106,6 +106,8 @@ fun DeliveryChalanScreen(
 
     val branchList = singleProductViewModel.branches
     val salesmanList by orderViewModel.empListFlow.collectAsState()
+    val touchList by deliveryChallanViewModel.customerTunchList.collectAsState()
+
 
     LaunchedEffect(employee?.clientCode) {
         val code = employee?.clientCode ?: return@LaunchedEffect
@@ -328,6 +330,44 @@ fun DeliveryChalanScreen(
                     val qtyValue: Double = matchedItem.totalQty?.toDouble()
                         ?: matchedItem.pcs?.toDouble() ?: 1.0
 
+
+                    val selectedSku = matchedItem.sku ?: ""
+
+
+                    // 1) Trigger ViewModel API load (NO CALLBACK)
+                    if (touchList.isEmpty()) {
+                        deliveryChallanViewModel.fetchCustomerTunch(
+                            employee?.clientCode.toString(),
+                            employee?.id?.toInt()
+                        )
+                        return@LaunchedEffect    // wait for next recomposition
+                    }
+                    // 2) Read touch list from StateFlow
+                    val touchMatch = touchList.firstOrNull {
+                        it.StockKeepingUnit.equals(selectedSku, ignoreCase = true)
+                    }
+
+                    var makingPercent = matchedItem.makingPercent ?: "0.0"
+                    var wastagePercent = matchedItem.fixWastage ?: "0.0"
+                    var makingFixedWastage = matchedItem.fixWastage ?: "0.0"
+                    var makingFixedAmt = matchedItem.fixMaking ?: "0.0"
+                    var makingPerGram = matchedItem.makingPerGram ?: "0.0"
+
+
+                    if (touchMatch != null) {
+                        Log.d("TouchMatch", "✔ SKU matched in Touch API")
+
+                        makingPercent = touchMatch.MakingPercentage ?: makingPercent
+                        wastagePercent = touchMatch.WastageWt ?: wastagePercent
+                        makingFixedWastage = touchMatch.MakingFixedWastage ?: makingFixedWastage
+                        makingFixedAmt = touchMatch.MakingFixedAmt ?: makingFixedAmt
+                        makingPerGram = touchMatch.MakingPerGram ?: makingPerGram
+                    } else {
+                        Log.d("TouchMatch", "❌ No touch settings found for SKU")
+                    }
+
+
+
                     val productDetail = ChallanDetails(
                         ChallanId = 0,
                         MRP = matchedItem.mrp?.toString() ?: "0.0",
@@ -360,10 +400,10 @@ fun DeliveryChalanScreen(
                         PurchaseInvoiceNo = "",
                         HallmarkAmount = "" ?: "0.0",
                         HallmarkNo =""?: "",
-                        MakingFixedAmt = matchedItem.fixMaking ?: "0.0",
-                        MakingFixedWastage = matchedItem.fixWastage ?: "0.0",
-                        MakingPerGram = matchedItem.makingPerGram ?: "0.0",
-                        MakingPercentage = matchedItem.makingPercent ?: "0.0",
+                        MakingFixedAmt = makingFixedAmt,
+                        MakingFixedWastage = makingFixedWastage,
+                        MakingPerGram = makingPerGram,
+                        MakingPercentage = makingPercent,
                         Description = ""?: "",
                         CuttingGrossWt = matchedItem.grossWeight ?: "0.0",
                         CuttingNetWt = matchedItem.netWeight ?: "0.0",
@@ -431,9 +471,10 @@ fun DeliveryChalanScreen(
                         qty = (matchedItem.pcs ?: 1),
                         tid = matchedItem.tid ?: "",
                         totayRate = ""?.toString() ?: "0.0",
-                        makingPercent = matchedItem.makingPercent ?: "0.0",
-                        fixMaking = matchedItem.fixMaking ?: "0.0",
-                        fixWastage = matchedItem.fixWastage ?: "0.0"
+                        makingPercent = makingPercent,
+                        fixMaking = makingFixedAmt,
+                        fixWastage = makingFixedWastage
+
                     )
 
 
@@ -540,6 +581,8 @@ fun DeliveryChalanScreen(
         deliveryChallanViewModel.addDeliveryChallan(request)
     }
 
+
+
     LaunchedEffect(itemCode.text) {
         val query = itemCode.text.trim()
         if (query.isNotEmpty()) {
@@ -552,6 +595,54 @@ fun DeliveryChalanScreen(
             if (matchedItem != null) {
                 // Prevent duplicates
                 if (productList.none { it.RFIDCode == matchedItem.rfid }) {
+
+
+                    val selectedSku = matchedItem.sku ?: ""
+
+
+                    // 1) Trigger ViewModel API load (NO CALLBACK)
+                    if (touchList.isEmpty()) {
+                        deliveryChallanViewModel.fetchCustomerTunch(
+                            employee?.clientCode.toString(),
+                            employee?.id?.toInt()
+                        )
+                        return@LaunchedEffect    // wait for next recomposition
+                    }
+                    // 2) Read touch list from StateFlow
+                    val touchMatch = touchList.firstOrNull {
+                        it.StockKeepingUnit.equals(selectedSku, ignoreCase = true)
+                    }
+
+                    var makingPercent = matchedItem.makingPercent ?: "0.0"
+                    var wastagePercent = matchedItem.fixWastage ?: "0.0"
+                    var makingFixedWastage = matchedItem.fixWastage ?: "0.0"
+                    var makingFixedAmt = matchedItem.fixMaking ?: "0.0"
+                    var makingPerGram = matchedItem.makingPerGram ?: "0.0"
+
+
+                    if (touchMatch != null) {
+                        Log.d("TouchMatch", "✔ SKU matched in Touch API")
+                        // print all fields
+                        Log.d(
+                            "TouchMatch", """
+        ✔ Touch API Data:
+        SKU = ${touchMatch.StockKeepingUnit}
+        MakingPercentage = ${touchMatch.MakingPercentage}
+        WastageWt = ${touchMatch.WastageWt}
+        MakingFixedWastage = ${touchMatch.MakingFixedWastage}
+        MakingFixedAmt = ${touchMatch.MakingFixedAmt}
+        MakingPerGram = ${touchMatch.MakingPerGram}
+    """.trimIndent()
+                        )
+
+                        makingPercent = touchMatch.MakingPercentage ?: makingPercent
+                        wastagePercent = touchMatch.WastageWt ?: wastagePercent
+                        makingFixedWastage = touchMatch.MakingFixedWastage ?: makingFixedWastage
+                        makingFixedAmt = touchMatch.MakingFixedAmt ?: makingFixedAmt
+                        makingPerGram = touchMatch.MakingPerGram ?: makingPerGram
+                    } else {
+                        Log.d("TouchMatch", "❌ No touch settings found for SKU")
+                    }
 
                     val productDetail = ChallanDetails(
                         ChallanId = 0,
@@ -585,10 +676,10 @@ fun DeliveryChalanScreen(
                         PurchaseInvoiceNo = "",
                         HallmarkAmount = "" ?: "0.0",
                         HallmarkNo =""?: "",
-                        MakingFixedAmt = matchedItem.fixMaking ?: "0.0",
-                        MakingFixedWastage = matchedItem.fixWastage ?: "0.0",
-                        MakingPerGram = matchedItem.makingPerGram ?: "0.0",
-                        MakingPercentage = matchedItem.makingPercent ?: "0.0",
+                        MakingFixedAmt = makingFixedAmt,
+                        MakingFixedWastage = makingFixedWastage,
+                        MakingPerGram = makingPerGram,
+                        MakingPercentage = makingPercent,
                         Description = ""?: "",
                         CuttingGrossWt = matchedItem.grossWeight ?: "0.0",
                         CuttingNetWt = matchedItem.netWeight ?: "0.0",
@@ -656,9 +747,9 @@ fun DeliveryChalanScreen(
                         qty = (matchedItem.pcs ?: 1),
                         tid = matchedItem.tid ?: "",
                         totayRate = ""?.toString() ?: "0.0",
-                        makingPercent = matchedItem.makingPercent ?: "0.0",
-                        fixMaking = matchedItem.fixMaking ?: "0.0",
-                        fixWastage = matchedItem.fixWastage ?: "0.0"
+                        makingPercent = makingPercent,
+                        fixMaking = makingFixedAmt,
+                        fixWastage = makingFixedWastage
 
                     )
 
@@ -756,34 +847,80 @@ fun DeliveryChalanScreen(
                             ?: 0.0) - (selectedItem?.TotalStoneWeight?.toDoubleOrNull()
                             ?: 0.0)
 
-                        val finePercent =
-                            selectedItem?.FinePercent?.toDoubleOrNull() ?: 0.0
-                        val wastagePercent =
-                            selectedItem?.WastagePercent?.toDoubleOrNull() ?: 0.0
 
-
-                        ((finePercent / 100.0) * netWt) + ((wastagePercent / 100.0) * netWt)
                         val metalAmt: Double =
                             (selectedItem?.NetWt?.toDoubleOrNull()
                                 ?: 0.0) * (selectedItem?.TodaysRate?.toDoubleOrNull()
                                 ?: 0.0)
 
-                        val makingPercentage =
-                            selectedItem?.MakingPercentage?.toDoubleOrNull() ?: 0.0
-                        val fixMaking =
-                            selectedItem?.MakingFixedAmt?.toDoubleOrNull() ?: 0.0
-                        val extraMakingPercent =
-                            selectedItem?.MakingPercentage?.toDoubleOrNull() ?: 0.0
-                        val fixWastage =
-                            selectedItem?.MakingFixedWastage?.toDoubleOrNull()
-                                ?: 0.0
+                        /*  val makingPercentage =
+                              selectedItem?.MakingPercentage?.toDoubleOrNull() ?: 0.0
+                          val fixMaking =
+                              selectedItem?.MakingFixedAmt?.toDoubleOrNull() ?: 0.0
+                          val extraMakingPercent =
+                              selectedItem?.MakingPercentage?.toDoubleOrNull() ?: 0.0
+                          val fixWastage =
+                              selectedItem?.MakingFixedWastage?.toDoubleOrNull()
+                                  ?: 0.0
 
-                        val makingAmt: Double =
-                            ((makingPercentage / 100.0) * netWt) +
-                                    fixMaking +
-                                    ((extraMakingPercent / 100.0) * netWt) +
-                                    fixWastage
+                          val makingAmt: Double =
+                              ((makingPercentage / 100.0) * netWt) +
+                                      fixMaking +
+                                      ((extraMakingPercent / 100.0) * netWt) +
+                                      fixWastage*/
 
+
+                        val selectedSku = selectedItem?.SKU ?: ""
+
+
+                        // 1) Trigger ViewModel API load (NO CALLBACK)
+                        if (touchList.isEmpty()) {
+                            deliveryChallanViewModel.fetchCustomerTunch(
+                                employee?.clientCode.toString(),
+                                employee?.id?.toInt()
+                            )
+                            return@setOnBarcodeScanned    // wait for next recomposition
+                        }
+                        // 2) Read touch list from StateFlow
+                        val touchMatch = touchList.firstOrNull {
+                            it.StockKeepingUnit.equals(selectedSku, ignoreCase = true)
+                        }
+
+                        var makingPercent = selectedItem?.MakingPercentage ?: "0.0"
+                        var wastagePercent = selectedItem?.WastagePercent ?: "0.0"
+                        var makingFixedWastage = selectedItem?.MakingFixedWastage ?: "0.0"
+                        var makingFixedAmt = selectedItem?.MakingFixedAmt ?: "0.0"
+                        var makingPerGram = selectedItem?.MakingPerGram ?: "0.0"
+
+
+                        if (touchMatch != null) {
+                            Log.d("TouchMatch", "✔ SKU matched in Touch API")
+
+                            makingPercent = touchMatch.MakingPercentage ?: makingPercent
+                            wastagePercent = touchMatch.WastageWt ?: wastagePercent
+                            makingFixedWastage = touchMatch.MakingFixedWastage ?: makingFixedWastage
+                            makingFixedAmt = touchMatch.MakingFixedAmt ?: makingFixedAmt
+                            makingPerGram = touchMatch.MakingPerGram ?: makingPerGram
+                        } else {
+                            Log.d("TouchMatch", "❌ No touch settings found for SKU")
+                        }
+                        val mp = makingPercent.toDoubleOrNull() ?: 0.0
+                        val wp = wastagePercent.toDoubleOrNull() ?: 0.0
+                        val mfa = makingFixedAmt.toDoubleOrNull() ?: 0.0
+                        val mfw = makingFixedWastage.toDoubleOrNull() ?: 0.0
+                        val nw = netWt.toDouble() ?: 0.0
+
+// Making Amount
+                        val makingAmt =
+                            ((mp / 100.0) * nw) +
+                                    mfa +
+                                    ((mp / 100.0) * nw) +
+                                    mfw
+
+// Fine & Wastage
+                        val finePercent = selectedItem?.FinePercent?.toDoubleOrNull() ?: 0.0
+                        val fineWt = (finePercent / 100.0) * nw
+                        val wastageWt = (wp / 100.0) * nw
                         val totalStoneAmount =
                             selectedItem?.TotalStoneAmount?.toDoubleOrNull() ?: 0.0
                         val diamondAmount =
@@ -833,10 +970,10 @@ fun DeliveryChalanScreen(
                             PurchaseInvoiceNo = "",
                             HallmarkAmount = selectedItem?.HallmarkAmount?.toString() ?: "0.0",
                             HallmarkNo = "",
-                            MakingFixedAmt = selectedItem?.MakingFixedAmt?.toString() ?: "0.0",
-                            MakingFixedWastage = selectedItem?.MakingFixedWastage?.toString() ?: "0.0",
-                            MakingPerGram = selectedItem?.MakingPerGram?.toString() ?: "0.0",
-                            MakingPercentage = selectedItem?.MakingPercentage?.toString() ?: "0.0",
+                            MakingFixedAmt = makingFixedAmt,
+                            MakingFixedWastage = makingFixedWastage,
+                            MakingPerGram = makingPerGram,
+                            MakingPercentage = makingPercent,
                             Description = "",
                             CuttingGrossWt = selectedItem?.GrossWt ?: "0.0",
                             CuttingNetWt = selectedItem?.NetWt ?: "0.0",

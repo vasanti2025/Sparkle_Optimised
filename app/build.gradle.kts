@@ -20,6 +20,7 @@ android {
         targetSdk = 35
         versionCode = 39
         versionName = "1.39"
+        resConfigs("en", "hi","ar")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

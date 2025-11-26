@@ -2,6 +2,7 @@ package com.loyalstring.rfid.ui.screens
 
 import android.content.Context
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,7 +25,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
+
+import com.loyalstring.rfid.worker.LocaleHelper
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -78,6 +80,11 @@ fun CustomerNameInputData(
                     it.LastName.orEmpty().lowercase().contains(query)
         }
     }
+    val context: Context = LocalContext.current
+    val currentLocales = AppCompatDelegate.getApplicationLocales()
+    val currentLang = if (currentLocales.isEmpty) "en" else currentLocales[0]?.language
+    val localizedContext = LocaleHelper.applyLocale(context, currentLang ?: "en")
+
 
     // ✅ Added Padding for better spacing in UI
     Column(
@@ -112,7 +119,7 @@ fun CustomerNameInputData(
                     ) {
                         if (customerName.isEmpty()) {
                             Text(
-                                text = stringResource(id = R.string.hint_enter_customer_name),
+                                text = localizedContext.getString(R.string.hint_enter_customer_name),
                                 fontSize = 13.sp,
                                 color = Color.Gray
                             )
@@ -178,7 +185,7 @@ fun CustomerNameInputData(
                                     color = Color(0xFF5231A7)
                                 )
                                 Spacer(Modifier.width(6.dp))
-                                Text(stringResource(id = R.string.label_loading), fontSize = 12.sp)
+                                Text(localizedContext.getString(R.string.label_loading), fontSize = 12.sp)
                             }
                         },
                         onClick = {}
@@ -189,7 +196,7 @@ fun CustomerNameInputData(
                     DropdownMenuItem(
                         text = {
                             Text(
-                                text = stringResource(id = R.string.no_results_found),
+                                text = localizedContext.getString( R.string.no_results_found),
                                 fontSize = 12.sp,
                                 color = Color.Gray
                             )
@@ -226,6 +233,7 @@ fun CustomerNameInputData(
     // 🔹 Add Customer Dialog
     if (showAddCustomerDialog) {
         AddCustomerDialog(
+            localizedContext=localizedContext,
             onDismiss = { showAddCustomerDialog = false },
             onSaveCustomer = {
                 onSaveCustomer(it)
@@ -246,10 +254,12 @@ fun CustomerNameInputData(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddCustomerDialog(
+    localizedContext: Context,
     onDismiss: () -> Unit,
     onSaveCustomer: (AddEmployeeRequest) -> Unit,
     employeeClientCode: String? = null,
     employeeId: String? = null
+
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
@@ -298,7 +308,7 @@ fun AddCustomerDialog(
                         Icon(Icons.Default.PersonAdd, contentDescription = null, tint = Color.White)
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            stringResource(R.string.title_customer_profile),
+                            localizedContext.getString(R.string.title_customer_profile),
                             color = Color.White,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
@@ -319,23 +329,23 @@ fun AddCustomerDialog(
                             .background(Color(0xFFF5F5F5))
                             .padding(horizontal = 10.dp)
 
-                        CenteredTextField(name, { name = it }, stringResource(R.string.hint_customer_name), fieldModifier())
+                        CenteredTextField(name, { name = it }, localizedContext.getString(R.string.hint_customer_name), fieldModifier())
                         Spacer(Modifier.height(10.dp))
-                        CenteredTextField(phone, { if (it.length <= 10) phone = it.filter(Char::isDigit) }, stringResource(R.string.hint_mobile_number), fieldModifier())
+                        CenteredTextField(phone, { if (it.length <= 10) phone = it.filter(Char::isDigit) }, localizedContext.getString(R.string.hint_mobile_number), fieldModifier())
                         Spacer(Modifier.height(10.dp))
-                        CenteredTextField(email, { email = it }, stringResource(R.string.hint_email), fieldModifier())
+                        CenteredTextField(email, { email = it }, localizedContext.getString(R.string.hint_email), fieldModifier())
                         Spacer(Modifier.height(10.dp))
-                        CenteredTextField(pan, { pan = it.uppercase().take(10) }, stringResource(R.string.hint_pan_number), fieldModifier())
+                        CenteredTextField(pan, { pan = it.uppercase().take(10) }, localizedContext.getString(R.string.hint_pan_number), fieldModifier())
                         Spacer(Modifier.height(10.dp))
-                        CenteredTextField(gst, { gst = it.uppercase().take(15) }, stringResource(R.string.hint_gst_number), fieldModifier())
+                        CenteredTextField(gst, { gst = it.uppercase().take(15) }, localizedContext.getString(R.string.hint_gst_number), fieldModifier())
                         Spacer(Modifier.height(10.dp))
-                        CenteredTextField(street, { street = it }, stringResource(R.string.hint_street_address), fieldModifier())
+                        CenteredTextField(street, { street = it }, localizedContext.getString(R.string.hint_street_address), fieldModifier())
                         Spacer(Modifier.height(10.dp))
 
                         // 🌍 Dropdown Row
                         Row(Modifier.fillMaxWidth()) {
                             DropdownBox(
-                                label = stringResource(R.string.hint_country),
+                                label = localizedContext.getString(R.string.hint_country),
                                 value = country,
                                 options = countryOptions,
                                 expanded = expandedCountry,
@@ -345,7 +355,7 @@ fun AddCustomerDialog(
                             )
                             Spacer(Modifier.width(8.dp))
                             DropdownBox(
-                                label = stringResource(R.string.hint_state),
+                                label = localizedContext.getString(R.string.hint_state),
                                 value = state,
                                 options = stateOptions,
                                 expanded = expandedState,
@@ -356,7 +366,7 @@ fun AddCustomerDialog(
                         }
 
                         Spacer(Modifier.height(10.dp))
-                        CenteredTextField(city, { city = it }, stringResource(R.string.hint_city), fieldModifier())
+                        CenteredTextField(city, { city = it }, localizedContext.getString(R.string.hint_city), fieldModifier())
                     }
 
                     // 🔹 Footer Buttons
@@ -367,7 +377,7 @@ fun AddCustomerDialog(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         GradientButtonIcon(
-                            text = stringResource(R.string.btn_cancel),
+                            text = localizedContext.getString(R.string.btn_cancel),
                             onClick = onDismiss,
                             icon = painterResource(id = R.drawable.ic_cancel),
                             iconDescription = "Cancel Icon",
@@ -375,7 +385,7 @@ fun AddCustomerDialog(
                         )
 
                         GradientButtonIcon(
-                            text = stringResource(R.string.btn_ok),
+                            text = localizedContext.getString(R.string.btn_ok),
                             onClick = {
                                 fun isValidEmail(email: String) =
                                     email.matches("^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$".toRegex())

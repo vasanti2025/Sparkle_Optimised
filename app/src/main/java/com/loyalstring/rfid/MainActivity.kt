@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -66,12 +67,13 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var userPreferences: UserPreferences
     private var scanKeyListener: ScanKeyListener? = null
-    override fun attachBaseContext(newBase: Context) {
+   /* override fun attachBaseContext(newBase: Context) {
         val prefs = UserPreferences.getInstance(newBase)
         val langCode = prefs.getAppLanguage().ifBlank { "en" }
+        Log.d("@@ langCode","langCode"+langCode)
         val localizedContext = LocaleHelper.applyLocale(newBase, langCode)
         super.attachBaseContext(localizedContext)
-    }
+    }*/
     @RequiresApi(Build.VERSION_CODES.R)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,6 +85,18 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
+
+            val ctx = LocalContext.current
+
+            LaunchedEffect(Unit) {
+                val cfg = ctx.resources.configuration
+                Log.d(
+                    "LocaleDebug",
+                    "Compose ctx locale = ${cfg.locales[0].toLanguageTag()}"
+                )
+                val s = ctx.getString(R.string.menu_rates_title)
+                Log.d("LocaleDebug", "menu_rates_title from Compose ctx = $s")
+            }
             SparkleRFIDTheme {
                 SetupNavigation(baseContext, userPreferences, startDestination)
             }

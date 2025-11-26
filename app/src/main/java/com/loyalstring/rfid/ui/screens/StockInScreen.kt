@@ -2,6 +2,7 @@ package com.loyalstring.rfid.ui.screens
 
 import android.util.Log
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -23,7 +24,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
+import com.loyalstring.rfid.worker.LocaleHelper
+
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -189,10 +191,14 @@ fun StockInScreen(
         }
     }
 
+    val currentLocales = AppCompatDelegate.getApplicationLocales()
+    val currentLang = if (currentLocales.isEmpty) "en" else currentLocales[0]?.language
+    val localizedContext = LocaleHelper.applyLocale(context, currentLang ?: "en")
+
     Scaffold(
         topBar = {
             GradientTopBar(
-                title = stringResource(R.string.stock_transfers_title),
+                title = localizedContext.getString(R.string.stock_transfers_title),
                 navigationIcon = {
                     IconButton(onClick = { shouldNavigateBack = true }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
@@ -247,7 +253,7 @@ fun StockInScreen(
                 }
 
                 IconButton(onClick = { showFilterDialog = true }) {
-                    Icon(Icons.Default.Tune, contentDescription = stringResource(R.string.filter_label), tint = Color(0xFF3C3C3C))
+                    Icon(Icons.Default.Tune, contentDescription = localizedContext.getString(R.string.filter_label), tint = Color(0xFF3C3C3C))
                 }
             }
 
@@ -258,7 +264,7 @@ fun StockInScreen(
 
                 errorMessage.value != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        text = errorMessage.value ?: stringResource(R.string.error_loading_data),
+                        text = errorMessage.value ?: localizedContext.getString(R.string.error_loading_data),
                         color = Color.Red
                     )
                 }
@@ -283,13 +289,13 @@ fun StockInScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             listOf(
-                                stringResource(R.string.from_header),
-                                stringResource(R.string.to_header),
-                                stringResource(R.string.gross_wt_header),
-                                stringResource(R.string.net_wt_header),
-                                stringResource(R.string.transfer_by_header),
-                                stringResource(R.string.transfer_to_header),
-                                stringResource(R.string.transfer_type_header)
+                                localizedContext.getString(R.string.from_header),
+                                localizedContext.getString(R.string.to_header),
+                                localizedContext.getString(R.string.gross_wt_header),
+                                localizedContext.getString(R.string.net_wt_header),
+                                localizedContext.getString(R.string.transfer_by_header),
+                                localizedContext.getString(R.string.transfer_to_header),
+                                localizedContext.getString(R.string.transfer_type_header)
                             ).forEach { header ->
                                 Text(
                                     header, color = Color.White, fontWeight = FontWeight.Bold,
@@ -305,7 +311,7 @@ fun StockInScreen(
                             )
                         } else {
                             Text(
-                                stringResource(R.string.status_header), color = Color.White,
+                                localizedContext.getString(R.string.status_header), color = Color.White,
                                 fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
                                 modifier = Modifier.width(100.dp)
                             )
@@ -388,10 +394,10 @@ fun StockInScreen(
                                     }
                                 } else {
                                     val displayText = when (selectedStatus) {
-                                        stringResource(R.string.pending_status) -> "P: ${item.pending}"
-                                        stringResource(R.string.approved_status) -> "A: ${item.approved}"
-                                        stringResource(R.string.rejected_status) -> "R: ${item.rejected}"
-                                        stringResource(R.string.lost_status) -> "L: ${item.lost}"
+                                        localizedContext.getString(R.string.pending_status) -> "P: ${item.pending}"
+                                        localizedContext.getString(R.string.approved_status) -> "A: ${item.approved}"
+                                        localizedContext.getString(R.string.rejected_status) -> "R: ${item.rejected}"
+                                        localizedContext.getString(R.string.lost_status) -> "L: ${item.lost}"
                                         else -> "P:${item.pending}"
                                     }
 
@@ -435,24 +441,24 @@ fun StockInScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                stringResource(R.string.status_filter_title),
+                                localizedContext.getString(R.string.status_filter_title),
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold
                             )
                         }
 
                         val statusIcons = mapOf(
-                            stringResource(R.string.pending_status) to R.drawable.schedule,
-                            stringResource(R.string.approved_status) to R.drawable.check_circle_gray,
-                            stringResource(R.string.rejected_status) to R.drawable.cancel_gray,
-                            stringResource(R.string.lost_status) to R.drawable.ic_lost
+                            localizedContext.getString(R.string.pending_status) to R.drawable.schedule,
+                            localizedContext.getString(R.string.approved_status) to R.drawable.check_circle_gray,
+                            localizedContext.getString(R.string.rejected_status) to R.drawable.cancel_gray,
+                            localizedContext.getString(R.string.lost_status) to R.drawable.ic_lost
                         )
 
                         listOf(
-                            stringResource(R.string.pending_status),
-                            stringResource(R.string.approved_status),
-                            stringResource(R.string.rejected_status),
-                            stringResource(R.string.lost_status)
+                            localizedContext.getString(R.string.pending_status),
+                            localizedContext.getString(R.string.approved_status),
+                            localizedContext.getString(R.string.rejected_status),
+                            localizedContext.getString(R.string.lost_status)
                         ).forEach { status ->
                             Divider(color = Color(0xFFE0E0E0), thickness = 0.5.dp)
                             FilterRow(

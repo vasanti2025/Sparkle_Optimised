@@ -1,6 +1,7 @@
 package com.loyalstring.rfid.ui.screens
 
 import android.content.Context
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -19,10 +20,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
+import com.loyalstring.rfid.worker.LocaleHelper
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -80,6 +82,12 @@ fun ItemCodeInputRowData(
         }
     }
 
+    val context: Context = LocalContext.current
+    val currentLocales = AppCompatDelegate.getApplicationLocales()
+    val currentLang = if (currentLocales.isEmpty) "en" else currentLocales[0]?.language
+    val localizedContext = LocaleHelper.applyLocale(context, currentLang ?: "en")
+
+
     Column(modifier = Modifier.fillMaxWidth()) {
 
         // 🔹 Input Row
@@ -108,7 +116,7 @@ fun ItemCodeInputRowData(
                     ) {
                         if (itemCode.text.isEmpty()) {
                             Text(
-                                text = stringResource(id = R.string.enter_rfid_itemcode),
+                                text = localizedContext.getString(R.string.enter_rfid_itemcode),
                                 fontSize = 12.sp,
                                 color = Color.Gray
                             )
@@ -135,14 +143,14 @@ fun ItemCodeInputRowData(
                 if (itemCode.text.isNotEmpty()) {
                     Icon(
                         Icons.Default.Clear,
-                        contentDescription = stringResource(id = R.string.clear),
+                        contentDescription = localizedContext.getString(R.string.clear),
                         modifier = Modifier.size(18.dp),
                         tint = Color.Gray
                     )
                 } else {
                     Icon(
                         painter = painterResource(id = R.drawable.svg_qr),
-                        contentDescription = stringResource(id = R.string.scan),
+                        contentDescription = localizedContext.getString( R.string.scan),
                         modifier = Modifier.size(18.dp),
                         tint = Color.Gray
                     )
@@ -169,7 +177,7 @@ fun ItemCodeInputRowData(
                                     color = Color(0xFF5231A7)
                                 )
                                 Spacer(Modifier.width(6.dp))
-                                Text(stringResource(id = R.string.searching), fontSize = 12.sp)
+                                Text(localizedContext.getString( R.string.searching), fontSize = 12.sp)
                             }
                         },
                         onClick = {}
@@ -180,7 +188,7 @@ fun ItemCodeInputRowData(
                     DropdownMenuItem(
                         text = {
                             Text(
-                                stringResource(id = R.string.no_results_found),
+                                localizedContext.getString(R.string.no_results_found),
                                 fontSize = 12.sp,
                                 color = Color.Gray
                             )

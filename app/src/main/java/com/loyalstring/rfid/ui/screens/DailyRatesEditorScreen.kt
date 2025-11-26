@@ -1,5 +1,7 @@
 package com.loyalstring.rfid.ui.screens
 
+import android.content.Context
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -20,7 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
+import com.loyalstring.rfid.worker.LocaleHelper
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -89,10 +91,17 @@ fun DailyRatesEditorScreen(
         }
     }
 
+
+    val currentLocales = AppCompatDelegate.getApplicationLocales()
+    val currentLang = if (currentLocales.isEmpty) "en" else currentLocales[0]?.language
+    val localizedContext = LocaleHelper.applyLocale(context, currentLang ?: "en")
+
+
+
     Scaffold(
         topBar = {
             GradientTopBar(
-                title = stringResource(R.string.title_edit_daily_rates),
+                title = localizedContext.getString(R.string.title_edit_daily_rates),
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
@@ -117,6 +126,7 @@ fun DailyRatesEditorScreen(
                 }
             } else {
                 DailyRatesContent(
+                    localizedContext=localizedContext,
                     purityList = purityList,
                     rateList = dailyRates.value,
                     onSave = { edited ->
@@ -145,10 +155,12 @@ fun DailyRatesEditorScreen(
 
 @Composable
 private fun DailyRatesContent(
+    localizedContext: Context,
     purityList: List<PurityModel>,
     rateList: List<DailyRateResponse>,
     onSave: (List<DailyRateResponse>) -> Unit,
     onCancel: () -> Unit
+
 ) {
     // ✅ Always build from purityList; rates can be empty
     val combinedRates = remember(rateList, purityList) {
@@ -182,7 +194,7 @@ private fun DailyRatesContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = stringResource(R.string.label_category),
+                text = localizedContext.getString(R.string.label_category),
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
                 fontFamily = poppins,
@@ -191,7 +203,7 @@ private fun DailyRatesContent(
                     .padding(start = 4.dp)
             )
             Text(
-                text =stringResource(R.string.label_purity),
+                text =localizedContext.getString(R.string.label_purity),
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
                 fontFamily = poppins,
@@ -200,7 +212,7 @@ private fun DailyRatesContent(
                     .padding(start = 8.dp)
             )
             Text(
-                text = stringResource(R.string.label_todays_rate),
+                text = localizedContext.getString(R.string.label_todays_rate),
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
                 fontFamily = poppins,
@@ -285,7 +297,7 @@ private fun DailyRatesContent(
                 .padding(horizontal = 8.dp)
         ) {
             GradientButtonIcon(
-                text = stringResource(R.string.button_cancel),
+                text = localizedContext.getString(R.string.button_cancel),
                 onClick = onCancel,
                 modifier = Modifier
                     .weight(1f)
@@ -299,7 +311,7 @@ private fun DailyRatesContent(
             Spacer(Modifier.width(8.dp))
 
             GradientButtonIcon(
-                text = stringResource(R.string.button_update),
+                text = localizedContext.getString(R.string.button_update),
                 onClick = { onSave(combinedRates.toList()) },
                 modifier = Modifier
                     .weight(1f)

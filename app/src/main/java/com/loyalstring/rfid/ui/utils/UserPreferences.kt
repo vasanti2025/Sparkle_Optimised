@@ -2,6 +2,7 @@ package com.loyalstring.rfid.ui.utils
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.core.content.edit
 import com.google.gson.Gson
 import com.loyalstring.rfid.data.model.login.Clients
@@ -203,12 +204,15 @@ class UserPreferences @Inject constructor(
         return prefs.contains(key)
     }
 
-    fun saveAppLanguage(langCode: String) {
-        prefs.edit().putString("app_language", langCode).apply()
+    fun saveAppLanguage(lang: String) {
+        prefs.edit().putString("app_language", lang).apply()
+        Log.d("LocaleDebug", "saveAppLanguage = $lang")
     }
 
     fun getAppLanguage(): String {
-        return prefs.getString("app_language", "en") ?: "en"
+        val value = prefs.getString("app_language", "en") ?: "en"
+        Log.d("LocaleDebug", "getAppLanguage -> $value")
+        return value
     }
 }
 

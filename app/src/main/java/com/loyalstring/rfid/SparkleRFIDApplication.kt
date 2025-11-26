@@ -3,6 +3,8 @@ package com.loyalstring.rfid
 import android.app.Application
 import android.content.Context
 import android.util.Log
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.loyalstring.rfid.ui.utils.UserPreferences
@@ -19,7 +21,7 @@ import javax.inject.Inject
 class SparkleRFIDApplication : Application(), Configuration.Provider {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    override fun attachBaseContext(base: Context?) {
+/*    override fun attachBaseContext(base: Context?) {
         if (base == null) {
             super.attachBaseContext(base)
             return
@@ -38,7 +40,7 @@ class SparkleRFIDApplication : Application(), Configuration.Provider {
             super.attachBaseContext(base)
             Log.e("AppLocale", "⚠️ Locale setup failed: ${e.message}")
         }
-    }
+    }*/
 
 
     @Inject
@@ -56,6 +58,23 @@ class SparkleRFIDApplication : Application(), Configuration.Provider {
         super.onCreate()
         LocaleHelper.applySavedLocale(this)
         Log.d("StartupTrace", "Application.onCreate start")
+
+        // ✅ 1. Load saved language
+        val prefs = UserPreferences.getInstance(this)
+        val rawLang = prefs.getAppLanguage()
+        val langCode = rawLang?.ifBlank { "en" } ?: "en"
+
+        Log.d("LocaleDebug", "prefs langCode = '$rawLang' -> using '$langCode'")
+
+        val localeList = LocaleListCompat.forLanguageTags(langCode)
+        AppCompatDelegate.setApplicationLocales(localeList)
+
+        val cfg = resources.configuration
+        Log.d(
+            "LocaleDebug",
+            "after setApplicationLocales: cfg.locales[0] = ${cfg.locales[0].toLanguageTag()}"
+        )
+
 
         applicationScope.launch {
             try {

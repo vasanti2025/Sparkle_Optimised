@@ -1,8 +1,8 @@
 package com.loyalstring.rfid.ui.screens
 
-import android.R.attr.onClick
 import android.content.Context
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -62,7 +62,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
+
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -76,9 +76,8 @@ import com.loyalstring.rfid.data.model.stockTransfer.StockTransferItem
 import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.ui.utils.GradientButtonIcon
 import com.loyalstring.rfid.ui.utils.UserPreferences
-import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.StockTransferViewModel
-import androidx.compose.ui.res.stringResource
+import com.loyalstring.rfid.worker.LocaleHelper
 
 
 @Composable
@@ -137,10 +136,13 @@ fun StockTransferDetailScreen(
         }
     }
 
+    val currentLocales = AppCompatDelegate.getApplicationLocales()
+    val currentLang = if (currentLocales.isEmpty) "en" else currentLocales[0]?.language
+    val localizedContext = LocaleHelper.applyLocale(context, currentLang ?: "en")
     Scaffold(
         topBar = {
             GradientTopBar(
-                title = stringResource(R.string.transfer_details_title),
+                title = localizedContext.getString(R.string.transfer_details_title),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
@@ -159,7 +161,7 @@ fun StockTransferDetailScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     GradientButtonIcon(
-                        text = stringResource(R.string.approve_button),
+                        text = localizedContext.getString(R.string.approve_button),
                         onClick = {
                             currentActionType = 1
                             handleDetailAction(
@@ -173,7 +175,7 @@ fun StockTransferDetailScreen(
                                 approvedCount = selectedIds.size
                                 refreshItems()
                                 showSuccessDialog = true
-                                apiMessage = stringResource(R.string.items_approved_success)
+                                apiMessage = localizedContext.getString(R.string.items_approved_success)
                                 selectedIds.clear()
                                 selectAll = false
                             }
@@ -183,12 +185,12 @@ fun StockTransferDetailScreen(
                             .height(36.dp)
                             .padding(horizontal = 4.dp),
                         icon = painterResource(id = R.drawable.check_circle),
-                        iconDescription = stringResource(R.string.approve_button),
+                        iconDescription = localizedContext.getString(R.string.approve_button),
                         fontSize = 12
                     )
 
                     GradientButtonIcon(
-                        text = stringResource(R.string.reject_button),
+                        text = localizedContext.getString(R.string.reject_button),
                         onClick = {
                             currentActionType = 2
                             handleDetailAction(
@@ -202,7 +204,7 @@ fun StockTransferDetailScreen(
                                 approvedCount = selectedIds.size
                                 refreshItems()
                                 showSuccessDialog = true
-                                apiMessage = stringResource(R.string.items_rejected_success)
+                                apiMessage = localizedContext.getString(R.string.items_rejected_success)
                                 selectedIds.clear()
                                 selectAll = false
                             }
@@ -212,12 +214,12 @@ fun StockTransferDetailScreen(
                             .height(36.dp)
                             .padding(horizontal = 4.dp),
                         icon = painterResource(id = R.drawable.ic_cancel),
-                        iconDescription = stringResource(R.string.reject_button),
+                        iconDescription = localizedContext.getString(R.string.reject_button),
                         fontSize = 12
                     )
 
                     GradientButtonIcon(
-                        text = stringResource(R.string.lost_button),
+                        text = localizedContext.getString(R.string.lost_button),
                         onClick = {
                             currentActionType = 3
                             handleDetailAction(
@@ -231,7 +233,7 @@ fun StockTransferDetailScreen(
                                 approvedCount = selectedIds.size
                                 refreshItems()
                                 showSuccessDialog = true
-                                apiMessage = stringResource(R.string.items_lost_success)
+                                apiMessage = localizedContext.getString(R.string.items_lost_success)
                                 selectedIds.clear()
                                 selectAll = false
                             }
@@ -241,7 +243,7 @@ fun StockTransferDetailScreen(
                             .height(36.dp)
                             .padding(horizontal = 4.dp),
                         icon = painterResource(id = R.drawable.ic_lost),
-                        iconDescription = stringResource(R.string.lost_button),
+                        iconDescription = localizedContext.getString(R.string.lost_button),
                         fontSize = 12
                     )
                 }
@@ -282,7 +284,7 @@ fun StockTransferDetailScreen(
                     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                         if (transferTypes.isEmpty()) {
                             DropdownMenuItem(onClick = { expanded = false }) {
-                                Text(stringResource(R.string.no_transfer_type_found), color = Color.Gray)
+                                Text(localizedContext.getString(R.string.no_transfer_type_found), color = Color.Gray)
                             }
                         } else {
                             transferTypes.forEach { typeItem ->
@@ -316,7 +318,7 @@ fun StockTransferDetailScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    stringResource(R.string.sr_header),
+                    localizedContext.getString(R.string.sr_header),
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
@@ -329,11 +331,11 @@ fun StockTransferDetailScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     listOf(
-                        stringResource(R.string.category_header),
-                        stringResource(R.string.item_code_header),
-                        stringResource(R.string.branch_header),
-                        stringResource(R.string.gross_wt_header),
-                        stringResource(R.string.net_wt_header)
+                        localizedContext.getString(R.string.category_header),
+                        localizedContext.getString(R.string.item_code_header),
+                        localizedContext.getString(R.string.branch_header),
+                        localizedContext.getString(R.string.gross_wt_header),
+                        localizedContext.getString(R.string.net_wt_header)
                     ).forEach { header ->
                         Text(
                             header,
@@ -472,24 +474,24 @@ fun StockTransferDetailScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                stringResource(R.string.status_filter_title),
+                                localizedContext.getString(R.string.status_filter_title),
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold
                             )
                         }
 
                         val statusIcons = mapOf(
-                            stringResource(R.string.pending_status) to R.drawable.schedule,
-                            stringResource(R.string.approved_status) to R.drawable.check_circle_gray,
-                            stringResource(R.string.rejected_status) to R.drawable.cancel_gray,
-                            stringResource(R.string.lost_status) to R.drawable.ic_lost
+                            localizedContext.getString(R.string.pending_status) to R.drawable.schedule,
+                            localizedContext.getString(R.string.approved_status) to R.drawable.check_circle_gray,
+                            localizedContext.getString(R.string.rejected_status) to R.drawable.cancel_gray,
+                            localizedContext.getString(R.string.lost_status) to R.drawable.ic_lost
                         )
 
                         listOf(
-                            stringResource(R.string.pending_status),
-                            stringResource(R.string.approved_status),
-                            stringResource(R.string.rejected_status),
-                            stringResource(R.string.lost_status)
+                            localizedContext.getString(R.string.pending_status),
+                            localizedContext.getString(R.string.approved_status),
+                            localizedContext.getString(R.string.rejected_status),
+                            localizedContext.getString(R.string.lost_status)
                         ).forEach { status ->
                             Divider(color = Color(0xFFE0E0E0), thickness = 0.5.dp)
                             FilterRow(
@@ -509,6 +511,7 @@ fun StockTransferDetailScreen(
         // --- Success Dialog ---
         if (showSuccessDialog) {
             ApproveSuccessDialog(
+                localizedContext= localizedContext,
                 visible = true,
                 approvedCount = approvedCount,
                 transferType = "",
@@ -569,6 +572,7 @@ fun FilterRow(
 
 @Composable
 fun ApproveSuccessDialog(
+    localizedContext: Context,
     visible: Boolean,
     approvedCount: Int,
     transferType: String,
@@ -576,13 +580,14 @@ fun ApproveSuccessDialog(
     onContinue: () -> Unit,
     apiMessage: String,
     actionType: Int
+
 ) {
     if (!visible) return
     val actionText = when (actionType) {
-        1 -> stringResource(R.string.approve_action)
-        2 -> stringResource(R.string.reject_action)
-        3 -> stringResource(R.string.lost_action)
-        else -> stringResource(R.string.processed_action)
+        1 -> localizedContext.getString(R.string.approve_action)
+        2 -> localizedContext.getString(R.string.reject_action)
+        3 -> localizedContext.getString(R.string.lost_action)
+        else -> localizedContext.getString(R.string.processed_action)
     }
 
     AlertDialog(
@@ -644,7 +649,7 @@ fun ApproveSuccessDialog(
                 Spacer(Modifier.height(16.dp))
 
                 Text(
-                    text = apiMessage.ifBlank { stringResource(R.string.api_default_message) },
+                    text = apiMessage.ifBlank { localizedContext.getString(R.string.api_default_message) },
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black,
@@ -654,7 +659,7 @@ fun ApproveSuccessDialog(
                 Spacer(Modifier.height(6.dp))
 
                 Text(
-                    text = stringResource(R.string.approve_count_text, approvedCount, actionText),
+                    text = localizedContext.getString(R.string.approve_count_text, approvedCount, actionText),
                     fontSize = 13.sp,
                     color = Color.Gray,
                     textAlign = TextAlign.Center
@@ -663,7 +668,7 @@ fun ApproveSuccessDialog(
                 Spacer(Modifier.height(10.dp))
 
                 Text(
-                    text = stringResource(R.string.approve_transfer_type_label, transferType),
+                    text = localizedContext.getString(R.string.approve_transfer_type_label, transferType),
                     color = Color(0xFF5231A7),
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 14.sp,
@@ -692,7 +697,7 @@ fun ApproveSuccessDialog(
                         .height(42.dp)
                 ) {
                     Text(
-                        text = stringResource(R.string.continue_text),
+                        text = localizedContext.getString(R.string.continue_text),
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
                     )

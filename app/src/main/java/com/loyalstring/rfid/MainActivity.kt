@@ -8,7 +8,6 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
-import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -78,7 +77,6 @@ class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.R)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         val startDestination = if (userPreferences.isLoggedIn()) {
             "main_graph"
@@ -294,10 +292,15 @@ private fun SetupNavigation(
                                             Screens.SearchScreen.route -> {
                                                 scope.launch {
                                                     drawerState.close()
-                                                    navController.navigate("${Screens.SearchScreen.route}/normal") {
+                                                    /* navController.navigate("${Screens.SearchScreen.route}/normal") {
                                                         launchSingleTop = true
                                                         restoreState = true
-                                                    }                                                }
+                                                    }    */
+                                                    navController.navigate("search_screen/normal") {
+                                                        launchSingleTop = true
+                                                        restoreState = true
+                                                    }
+                                                }
 
                                             }
 

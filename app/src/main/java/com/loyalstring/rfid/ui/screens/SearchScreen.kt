@@ -40,6 +40,7 @@ import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.SearchViewModel
 import com.rscja.deviceapi.RFIDWithUHFUART
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 @Composable
 fun SearchScreen(
@@ -47,6 +48,7 @@ fun SearchScreen(
     navController: NavHostController,
     listKey: String? = "unmatchedItems"
 ) {
+    var showMenu by remember { mutableStateOf(false) }
     val searchViewModel: SearchViewModel = hiltViewModel()
     val context = LocalContext.current
     val activity = context.findActivity() as? MainActivity
@@ -57,10 +59,22 @@ fun SearchScreen(
     var searchQuery by remember { mutableStateOf("") }
     var allDbItems by remember { mutableStateOf<List<BulkItem>>(emptyList()) }
     var filteredDbItems by remember { mutableStateOf<List<BulkItem>>(emptyList()) }
+    var showLoader by remember { mutableStateOf(true) } // Initialize loader to true
 
     var selectedPower by remember {
         mutableIntStateOf(UserPreferences.getInstance(context).getInt(
             UserPreferences.KEY_SEARCH_COUNT))
+    }
+
+    BackHandler { onBack() }
+
+    // ✅ Load DB items once
+    LaunchedEffect(Unit) {
+        delay(1000)
+        allDbItems = withContext(Dispatchers.IO) {
+            searchViewModel.getAllBulkItemsFromDb()
+        }
+        showLoader = false // Dismiss loader after data is loaded
     }
 
     // ✅ Explicit unmatched flag
@@ -83,21 +97,17 @@ fun SearchScreen(
 
 
 
-    BackHandler { onBack() }
 
-    // ✅ Load DB items once
-    LaunchedEffect(Unit) {
-        allDbItems = withContext(Dispatchers.IO) {
-            searchViewModel.getAllBulkItemsFromDb()
-        }
-    }
 
     // ✅ For unmatched — start search immediately
     LaunchedEffect(isUnmatchedList, inputItems) {
-        if (isUnmatchedList && inputItems.isNotEmpty()) {
-            searchViewModel.startSearch(inputItems, selectedPower)
-        } else {
-            searchViewModel.clearSearchItems()
+        delay(1000)
+        withContext(Dispatchers.IO) {
+            if (isUnmatchedList && inputItems.isNotEmpty()) {
+                searchViewModel.startSearch(inputItems, selectedPower)
+            } else {
+                searchViewModel.clearSearchItems()
+            }
         }
     }
 
@@ -231,7 +241,7 @@ fun SearchScreen(
         bottomBar = {
             ScanBottomBar(
                 onSave = {},
-                onList = {},
+                onList = {showMenu = true },
                 onScan = {
                     if (!isScanning) {
                         val itemsToSearch = when {
@@ -291,7 +301,14 @@ fun SearchScreen(
                 keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Search)
             )
 
-            if (filteredItems.isEmpty() && !isScanning) {
+            if (showLoader) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else if (filteredItems.isEmpty() && !isScanning) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center

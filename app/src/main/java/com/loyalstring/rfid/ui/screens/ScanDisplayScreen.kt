@@ -961,19 +961,40 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
                         }
                         // In ScanDisplayScreen
                         "Search" -> {
-                            val latestUnmatched = scopeItems
-                                .filter { it.scannedStatus.equals("Unmatched", true) }
-                                .distinctBy { it.epc?.trim()?.uppercase() }
+                            scope.launch {
+                                bulkViewModel.setLoading(true)
+                                // Remove artificial delay
+                                // delay(1000)
 
-                            if (latestUnmatched.isNotEmpty()) {
-                                navController.currentBackStackEntry?.savedStateHandle?.set(
-                                    "unmatchedItems",
-                                    ArrayList(latestUnmatched)
-                                )
-                                navController.navigate("search_screen/unmatched")
-                            } else {
-                                navController.navigate("search_screen/normal")
+                                val latestUnmatched = withContext(Dispatchers.Default) {
+                                    scopeItems
+                                        .filter { it.scannedStatus.equals("Unmatched", true) }
+                                        .distinctBy { it.epc?.trim()?.uppercase() }
+                                }
+
+                                if (latestUnmatched.isNotEmpty()) {
+                                    navController.currentBackStackEntry?.savedStateHandle?.set(
+                                        "unmatchedItems",
+                                        ArrayList(latestUnmatched)
+                                    )
+                                    navController.navigate("search_screen/unmatched") {
+                                        // This is the callback from SearchScreen
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                } else {
+                                    navController.navigate("search_screen/normal") {
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+
+
+                                }
+                                //delay(1000)
+                                bulkViewModel.setLoading(false)
+                                //showToast(context, "End")
                             }
+
                         }
                     }
                     showMenu = false

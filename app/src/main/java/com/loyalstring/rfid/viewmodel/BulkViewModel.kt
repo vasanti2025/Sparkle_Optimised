@@ -1434,9 +1434,6 @@ class BulkViewModel @Inject constructor(
                 var lastUpdate = System.currentTimeMillis()
 
                 for (item in bulkItems) {
-                    val originalRfid = item.rfid // Capture original rfid before potential modification
-                    val originalEpc = item.epc // Capture original epc before potential modification
-
                     val updatedItem = if (tagType == "webreusable") {
                         if (!item.rfid.isNullOrBlank()) {
                             if (item.epc.isNullOrBlank()) {
@@ -1448,11 +1445,9 @@ class BulkViewModel @Inject constructor(
                         if (!item.itemCode.isNullOrBlank()) {
                             val hexValue = item.itemCode.toByteArray()
                                 .joinToString("") { String.format("%02X", it) }
-                            item.copy(rfid = originalRfid ?: item.itemCode, epc = originalEpc ?: hexValue, tid = hexValue)
+                            item.copy(rfid = item.itemCode, epc = hexValue, tid = hexValue)
                         } else null
                     }
-
-                    Log.d("SYNC_ITEM_DEBUG", "Processed Item - ItemCode: ${item.itemCode}, Original RFID: $originalRfid, Original EPC: $originalEpc, Final RFID: ${updatedItem?.rfid}, Final EPC: ${updatedItem?.epc}")
 
                     if (updatedItem != null) {
                         processedItems.add(updatedItem)

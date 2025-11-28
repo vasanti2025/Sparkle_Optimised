@@ -65,6 +65,8 @@ import com.loyalstring.rfid.viewmodel.OrderViewModel
 import com.loyalstring.rfid.viewmodel.ProductListViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
 import com.loyalstring.rfid.viewmodel.UiState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @SuppressLint("UnrememberedMutableState")
 @Composable
@@ -108,7 +110,26 @@ fun DeliveryChalanScreen(
     val salesmanList by orderViewModel.empListFlow.collectAsState()
     val touchList by deliveryChallanViewModel.customerTunchList.collectAsState()
     var pendingItem by remember { mutableStateOf<BulkItem?>(null) }
-    var pendingBarcodeItem by remember { mutableStateOf<ItemCodeResponse?>(null) }
+    var pendingBarcodeItem by remember { mutableStateOf<BulkItem?>(null) }
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            try {
+                orderViewModel.getAllEmpList(employee?.clientCode.toString())
+                orderViewModel.getAllItemCodeList(ClientCodeRequest(employee?.clientCode.toString()))
+                singleProductViewModel.getAllBranches(ClientCodeRequest(employee?.clientCode.toString()))
+                singleProductViewModel.getAllPurity(ClientCodeRequest(employee?.clientCode.toString()))
+                singleProductViewModel.getAllSKU(ClientCodeRequest(employee?.clientCode.toString()))
+                orderViewModel.getDailyRate(ClientCodeRequest(employee?.clientCode))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+
+    // Collect the latest rates
+    val dailyRates by orderViewModel.getAllDailyRate.collectAsState()
 
     LaunchedEffect(employee?.clientCode) {
         val code = employee?.clientCode ?: return@LaunchedEffect
@@ -571,6 +592,27 @@ fun DeliveryChalanScreen(
             Log.d("TouchMatch1", "❌ No Touch data for SKU=${matchedItem.sku}")
         }
 
+        // --- Compute Metal, Making, and Item Amounts ---
+        fun safeDouble(value: String?) = value?.toDoubleOrNull() ?: 0.0
+        val netWt = safeDouble(matchedItem.netWeight)
+        val rate = if (!dailyRates.isNullOrEmpty()) { dailyRates .firstOrNull { it.PurityName.equals(matchedItem.purity, ignoreCase = true) } ?.Rate?.toDoubleOrNull() ?: 0.0 } else { 0.0 }
+        val makingPerGramFinal = safeDouble(makingPerGram)
+        val fixMaking = safeDouble(makingFixedAmt)
+        val makingPercentFinal = safeDouble(makingPercent)
+        val fixWastage = safeDouble(makingFixedWastage)
+        val stoneAmt = safeDouble(matchedItem.stoneAmount)
+        val diamondAmt = safeDouble(matchedItem.diamondAmount) // Metal Amount = NetWt * Rate val metalAmt = netWt * rate // Making Amount = (MakingPerGram + FixMaking) + (Making% * NetWt / 100) + FixWastage val makingAmt = (makingPerGramFinal + fixMaking) + ((makingPercentFinal / 100) * netWt) + fixWastage // Item Amount = Stone + Diamond + Metal + Making val itemAmt = stoneAmt + diamondAmt + metalAmt + (makingAmt)
+
+
+        // Metal Amount = NetWt * Rate
+        val metalAmt = netWt * rate
+
+// Making Amount = (MakingPerGram + FixMaking) + (Making% * NetWt / 100) + FixWastage
+        val makingAmt = (makingPerGramFinal + fixMaking) + ((makingPercentFinal / 100) * netWt) + fixWastage
+
+// Item Amount = Stone + Diamond + Metal + Making
+        val itemAmt = stoneAmt + diamondAmt + metalAmt + (makingAmt)
+
         // build productDetail
         val productDetail = ChallanDetails(
             ChallanId = 0,
@@ -585,8 +627,8 @@ fun DeliveryChalanScreen(
             NetWt = matchedItem.netWeight ?: "0.0",
             ProductId = matchedItem.productId ?: 0,
             CustomerId = 0,
-            MetalRate = ""?.toString() ?: "0.0",
-            MakingCharg = matchedItem.makingPerGram ?: "0.0",
+            MetalRate = metalAmt?.toString() ?: "0.0",
+            MakingCharg = makingAmt.toString() ?: "0.0",
             Price = matchedItem.mrp?.toString() ?: "0.0",
             HUIDCode = "",
             ProductCode = matchedItem.productCode.orEmpty(),
@@ -595,10 +637,10 @@ fun DeliveryChalanScreen(
             StoneAmount = matchedItem.stoneAmount ?: "0.0",
             TotalWt = matchedItem.totalGwt?.toString() ?: "0.0",
             PackingWeight = "" ?: "0.0",
-            MetalAmount =""?.toString() ?: "0.0",
+            MetalAmount =metalAmt?.toString() ?: "0.0",
             OldGoldPurchase = false,
             RatePerGram ="" ?: "0.0",
-            Amount =""?.toString() ?: "0.0",
+            Amount =itemAmt?.toString() ?: "0.0",
             ChallanType = "Delivery",
             FinePercentage = ""?: "0.0",
             PurchaseInvoiceNo = "",
@@ -624,7 +666,7 @@ fun DeliveryChalanScreen(
             SKU = matchedItem.sku.orEmpty(),
             FineWastageWt = matchedItem.fixWastage ?: "0.0",
             TotalItemAmount ="".toString() ?: "0.0",
-            ItemAmount = "".toString() ?: "0.0",
+            ItemAmount = itemAmt.toString() ?: "0.0",
             ItemGSTAmount = "0.0",
             ClientCode = "",
             DiamondSize = "",
@@ -674,7 +716,7 @@ fun DeliveryChalanScreen(
             FineWt = "" ?: "0.0",
             qty = (matchedItem.pcs ?: 1),
             tid = matchedItem.tid ?: "",
-            totayRate = ""?.toString() ?: "0.0",
+            totayRate = rate?.toString() ?: "0.0",
             makingPercent = makingPercent,
             fixMaking = makingFixedAmt,
             fixWastage = makingFixedWastage
@@ -984,10 +1026,11 @@ fun DeliveryChalanScreen(
         }
 
         if (matchedItem != null) {
-
+            Log.d("ManualEntry", "⚠️ Already exists: ${matchedItem.itemCode}")
             if (productList.any { it.RFIDCode == matchedItem.rfid }) {
 
                 Log.d("ManualEntry", "⚠️ Already exists: ${matchedItem.itemCode}")
+
                 return@LaunchedEffect
             }
 
@@ -1010,9 +1053,14 @@ fun DeliveryChalanScreen(
     }
 
 
-    LaunchedEffect(touchList) {
+    LaunchedEffect(pendingItem,touchList) {
+        if (pendingItem == null || touchList.isEmpty()) return@LaunchedEffect
 
-        val matchedItem = pendingItem ?: return@LaunchedEffect
+        val matchedItem = pendingItem!!
+        Log.d("TouchList", "Triggered with sku=${matchedItem.sku}")
+        Log.d("TouchList", "Triggered with sku=${matchedItem.rfid}")
+        Log.d("TouchList", "Triggered with sku=${matchedItem.itemCode}")
+       // val matchedItem = pendingItem ?: return@LaunchedEffect
 
         // print list
         Log.d("TouchList", "size=${touchList.size}")
@@ -1059,6 +1107,36 @@ MakingPerGram=${touchMatch.MakingPerGram}
             Log.d("TouchMatch3", ""+"")
         }
 
+
+        // --- Compute Metal, Making, and Item Amounts ---
+        fun safeDouble(value: String?) = value?.toDoubleOrNull() ?: 0.0
+
+        val netWt = safeDouble(matchedItem.netWeight)
+        val rate = if (!dailyRates.isNullOrEmpty()) {
+            dailyRates
+                .firstOrNull { it.PurityName.equals(matchedItem.purity, ignoreCase = true) }
+                ?.Rate?.toDoubleOrNull()
+                ?: 0.0
+        } else {
+            0.0
+        }
+        val makingPerGramFinal = safeDouble(makingPerGram)
+        val fixMaking = safeDouble(makingFixedAmt)
+        val makingPercentFinal = safeDouble(makingPercent)
+        val fixWastage = safeDouble(makingFixedWastage)
+        val stoneAmt = safeDouble(matchedItem.stoneAmount)
+        val diamondAmt = safeDouble(matchedItem.diamondAmount)
+
+// Metal Amount = NetWt * Rate
+        val metalAmt = netWt * rate
+
+// Making Amount = (MakingPerGram + FixMaking) + (Making% * NetWt / 100) + FixWastage
+        val makingAmt = (makingPerGramFinal + fixMaking) + ((makingPercentFinal / 100) * netWt) + fixWastage
+
+// Item Amount = Stone + Diamond + Metal + Making
+        val itemAmt = stoneAmt + diamondAmt + metalAmt + (makingAmt)
+
+
         // NOW add product
         val productDetail = ChallanDetails(
             ChallanId = 0,
@@ -1074,7 +1152,7 @@ MakingPerGram=${touchMatch.MakingPerGram}
             ProductId = matchedItem.productId ?: 0,
             CustomerId = 0,
             MetalRate = ""?.toString() ?: "0.0",
-            MakingCharg = matchedItem.makingPerGram ?: "0.0",
+            MakingCharg = makingAmt.toString() ?: "0.0",
             Price = matchedItem.mrp?.toString() ?: "0.0",
             HUIDCode = "",
             ProductCode = matchedItem.productCode.orEmpty(),
@@ -1083,10 +1161,10 @@ MakingPerGram=${touchMatch.MakingPerGram}
             StoneAmount = matchedItem.stoneAmount ?: "0.0",
             TotalWt = matchedItem.totalGwt?.toString() ?: "0.0",
             PackingWeight = "" ?: "0.0",
-            MetalAmount =""?.toString() ?: "0.0",
+            MetalAmount =metalAmt?.toString() ?: "0.0",
             OldGoldPurchase = false,
             RatePerGram ="" ?: "0.0",
-            Amount =""?.toString() ?: "0.0",
+            Amount =itemAmt?.toString() ?: "0.0",
             ChallanType = "Delivery",
             FinePercentage = ""?: "0.0",
             PurchaseInvoiceNo = "",
@@ -1112,7 +1190,7 @@ MakingPerGram=${touchMatch.MakingPerGram}
             SKU = matchedItem.sku.orEmpty(),
             FineWastageWt = matchedItem.fixWastage ?: "0.0",
             TotalItemAmount ="".toString() ?: "0.0",
-            ItemAmount = "".toString() ?: "0.0",
+            ItemAmount = itemAmt.toString() ?: "0.0",
             ItemGSTAmount = "0.0",
             ClientCode = "",
             DiamondSize = "",
@@ -1133,7 +1211,7 @@ MakingPerGram=${touchMatch.MakingPerGram}
             MetalName = "",
             NetAmount = "0.0",
             GSTAmount = "0.0",
-            TotalAmount = "0.0",
+            TotalAmount = itemAmt.toString(),
 
             Purity = matchedItem.purity ?: "",
             DesignName = matchedItem.design ?: "",
@@ -1454,8 +1532,8 @@ MakingPerGram=${touchMatch.MakingPerGram}
             Log.d("RFID Scan", scanned)
             itemCode = TextFieldValue(scanned)
 
-            val matchedItem = itemCodeList.firstOrNull {
-                it.RFIDCode.equals(scanned, ignoreCase = true)
+            val matchedItem = allItems.firstOrNull {
+                it.rfid.equals(scanned, ignoreCase = true)
             }
 
             if (matchedItem == null) {
@@ -1464,8 +1542,8 @@ MakingPerGram=${touchMatch.MakingPerGram}
             }
 
             // Prevent duplicates
-            if (productList.any { it.RFIDCode == matchedItem.RFIDCode }) {
-                Log.d("RFID Scan", "⚠️ Already exists: ${matchedItem.ItemCode}")
+            if (productList.any { it.RFIDCode == matchedItem.rfid }) {
+                Log.d("RFID Scan", "⚠️ Already exists: ${matchedItem.itemCode}")
                 return@setOnBarcodeScanned
             }
 
@@ -1482,9 +1560,13 @@ MakingPerGram=${touchMatch.MakingPerGram}
         }
     }
 
+    // Yeh helper ek baar upar composable me rakh sakta hai
+    fun safeDouble(value: String?) = value?.toDoubleOrNull() ?: 0.0
+
     LaunchedEffect(touchList) {
 
-        val matchedItem = pendingItem ?: return@LaunchedEffect
+        // 🔹 Barcode scan ke baad set hua item
+        val matchedItem = pendingBarcodeItem ?: return@LaunchedEffect
 
         // print list
         Log.d("TouchList", "size=${touchList.size}")
@@ -1492,20 +1574,21 @@ MakingPerGram=${touchMatch.MakingPerGram}
             Log.d("TouchList", "[$index] SKU=${t.StockKeepingUnit}, Cust=${t.CustomerId}")
         }
 
-         val selectedSku = matchedItem.sku.orEmpty()
-       // val selectedSku = "SILVER THALI"
-        // find matching SKU
+        val selectedSku = matchedItem.sku.orEmpty()
+
+        // 🔹 Touch API se customer + SKU wise match
         val touchMatch = touchList.firstOrNull {
-            it.CustomerId.equals(customerId) &&
+            it.CustomerId == customerId &&
                     it.StockKeepingUnit.equals(selectedSku, ignoreCase = true)
         }
 
+        // defaults from item
         var makingPercent = matchedItem.makingPercent ?: "0.0"
-        var wastagePercent = matchedItem.fixWastage ?: "0.0"
         var makingFixedWastage = matchedItem.fixWastage ?: "0.0"
         var makingFixedAmt = matchedItem.fixMaking ?: "0.0"
         var makingPerGram = matchedItem.makingPerGram ?: "0.0"
 
+        // 🔹 Touch data override
         if (touchMatch != null) {
             Log.d(
                 "TouchMatch2", """
@@ -1520,110 +1603,113 @@ MakingPerGram=${touchMatch.MakingPerGram}
             )
 
             makingPercent = touchMatch.MakingPercentage ?: makingPercent
-            wastagePercent = touchMatch.WastageWt ?: wastagePercent
             makingFixedWastage = touchMatch.MakingFixedWastage ?: makingFixedWastage
             makingFixedAmt = touchMatch.MakingFixedAmt ?: makingFixedAmt
             makingPerGram = touchMatch.MakingPerGram ?: makingPerGram
-        }else
-        {
-            Log.d(
-                "TouchMatch2", ""+"")
+        } else {
+            Log.d("TouchMatch2", "❌ No touch for this SKU")
         }
 
-        val mp = makingPercent.toDoubleOrNull() ?: 0.0
-        val wp = wastagePercent.toDoubleOrNull() ?: 0.0
-        val mfa = makingFixedAmt.toDoubleOrNull() ?: 0.0
-        val mfw = makingFixedWastage.toDoubleOrNull() ?: 0.0
-        val nw = matchedItem.netWeight?.toDouble() ?: 0.0
+        // --- Compute Metal, Making, and Item Amounts ---
+        val netWt = safeDouble(matchedItem.netWeight)
 
-// Making Amount
-        val makingAmt =
-            ((mp / 100.0) * nw) +
-                    mfa +
-                    ((mp / 100.0) * nw) +
-                    mfw
-
-// Fine & Wastage
-        val finePercent = selectedItem?.FinePercent?.toDoubleOrNull() ?: 0.0
-        val fineWt = (finePercent / 100.0) * nw
-        val wastageWt = (wp / 100.0) * nw
-        val totalStoneAmount =
-            selectedItem?.TotalStoneAmount?.toDoubleOrNull() ?: 0.0
-        val diamondAmount =
-            selectedItem?.DiamondPurchaseAmount?.toDoubleOrNull()
+        // 🔹 Purity-wise daily rate
+        val rate = if (!dailyRates.isNullOrEmpty()) {
+            dailyRates
+                .firstOrNull { it.PurityName.equals(matchedItem.purity, ignoreCase = true) }
+                ?.Rate?.toDoubleOrNull()
                 ?: 0.0
-       // val safeMetalAmt = metalAmt
-        val safeMakingAmt = makingAmt
+        } else {
+            0.0
+        }
 
-       // val rate = 100*//*dailyRates.find { it.PurityName.equals(selectedItem?.PurityName, ignoreCase = true) }?.Rate?.toDoubleOrNull() ?: 0.0*//*
+        val makingPerGramFinal = safeDouble(makingPerGram)
+        val fixMakingFinal = safeDouble(makingFixedAmt)
+        val makingPercentFinal = safeDouble(makingPercent)
+        val fixWastageFinal = safeDouble(makingFixedWastage)
+        val stoneAmt = safeDouble(matchedItem.stoneAmount)
+        val diamondAmt = safeDouble(matchedItem.diamondAmount)
 
-        val itemAmt: Double = (selectedItem?.NetWt?.toDoubleOrNull() ?: 0.0) * 0.0
-        val baseUrl =
-            "https://rrgold.loyalstring.co.in/" // Replace with actual base URL
-        val imageString = selectedItem?.Images.toString()
-        val lastImagePath =
-            imageString.split(",").lastOrNull()?.trim()
-        "$baseUrl$lastImagePath"
-        // If the product doesn't exist in productList, add it and insert into database
+        // Metal Amount = NetWt * Rate
+        val metalAmt = netWt * rate
 
-        // NOW add product
+        // Making Amount = (MakingPerGram + FixMaking) + (Making% * NetWt / 100) + FixWastage
+        val makingAmt =
+            (makingPerGramFinal + fixMakingFinal) +
+                    ((makingPercentFinal / 100.0) * netWt) +
+                    fixWastageFinal
+
+        // Item Amount = Stone + Diamond + Metal + Making
+        val itemAmt = stoneAmt + diamondAmt + metalAmt + makingAmt
+
+        val baseUrl = "https://rrgold.loyalstring.co.in/"
+        val imageString = matchedItem.imageUrl.orEmpty()
+        val lastImagePath = imageString.split(",").lastOrNull()?.trim()
+        val finalImageUrl = if (!lastImagePath.isNullOrBlank()) "$baseUrl$lastImagePath" else ""
+
+        // 🔹 NOW add product
         val newProduct = ChallanDetails(
             ChallanId = 0,
-            MRP = selectedItem?.MRP ?: "0.0",
-            CategoryName = selectedItem?.CategoryName ?: "",
+            MRP = matchedItem.mrp?.toString() ?: "0.0",
+            CategoryName = matchedItem.category.orEmpty(),
             ChallanStatus = "Pending",
-            ProductName = selectedItem?.ProductName ?: "",
-            Quantity = selectedItem?.ClipQuantity ?: "1",
+            ProductName = matchedItem.productName.orEmpty(),
+            Quantity = (matchedItem.totalQty ?: matchedItem.pcs ?: 1).toString(),
             HSNCode = "",
-            ItemCode = selectedItem?.ItemCode ?: "",
-            GrossWt = selectedItem?.GrossWt ?: "0.0",
-            NetWt = selectedItem?.NetWt ?: "0.0",
-            ProductId = selectedItem?.ProductId ?: 0,
+            ItemCode = matchedItem.itemCode.orEmpty(),
+            GrossWt = matchedItem.grossWeight ?: "0.0",
+            NetWt = matchedItem.netWeight ?: "0.0",
+            ProductId = matchedItem.productId ?: 0,
             CustomerId = 0,
-            MetalRate = selectedItem?.TodaysRate?.toString() ?: "0.0",
-            MakingCharg = selectedItem?.MakingFixedAmt?.toString() ?: "0.0",
+
+            // ✅ Rate / Metal / Making / Item
+            MetalRate = rate.toString(),
+            MakingCharg = makingAmt.toString(),
+            MetalAmount = metalAmt.toString(),
+            ItemAmount = itemAmt.toString(),
+            TotalItemAmount = itemAmt.toString(),
+            TotalAmount = itemAmt.toString(),
             Price = itemAmt.toString(),
+
             HUIDCode = "",
-            ProductCode = selectedItem?.ProductCode ?: "",
+            ProductCode = matchedItem.productCode.orEmpty(),
             ProductNo = "",
-            Size = selectedItem?.Size ?: "",
-            StoneAmount = selectedItem?.TotalStoneAmount ?: "0.0",
-            TotalWt = selectedItem?.TotalWeight?.toString() ?: "0.0",
-            PackingWeight = selectedItem?.PackingWeight?.toString() ?: "0.0",
-            MetalAmount = itemAmt.toString(),
+            Size = "1",
+            StoneAmount = matchedItem.stoneAmount ?: "0.0",
+            TotalWt = matchedItem.totalGwt?.toString() ?: "0.0",
+            PackingWeight = "0.0",
             OldGoldPurchase = false,
-            RatePerGram = selectedItem?.MakingPerGram?.toString() ?: "0.0",
+            RatePerGram = makingPerGramFinal.toString(),
             Amount = itemAmt.toString(),
             ChallanType = "Delivery",
-            FinePercentage = selectedItem?.FinePercent?.toString() ?: "0.0",
+            FinePercentage = "0.0",
             PurchaseInvoiceNo = "",
-            HallmarkAmount = selectedItem?.HallmarkAmount?.toString() ?: "0.0",
+            HallmarkAmount = "0.0",
             HallmarkNo = "",
-            MakingFixedAmt = makingFixedAmt,
-            MakingFixedWastage = makingFixedWastage,
-            MakingPerGram = makingPerGram,
-            MakingPercentage = makingPercent,
+            MakingFixedAmt = fixMakingFinal.toString(),
+            MakingFixedWastage = fixWastageFinal.toString(),
+            MakingPerGram = makingPerGramFinal.toString(),
+            MakingPercentage = makingPercentFinal.toString(),
             Description = "",
-            CuttingGrossWt = selectedItem?.GrossWt ?: "0.0",
-            CuttingNetWt = selectedItem?.NetWt ?: "0.0",
+            CuttingGrossWt = matchedItem.grossWeight ?: "0.0",
+            CuttingNetWt = matchedItem.netWeight ?: "0.0",
             BaseCurrency = "INR",
-            CategoryId = selectedItem?.CategoryId ?: 0,
-            PurityId = selectedItem?.PurityId ?: 0,
-            TotalStoneWeight = selectedItem?.TotalStoneWeight ?: "0.0",
-            TotalStoneAmount = selectedItem?.TotalStoneAmount ?: "0.0",
+            CategoryId = matchedItem.categoryId ?: 0,
+            PurityId = 0,
+            TotalStoneWeight = matchedItem.totalStoneWt?.toString() ?: "0.0",
+            TotalStoneAmount = matchedItem.stoneAmount ?: "0.0",
             TotalStonePieces = "0",
-            TotalDiamondWeight = selectedItem?.DiamondWeight ?: "0.0",
+            TotalDiamondWeight = matchedItem.diamondWeight ?: "0.0",
             TotalDiamondPieces = "0",
-            TotalDiamondAmount = selectedItem?.TotalDiamondAmount ?: "0.0",
-            SKUId = selectedItem?.SKUId ?: 0,
-            SKU = selectedItem?.SKU ?: "",
-            FineWastageWt = selectedItem?.WastagePercent?.toString() ?: "0.0",
-            TotalItemAmount = itemAmt.toString(),
-            ItemAmount = itemAmt.toString(),
+            TotalDiamondAmount = matchedItem.diamondAmount ?: "0.0",
+            SKUId = 0,
+            SKU = matchedItem.sku.orEmpty(),
+            FineWastageWt = matchedItem.fixWastage ?: "0.0",
+
             ItemGSTAmount = "0.0",
             ClientCode = employee?.clientCode ?: "",
             DiamondSize = "",
-            DiamondWeight = selectedItem?.DiamondWeight ?: "0.0",
+            DiamondWeight = matchedItem.diamondWeight ?: "0.0",
             DiamondPurchaseRate = "0.0",
             DiamondSellRate = "0.0",
             DiamondClarity = "",
@@ -1637,15 +1723,15 @@ MakingPerGram=${touchMatch.MakingPerGram}
             DiamondPurchaseAmount = "0.0",
             DiamondSellAmount = "0.0",
             DiamondDescription = "",
-            MetalName = selectedItem?.MetalName ?: "Gold",
+            MetalName = "",
             NetAmount = itemAmt.toString(),
             GSTAmount = "0.0",
-            TotalAmount = itemAmt.toString(),
-            Purity = selectedItem?.PurityName ?: "",
-            DesignName = selectedItem?.DesignName ?: "",
+
+            Purity = matchedItem.purity ?: "",
+            DesignName = matchedItem.design ?: "",
             CompanyId = 0,
-            BranchId = selectedItem?.BranchId ?: 0,
-            CounterId = selectedItem?.CounterId ?: 0,
+            BranchId = matchedItem.branchId ?: 0,
+            CounterId = matchedItem.counterId ?: 0,
             EmployeeId = employee?.employeeId ?: 0,
             LabelledStockId = 0,
             FineSilver = "0.0",
@@ -1655,17 +1741,29 @@ MakingPerGram=${touchMatch.MakingPerGram}
             BalanceSilver = "0.0",
             BalanceGold = "0.0",
             ConvertAmt = "0.0",
-            Pieces = selectedItem?.ClipQuantity ?: "1",
+            Pieces = matchedItem.pcs?.toString() ?: "1",
             StoneLessPercent = "0.0",
-            DesignId = selectedItem?.DesignId ?: 0,
-            PacketId = selectedItem?.PacketId ?: 0,
-            RFIDCode =selectedItem?.RFIDCode ?: "",
+            DesignId = matchedItem.designId ?: 0,
+            PacketId = matchedItem.packetId ?: 0,
+            RFIDCode = matchedItem.rfid.orEmpty(),
+            Image = finalImageUrl,
+            DiamondWt = matchedItem.diamondWeight ?: "0.0",
+            StoneAmt = matchedItem.stoneAmount ?: "0.0",
+            DiamondAmt = matchedItem.diamondAmount ?: "0.0",
+            FinePer = "0.0",
+            FineWt = "0.0",
+            qty = (matchedItem.pcs ?: 1),
+            tid = matchedItem.tid ?: "",
+            totayRate = rate.toString(),
+            makingPercent = makingPercentFinal.toString(),
+            fixMaking = fixMakingFinal.toString(),
+            fixWastage = fixWastageFinal.toString()
         )
 
         productList.add(newProduct)
-        pendingBarcodeItem=null
-
+        pendingBarcodeItem = null
     }
+
 
 
 

@@ -25,7 +25,8 @@ interface BulkItemDao {
     @Query("SELECT id, productName, itemCode, rfid, epc, imageUrl, isScanned, counterName, branchName, boxName, branchType, totalQty, totalNetWt, mrp, categoryId, category, productName, design FROM bulk_items")
     fun getMinimalItemsFlow(): Flow<List<BulkItem>>
 
-    @Query("SELECT id, productName, itemCode, rfid, epc, imageUrl, isScanned, counterName, branchName, boxName, branchType, totalQty, totalNetWt, mrp, categoryId, category, productName, design FROM bulk_items")
+    @Query("SELECT * FROM bulk_items")
+   // @Query("SELECT id, productName, itemCode, rfid, epc, imageUrl, isScanned, counterName, branchName, boxName, branchType, totalQty, totalNetWt, mrp, categoryId, category, productName, design, sku FROM bulk_items")
     fun getAllItemsFlow(): Flow<List<BulkItem>>
 
     @Query("SELECT * FROM bulk_items WHERE epc = :epc LIMIT 1")

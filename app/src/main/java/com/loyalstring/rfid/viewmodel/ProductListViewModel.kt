@@ -1,7 +1,9 @@
 package com.loyalstring.rfid.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.gson.Gson
 import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.repository.BulkRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -29,6 +31,13 @@ class ProductListViewModel @Inject constructor(
             try {
                 _isLoading.value = true
                 repository.getAllBulkItems().collect { items ->
+                    for (item in items) {
+                        if (item.rfid == "SJ4227") {
+                            val json = Gson().toJson(item)
+                            Log.d("ProductListVM", "🎯 Matched BulkItem: $json")
+                        }
+                    }
+
                     _productList.value = items
                     _isLoading.value = false
                 }

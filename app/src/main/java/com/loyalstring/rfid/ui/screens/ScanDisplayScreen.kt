@@ -896,26 +896,21 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
                         Log.d("ScanDisplayScreen", "Calling")
                         if (!_isResetting) {
                             Log.d("ScanDisplayScreen", "Called")
-                            _isResetting = true;
+                            // Instant UI feedback — update state on main thread immediately
+                            _isResetting = true
                             isScanning = false
-                            try {
-                                selectedCategories.clear()
-                                selectedProducts.clear()
-                                selectedDesigns.clear()
-
-                                bulkViewModel.setFilteredItems(allItems.asSequence().map { it }.toList()) // ✅ reset to full DB, pass original BulkItem
-                                bulkViewModel.resetScanResults()
-
-                                selectedMenu = MENU_ALL
-                                currentLevel = "Category"
-                                currentCategory = null
-                                currentProduct = null
-                                currentDesign = null
-                                bulkViewModel.stopScanningAndCompute()
-                                Log.d("ScanDisplayScreen", "Completed")
-                            } finally {
-                                Log.d("ScanDisplayScreen", "Finally")
-                            }
+                            selectedCategories.clear()
+                            selectedProducts.clear()
+                            selectedDesigns.clear()
+                            selectedMenu = MENU_ALL
+                            currentLevel = "Category"
+                            currentCategory = null
+                            currentProduct = null
+                            currentDesign = null
+                            // resetForDisplay() clears all data synchronously then fires
+                            // hardware stop in its own coroutine — safe to call on main thread
+                            bulkViewModel.resetForDisplay()
+                            Log.d("ScanDisplayScreen", "Completed")
                         }
                     },
                     isScanning = isScanning

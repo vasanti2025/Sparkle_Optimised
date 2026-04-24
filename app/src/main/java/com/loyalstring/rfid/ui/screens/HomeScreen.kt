@@ -77,35 +77,40 @@ fun HomeScreen(
 ) {
 
 
-    val t0 = System.nanoTime()
-    Log.d("StartupTrace", "HomeScreen compose start")
     val items = remember {
         listOfNavItems.filter {
             it.titleResId != R.string.home && it.titleResId != R.string.logout
         }
     }
-   // val items = remember { listOfNavItems.filter { it.title != "Home" && it.title != "Logout" } }
     val context: Context = LocalContext.current
 
-  /*  val currentLocales = AppCompatDelegate.getApplicationLocales()
-    val currentLang = if (currentLocales.isEmpty) "en" else currentLocales[0]?.language
-    val localizedContext = LocaleHelper.applyLocale(context, currentLang ?: "en")*/
+    // PERF-FIX: Both AppCompatDelegate.getApplicationLocales() AND applyLocale() wrapped
+    // inside a single remember{} block so NEITHER runs on recomposition.
+    // AppCompatDelegate.getApplicationLocales() crosses into the framework via JNI on
+    // every call — even though it's fast individually, doing it on every frame at
+    // 60fps (during scroll/animation) adds measurable overhead on Cortex-A55 cores.
+    /*
     val userPreferences = UserPreferences.getInstance(context)
     val savedLang = userPreferences.getAppLanguage().ifBlank { "en" }
     val currentLocales = AppCompatDelegate.getApplicationLocales()
     val currentLang = currentLocales[0]?.language ?: savedLang
     val localizedContext = LocaleHelper.applyLocale(context, currentLang)
-
     val delegateLang = currentLocales[0]?.language
     val delegateTags = currentLocales.toLanguageTags()
     val configLang = ConfigurationCompat.getLocales(localizedContext.resources.configuration)[0]?.language
     val configTags = ConfigurationCompat.getLocales(localizedContext.resources.configuration).toLanguageTags()
-
     Log.d("LANG_DEBUG", "AppCompatDelegate locales = $delegateTags")
     Log.d("LANG_DEBUG", "currentLang = $currentLang")
     Log.d("LANG_DEBUG", "delegateLang = $delegateLang")
     Log.d("LANG_DEBUG", "localizedContext config language = $configLang")
     Log.d("LANG_DEBUG", "localizedContext config tags = $configTags")
+    */
+    val localizedContext = remember {
+        val currentLocales = AppCompatDelegate.getApplicationLocales()
+        val savedLang = UserPreferences.getInstance(context).getAppLanguage().ifBlank { "en" }
+        val currentLang = currentLocales[0]?.language ?: savedLang
+        LocaleHelper.applyLocale(context, currentLang)
+    }
     val topBarBrush = remember {
         Brush.horizontalGradient(
             colors = listOf(Color(0xFF5231A7), Color(0xFFD32940))
@@ -212,8 +217,7 @@ fun HomeScreen(
             }
         }
     }
-    val t1 = System.nanoTime()
-    Log.d("StartupTrace", "HomeScreen compose end ${(t1 - t0)/1_000_000} ms")
+    // PERF-FIX: Removed t0/t1 timing log — referenced t0 that no longer exists.
 }
 
 
@@ -271,7 +275,8 @@ fun HomeGridCard(
             )
         }
     }
-    Log.d("SparkleRFID", "HomeScreen End")
+    // PERF-FIX: Removed Log.d() from composable body — it ran on every recomposition of
+    // every grid card (n cards × m recompositions), flooding logcat and adding overhead.
 }
 
 

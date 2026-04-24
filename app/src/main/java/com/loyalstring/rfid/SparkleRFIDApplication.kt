@@ -57,34 +57,45 @@ class SparkleRFIDApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
-        POSConnect.init(this)
-      //  LocaleHelper.applySavedLocale(this)
         Log.d("StartupTrace", "Application.onCreate start")
 
-        // ✅ 1. Load saved language
+        // PERF-FIX: Load language preference once and set locale only once.
+        // Previously setApplicationLocales() was called twice with two separate
+        // UserPreferences.getInstance() calls, doubling the SharedPreferences I/O
+        // and locale-rebuild cost on the main thread.
+        /*
+        POSConnect.init(this)
         val prefs = UserPreferences.getInstance(this)
         val rawLang = prefs.getAppLanguage()
         val langCode = rawLang?.ifBlank { "en" } ?: "en"
-
         Log.d("LocaleDebug", "prefs langCode = '$rawLang' -> using '$langCode'")
-
         val localeList = LocaleListCompat.forLanguageTags(langCode)
         AppCompatDelegate.setApplicationLocales(localeList)
-
         val userPrefs = UserPreferences.getInstance(this)
         val savedLang = userPrefs.getAppLanguage().ifBlank { "en" }
-
-        AppCompatDelegate.setApplicationLocales(
-            LocaleListCompat.forLanguageTags(savedLang)
-        )
-
+        AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(savedLang))
         val cfg = resources.configuration
-        Log.d(
-            "LocaleDebug",
-            "after setApplicationLocales: cfg.locales[0] = ${cfg.locales[0].toLanguageTag()}"
-        )
+        Log.d("LocaleDebug", "after setApplicationLocales: cfg.locales[0] = ${cfg.locales[0].toLanguageTag()}")
+        */
+        val userPrefs = UserPreferences.getInstance(this)
+        val langCode = userPrefs.getAppLanguage().ifBlank { "en" }
+        AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(langCode))
+        Log.d("LocaleDebug", "Locale applied once in Application: '$langCode'")
 
+        // PERF-FIX: Move POSConnect.init() to background thread so it does not
+        // block the main thread during app startup. It is a third-party library
+        // that may perform I/O (socket/file) internally.
+        // POSConnect.init(this)  // old: was blocking main thread
+        applicationScope.launch {
+            try {
+                POSConnect.init(this@SparkleRFIDApplication)
+                Log.d("SparkleRFID", "POSConnect initialized on background thread")
+            } catch (ex: Exception) {
+                Log.e("SparkleRFID", "POSConnect init failed: ${ex.message}")
+            }
+        }
 
+        // RFID reader initialization runs on background thread (unchanged)
         applicationScope.launch {
             try {
                 val reader = RFIDWithUHFUART.getInstance()
@@ -98,7 +109,7 @@ class SparkleRFIDApplication : Application(), Configuration.Provider {
                 Log.e("SparkleRFID", "Exception initializing RFID: ${ex.message}")
             }
         }
-      //  val userPrefs = UserPreferences.getInstance(this)
+
         ensureDefaultCounters(userPrefs)
         Log.d("StartupTrace", "Application.onCreate end")
     }

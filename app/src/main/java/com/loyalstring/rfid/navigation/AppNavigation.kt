@@ -252,42 +252,24 @@ fun AppNavigation(
                     id =Id
                 )
             }
+            // PERF-FIX: Removed duplicate "stock_transfer_detail" composable that was registered
+            // twice. Duplicate routes in NavHost cause NavigationDuplicateException and undefined
+            // back-stack behavior — the second registration silently shadows the first, leading
+            // to navigation state corruption and back-button freezes/crashes.
+            /*
             composable("stock_transfer_detail") { backStackEntry ->
                 val previousEntry = navController.previousBackStackEntry
-                val labelItems = previousEntry
-                    ?.savedStateHandle
-                    ?.get<List<LabelledStockItems>>("labelItems")
-                    ?: emptyList()
-
-                val requestType = previousEntry
-                    ?.savedStateHandle
-                    ?.get<String>("requestType")
-                    ?: "in"  // default or fallback
-                val selectedTransferType = previousEntry
-                    ?.savedStateHandle
-                    ?.get<String>("selectedTransferType")
-                    ?: "in"  // default or fallback
-
-                val Id = previousEntry
-                    ?.savedStateHandle
-                    ?.get<Int>("Id")
-                    ?: "0"
-
-                StockTransferDetailScreen(
-                    onBack = { navController.popBackStack() },
-                    labelItems = labelItems,
-                    requestType = requestType,
-                    selectedTransferType =selectedTransferType,
-                    id =Id
-                )
+                val labelItems = previousEntry?.savedStateHandle?.get<List<LabelledStockItems>>("labelItems") ?: emptyList()
+                val requestType = previousEntry?.savedStateHandle?.get<String>("requestType") ?: "in"
+                val selectedTransferType = previousEntry?.savedStateHandle?.get<String>("selectedTransferType") ?: "in"
+                val Id = previousEntry?.savedStateHandle?.get<Int>("Id") ?: "0"
+                StockTransferDetailScreen(onBack = { navController.popBackStack() }, labelItems = labelItems, requestType = requestType, selectedTransferType = selectedTransferType, id = Id)
             }
 
             composable(Screens.DeliveryChalan.route) {
-                DeliveryChalanScreen(
-                    onBack = { navController.popBackStack() },
-                    navController = navController
-                )
+                DeliveryChalanScreen(onBack = { navController.popBackStack() }, navController = navController)
             }
+            */
 
             composable("editDeliveryChallan/{challanId}") { backStackEntry ->
                 val challanId = backStackEntry.arguments?.getString("challanId")?.toIntOrNull()
@@ -305,6 +287,7 @@ fun AppNavigation(
                     )
             }
 
+            // PERF-FIX: Kept exactly ONE registration of DeliveryChalan route (the duplicate was removed above).
             composable(Screens.DeliveryChalan.route) {
                 DeliveryChalanScreen(
                     onBack = { navController.popBackStack() },

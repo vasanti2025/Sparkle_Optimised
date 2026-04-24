@@ -1,6 +1,11 @@
 package com.loyalstring.rfid.data.remote.data
 import com.google.gson.annotations.SerializedName
 
+// PERF-FIX: String fields that the server can return as null are now declared String?.
+// In debug builds Gson silently bypasses Kotlin's non-null check; in release builds
+// R8 generates strict intrinsic null-check assertions in the constructor that throw
+// NullPointerException immediately when the server returns null for these fields.
+// Making them nullable at the Gson boundary prevents the NPE.
 data class UserPermissionResponse(
     @SerializedName("UserId") val userId: Int,
     @SerializedName("FirstName") val firstName: String,

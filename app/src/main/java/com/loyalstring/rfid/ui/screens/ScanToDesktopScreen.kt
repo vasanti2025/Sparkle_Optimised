@@ -18,12 +18,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -38,10 +41,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.loyalstring.rfid.MainActivity
@@ -70,7 +75,7 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
     var firstPress by remember { mutableStateOf(false) }
 
     var selectedPower by remember { mutableIntStateOf(5) }
-
+    var showExportPopup by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         selectedPower = UserPreferences.getInstance(context).getInt(
             UserPreferences.KEY_PRODUCT_COUNT,
@@ -373,15 +378,87 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                     .fillMaxWidth()
                     .background(Color.DarkGray)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("", color = Color.White, fontFamily = poppins)
                 Text(
                     text = localizedContext.getString(R.string.total_items, tags.size),
                     color = Color.White,
                     fontFamily = poppins,
                     fontSize = 12.sp
                 )
+
+                Text(
+                    text = "Export Data",
+                    color = Color.White,
+                    fontFamily = poppins,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable {
+                        showExportPopup = true
+                    }
+                )
+            }
+        }
+    }
+
+    if (showExportPopup) {
+        Dialog(onDismissRequest = { showExportPopup = false }) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color.White,
+                tonalElevation = 4.dp,
+                modifier = Modifier.fillMaxWidth(0.92f)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.White, RoundedCornerShape(12.dp))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF3A3A3A))
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Export Data",
+                            fontSize = 18.sp,
+                            color = Color.White,
+                            fontFamily = poppins,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    Column(
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+                    ) {
+                        Text(
+                            text = "Export Excel",
+                            fontFamily = poppins,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showExportPopup = false
+                                    exportExcel()
+                                }
+                                .padding(vertical = 12.dp)
+                        )
+
+                        Text(
+                            text = "Email",
+                            fontFamily = poppins,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showExportPopup = false
+                                    sendEmail()
+                                }
+                                .padding(vertical = 12.dp)
+                        )
+                    }
+                }
             }
         }
     }
@@ -422,6 +499,14 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
     }
 }
 
+private fun sendEmail() {
+    TODO("Not yet implemented")
+}
+
+private fun exportExcel() {
+    TODO("Not yet implemented")
+}
+
 fun hexToAscii(hex: String): String {
     val cleanHex = hex.replace(" ", "").uppercase()
 
@@ -441,6 +526,8 @@ fun hexToAscii(hex: String): String {
         ""
     }
 }
+
+
 
 
 fun shortSerial(serial: String?): String {

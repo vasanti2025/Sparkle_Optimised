@@ -30,9 +30,15 @@
         android:usesPermissionFlags="neverForLocation"
         tools:targetApi="31" />
 
-
+    <!-- PERF-FIX: Removed android:largeHeap="true".
+         Device has only ~75MB free RAM with 1.15GB on swap (97.9% RAM used).
+         largeHeap raised the heap ceiling to 512MB, causing GC to run 268ms
+         cycles that blocked the UI thread (100% janky frames observed via
+         dumpsys gfxinfo). The device was also swapping 152MB of the app's
+         heap to disk. Without largeHeap the normal 256MB ceiling reduces
+         GC scan time and swap pressure significantly. -->
     <application
-        android:largeHeap="true"
+        android:largeHeap="false"
         android:allowBackup="true"
         android:name=".SparkleRFIDApplication"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -60,11 +66,15 @@
             android:authorities="${applicationId}.androidx-startup"
             tools:node="remove" />
 
-        <service
+        <!-- SyncDataWorker is a @HiltWorker CoroutineWorker — WorkManager manages its own
+             internal service scheduling. Declaring it as <service> here is incorrect
+             (it does not extend android.app.Service) and causes lint Instantiatable errors.
+             WorkManager workers must NOT be registered in the manifest. -->
+        <!-- <service
             android:name=".worker.SyncDataWorker"
             android:permission="android.permission.BIND_JOB_SERVICE"
             android:exported="false"
-            tools:ignore="MissingClass" />
+            tools:ignore="MissingClass" /> -->
 
 
         <activity

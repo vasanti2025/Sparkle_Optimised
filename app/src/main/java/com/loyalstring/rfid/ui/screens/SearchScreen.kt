@@ -41,6 +41,7 @@ import com.loyalstring.rfid.viewmodel.SearchViewModel
 import com.rscja.deviceapi.RFIDWithUHFUART
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 @Composable
 fun SearchScreen(
@@ -53,6 +54,7 @@ fun SearchScreen(
     val activity = context.findActivity() as? MainActivity
     val lifecycleOwner = LocalLifecycleOwner.current
     val readerManager: RFIDReaderManager
+    val coroutineScope = rememberCoroutineScope()
 
     var isScanning by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
@@ -78,11 +80,13 @@ fun SearchScreen(
         }
     }
 
+    // rememberUpdatedState captures the LATEST value of each var inside non-composable
+    // callbacks (DisposableEffect lambdas) without stale-closure bugs.
+    val latestInputItems by rememberUpdatedState(inputItems)
+    val latestSelectedPower by rememberUpdatedState(selectedPower)
+    val latestIsScanning by rememberUpdatedState(isScanning)
+
     Log.d("SEARCH_SCREEN", "Mode: ${if (isUnmatchedList) "UNMATCHED" else "NORMAL"} | Items: ${inputItems.size}")
-
-    // ✅ Only read unmatched items if listKey == "unmatchedItems"
-
-
 
     BackHandler { onBack() }
 
@@ -93,14 +97,16 @@ fun SearchScreen(
         }
     }
 
-    // ✅ For unmatched — start search immediately
+    // Initial auto-start on first composition (inputItems available immediately from savedStateHandle)
     LaunchedEffect(isUnmatchedList, inputItems) {
         if (isUnmatchedList && inputItems.isNotEmpty()) {
-            delay(300)
-            searchViewModel.startSearch(inputItems, selectedPower)
-            isScanning = true
-            Log.d("AUTO_SCAN", "Unmatched auto scan started")
-        } else {
+            delay(600) // give RFID reader time to initialize
+            if (!isScanning) {
+                searchViewModel.startSearch(inputItems, selectedPower)
+                isScanning = true
+                Log.d("AUTO_SCAN", "Initial auto scan started (${inputItems.size} items)")
+            }
+        } else if (!isUnmatchedList) {
             searchViewModel.clearSearchItems()
             isScanning = false
         }
@@ -139,6 +145,12 @@ fun SearchScreen(
 
         // Wait until DB loaded
         if (allDbItems.isEmpty()) return@LaunchedEffect
+
+        // PERF-FIX: Added 300ms debounce so that filtering and scan-restart do not trigger
+        // on every single keystroke while the user is still typing. Without this, each
+        // character typed called searchViewModel.startSearch() → stopInventory() + startInventory()
+        // which caused RFID hardware thrashing and visible UI lag on fast typing.
+        delay(300)
 
         val matched = allDbItems.filter {
             it.rfid?.trim()?.equals(query, true) == true ||
@@ -240,28 +252,32 @@ fun SearchScreen(
 
 
 
-    // ✅ RFID key listener
+    // ✅ RFID key listener + lifecycle-driven auto-scan
     DisposableEffect(lifecycleOwner, activity) {
         val listener = object : ScanKeyListener {
             override fun onBarcodeKeyPressed() {}
             override fun onRfidKeyPressed() {
-                if (isScanning) {
-                    searchViewModel.stopSearch()
-                    isScanning = false
+                // latestIsScanning always gives the CURRENT value (rememberUpdatedState, no stale closure)
+                if (latestIsScanning) {
+                    isScanning = false  // instant UI feedback
+                    coroutineScope.launch(Dispatchers.IO) {
+                        searchViewModel.stopSearch()
+                    }
                     Log.d("SEARCH", "RFID STOPPED")
                 } else {
                     val itemsToSearch = when {
-                        isUnmatchedList && inputItems.isNotEmpty() -> inputItems
+                        isUnmatchedList && latestInputItems.isNotEmpty() -> latestInputItems
                         !isUnmatchedList && filteredDbItems.isNotEmpty() -> filteredDbItems
                         else -> emptyList()
                     }
-
                     if (itemsToSearch.isNotEmpty()) {
-                        searchViewModel.startSearch(itemsToSearch, selectedPower)
-                        isScanning = true
+                        isScanning = true  // instant UI feedback
+                        coroutineScope.launch(Dispatchers.IO) {
+                            searchViewModel.startSearch(itemsToSearch, latestSelectedPower)
+                        }
                         Log.d("SEARCH", "RFID STARTED scanning ${itemsToSearch.size} items")
                     } else {
-                        Log.d("SEARCH", "⚠️ No items to scan (maybe type a query?)")
+                        Log.d("SEARCH", "⚠️ No items to scan")
                     }
                 }
             }
@@ -269,12 +285,30 @@ fun SearchScreen(
 
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> activity?.registerScanKeyListener(listener)
+                Lifecycle.Event.ON_RESUME -> {
+                    activity?.registerScanKeyListener(listener)
+                    // Auto-restart scan on every RESUME when unmatched items exist and not scanning.
+                    // Uses coroutineScope so the 600ms delay doesn't block the observer callback.
+                    if (isUnmatchedList && latestInputItems.isNotEmpty() && !latestIsScanning) {
+                        coroutineScope.launch {
+                            delay(600)
+                            if (!latestIsScanning) {
+                                isScanning = true
+                                launch(Dispatchers.IO) {
+                                    searchViewModel.startSearch(latestInputItems, latestSelectedPower)
+                                }
+                                Log.d("AUTO_SCAN", "Auto scan restarted on RESUME (${latestInputItems.size} items)")
+                            }
+                        }
+                    }
+                }
                 Lifecycle.Event.ON_PAUSE -> {
                     activity?.unregisterScanKeyListener()
-                    if (isScanning) {
-                        searchViewModel.stopSearch()
+                    if (latestIsScanning) {
                         isScanning = false
+                        coroutineScope.launch(Dispatchers.IO) {
+                            searchViewModel.stopSearch()
+                        }
                     }
                 }
                 else -> {}
@@ -285,9 +319,10 @@ fun SearchScreen(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             activity?.unregisterScanKeyListener()
-            if (isScanning) {
-                searchViewModel.stopSearch()
-                isScanning = false
+            if (latestIsScanning) {
+                coroutineScope.launch(Dispatchers.IO) {
+                    searchViewModel.stopSearch()
+                }
             }
         }
     }
@@ -326,15 +361,19 @@ fun SearchScreen(
                         }
 
                         if (itemsToSearch.isNotEmpty()) {
-                            searchViewModel.startSearch(itemsToSearch, selectedPower)
-                            isScanning = true
+                            isScanning = true  // instant UI feedback
+                            coroutineScope.launch(Dispatchers.IO) {
+                                searchViewModel.startSearch(itemsToSearch, selectedPower)
+                            }
                             Log.d("SEARCH", "Manual SCAN started (${itemsToSearch.size}) items")
                         } else {
                             Log.d("SEARCH", "⚠️ No items to scan")
                         }
                     } else {
-                        searchViewModel.stopSearch()
-                        isScanning = false
+                        isScanning = false  // instant UI feedback
+                        coroutineScope.launch(Dispatchers.IO) {
+                            searchViewModel.stopSearch()
+                        }
                         Log.d("SEARCH", "Manual SCAN stopped")
                     }
                 },

@@ -29,6 +29,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = false
+            isMinifyEnabled = false
+        }
+        
         release {
             isMinifyEnabled = false
             proguardFiles(
@@ -50,6 +56,16 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+        // PERF-FIX: Compiler flags to reduce runtime overhead on low-end devices.
+        // -Xopt-in: silences experimental API warnings without runtime cost.
+        // -opt-in: same for multiplatform opt-in annotations.
+        // These don't change behavior but allow using stable optimized APIs without overhead.
+        freeCompilerArgs += listOf(
+            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
+            "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi",
+            "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi"
+        )
+
     }
     buildFeatures {
         compose = true

@@ -146,31 +146,24 @@ fun DeliveryChalanScreen(
     var gstAmount by remember { mutableStateOf(0.0) }
     var totalWithGst by remember { mutableStateOf(0.0) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(employee?.clientCode) {
+        val code = employee?.clientCode ?: return@LaunchedEffect
         withContext(Dispatchers.IO) {
             try {
-                orderViewModel.getAllEmpList(employee?.clientCode.toString())
-                orderViewModel.getAllItemCodeList(ClientCodeRequest(employee?.clientCode.toString()))
-                singleProductViewModel.getAllBranches(ClientCodeRequest(employee?.clientCode.toString()))
-                singleProductViewModel.getAllPurity(ClientCodeRequest(employee?.clientCode.toString()))
-                singleProductViewModel.getAllSKU(ClientCodeRequest(employee?.clientCode.toString()))
-                orderViewModel.getDailyRate(ClientCodeRequest(employee?.clientCode))
+                orderViewModel.getAllEmpList(code)
+                orderViewModel.getAllItemCodeList(ClientCodeRequest(code))
+                singleProductViewModel.getAllBranches(ClientCodeRequest(code))
+                singleProductViewModel.getAllPurity(ClientCodeRequest(code))
+                singleProductViewModel.getAllSKU(ClientCodeRequest(code))
+                orderViewModel.getDailyRate(ClientCodeRequest(code))
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
     }
 
-
     // Collect the latest rates
     val dailyRates by orderViewModel.getAllDailyRate.collectAsState()
-
-    LaunchedEffect(employee?.clientCode) {
-        val code = employee?.clientCode ?: return@LaunchedEffect
-        // No need for withContext here; VM already uses IO
-        singleProductViewModel.getAllBranches(ClientCodeRequest(code))
-        orderViewModel.getAllEmpList(ClientCodeRequest(code).toString())
-    }
 
 
     val tags by viewModel.scannedTags.collectAsState()

@@ -1,5 +1,6 @@
 package com.loyalstring.rfid.viewmodel
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.LiveData
@@ -747,6 +748,9 @@ class OrderViewModel @Inject constructor(
         _orderUpdateResponse.value = null
     }
 
+    // PERF-FIX: @SuppressLint added because _addEmpResponse is MutableLiveData<Resource<EmployeeResponse>>
+    // (non-nullable type param) but null is intentionally used here as a "reset/consumed" sentinel.
+    @SuppressLint("NullSafeMutableLiveData")
     fun clearAddEmpResponse() {
         _addEmpResponse.value = null
     }

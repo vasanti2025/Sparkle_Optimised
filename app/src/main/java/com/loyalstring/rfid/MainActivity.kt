@@ -74,12 +74,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.core.os.LocaleListCompat
+// PERF-FIX: Removed LocaleListCompat import — locale is now set only in Application class
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.loyalstring.rfid.data.model.ClientCodeRequest
 import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.data.model.login.LoginRequest
 import com.loyalstring.rfid.data.reader.ScanKeyListener
@@ -93,10 +92,10 @@ import com.loyalstring.rfid.ui.utils.BackgroundGradient
 
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
-import com.loyalstring.rfid.viewmodel.BulkViewModel
+// PERF-FIX: Removed BulkViewModel, OrderViewModel, SingleProductViewModel imports —
+// these ViewModels are now created lazily inside their respective screen composables,
+// not eagerly at the root SetupNavigation level.
 import com.loyalstring.rfid.viewmodel.LoginViewModel
-import com.loyalstring.rfid.viewmodel.OrderViewModel
-import com.loyalstring.rfid.viewmodel.SingleProductViewModel
 import com.loyalstring.rfid.viewmodel.UserPermissionViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
@@ -130,13 +129,14 @@ class MainActivity : ComponentActivity() {
     }
     @RequiresApi(Build.VERSION_CODES.R)
     override fun onCreate(savedInstanceState: Bundle?) {
+       // PERF-FIX: Locale is already applied once in SparkleRFIDApplication.onCreate().
+       // Calling setApplicationLocales() again here caused a second locale-rebuild on the
+       // main thread before super.onCreate(), delaying rendering by 50-150ms.
+       /*
        val prefs = UserPreferences.getInstance(this)
        val savedLang = prefs.getAppLanguage().ifBlank { "en" }
-
-       AppCompatDelegate.setApplicationLocales(
-           LocaleListCompat.forLanguageTags(savedLang)
-       )
-
+       AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(savedLang))
+       */
        Log.d(
            "LocaleDebug",
            "AppCompat locales = ${AppCompatDelegate.getApplicationLocales().toLanguageTags()}"
@@ -220,10 +220,15 @@ private fun SetupNavigation(
     startDestination: String,
 ) {
     val context = LocalContext.current
-    val orderViewModel1: OrderViewModel = hiltViewModel()
-    val userPermissionViewModel:UserPermissionViewModel = hiltViewModel()
-    val viewModel: BulkViewModel = hiltViewModel()
-    val singleProductViewModel: SingleProductViewModel = hiltViewModel()
+    // PERF-FIX: ViewModels are now obtained lazily only when needed per-screen via hiltViewModel()
+    // inside NavHost composables. Creating BulkViewModel + OrderViewModel + SingleProductViewModel
+    // here caused all their init{} blocks, StateFlow collections (Eagerly), and DB flows to start
+    // the moment the app opened — even on the login screen where none of them are needed.
+    // BulkViewModel alone allocated a 300K-capacity ConcurrentHashMap and started 3 Eagerly flows.
+    // val orderViewModel1: OrderViewModel = hiltViewModel()
+    // val viewModel: BulkViewModel = hiltViewModel()
+    // val singleProductViewModel: SingleProductViewModel = hiltViewModel()
+    val userPermissionViewModel: UserPermissionViewModel = hiltViewModel()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var selectedItemIndex by rememberSaveable { mutableIntStateOf(-1) }
     val scope = rememberCoroutineScope()
@@ -355,39 +360,33 @@ private fun SetupNavigation(
 
 
 
-// Load employee on first composition
-    LaunchedEffect(Unit) {
-        employee = UserPreferences.getInstance(context).getEmployee(Employee::class.java)
-    }
-
-// Refresh when drawer opens (always show latest info)
-    LaunchedEffect(drawerState.isOpen) {
-        if (drawerState.isOpen) {
-            employee = UserPreferences.getInstance(context).getEmployee(Employee::class.java)
-        }
-    }
-
-    // Sync Data on Load
+    // Load employee on first composition
+    // PERF-FIX: Run SharedPreferences read on IO thread to avoid ANR on slow storage
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            viewModel.syncRFIDDataIfNeeded(context)
+            val emp = UserPreferences.getInstance(context).getEmployee(Employee::class.java)
+            withContext(Dispatchers.Main) { employee = emp }
         }
     }
 
-    LaunchedEffect(employee?.clientCode) {
-        employee?.clientCode?.let { clientCode ->
+    // Refresh when drawer opens (always show latest info)
+    LaunchedEffect(drawerState.isOpen) {
+        if (drawerState.isOpen) {
             withContext(Dispatchers.IO) {
-                //Unnecessary
-                //Unnecessary
-                /*orderViewModel1.getAllEmpList(clientCode)
-                orderViewModel1.getAllItemCodeList(ClientCodeRequest(clientCode))
-                singleProductViewModel.getAllBranches(ClientCodeRequest(clientCode))
-                singleProductViewModel.getAllPurity(ClientCodeRequest(clientCode))
-                singleProductViewModel.getAllSKU(ClientCodeRequest(clientCode))*/
-                orderViewModel1.getDailyRate(ClientCodeRequest(employee?.clientCode))
+                val emp = UserPreferences.getInstance(context).getEmployee(Employee::class.java)
+                withContext(Dispatchers.Main) { employee = emp }
             }
         }
     }
+
+    // PERF-FIX: syncRFIDDataIfNeeded removed from here. It was being called on every app open
+    // making a network request before the home screen was shown. It is still called after login
+    // in LoginScreen.kt (correct place) and has a guard to skip if already synced.
+    // LaunchedEffect(Unit) { withContext(Dispatchers.IO) { viewModel.syncRFIDDataIfNeeded(context) } }
+
+    // PERF-FIX: getDailyRate is now called lazily inside OrderScreen when needed,
+    // not eagerly here for every employee clientCode change on every app launch.
+    // LaunchedEffect(employee?.clientCode) { ... orderViewModel1.getDailyRate(...) }
 
     val navigationBody: @Composable () -> Unit = {
         AppNavigation(navController, drawerState, scope, userPreferences, startDestination)

@@ -149,15 +149,26 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
 
                 userPrefs.saveLoginCredentials(username, password, rememberMe,response.employee.clients.rfidType.toString(),response.employee.id,response.employee.defaultBranchId,response.employee.clients.organisationName.toString())
 
-                response.employee.clientCode?.let {
-                    userPermissionViewModel.loadPermissions(it, response.employee.id)
-                }
-
+                // Sync RFID data in background — does not block navigation
                 launch {
                     bulkviewmodel.syncRFIDDataIfNeeded(context)
                 }
 
-                navController.navigate(Screens.HomeScreen.route)
+                // PERF-FIX: Load permissions first; navigation to HomeScreen is handled
+                // ONLY in the permissionResponse LaunchedEffect below (Resource.Success branch).
+                // Previously, navigate(HomeScreen) was called HERE as well, causing the app to
+                // navigate twice: once immediately after login and once after permissions loaded.
+                // This double-navigate pushed HomeScreen twice onto the back stack, causing
+                // back-button freezes and unexpected navigation behavior.
+                response.employee.clientCode?.let {
+                    userPermissionViewModel.loadPermissions(it, response.employee.id)
+                } ?: run {
+                    // No clientCode — navigate directly since permissions cannot be loaded
+                    navController.navigate(Screens.HomeScreen.route) {
+                        popUpTo(Screens.LoginScreen.route) { inclusive = true }
+                    }
+                }
+
             }
         }
     }*/

@@ -34,6 +34,12 @@ class SearchViewModel @Inject constructor(
   private val _searchItems = mutableStateListOf<SearchItem>()
     val searchItems: SnapshotStateList<SearchItem> = _searchItems
 
+    // PERF-FIX: HashMap for O(1) EPC/RFID/ItemCode → list index lookup.
+    // Previously, every RFID tag read from hardware triggered an indexOfFirst { } call
+    // which is O(n) over the entire searchItems list. At high scan rates (100+ tags/sec)
+    // this caused severe main-thread jank. The map is rebuilt whenever startSearch() is called.
+    private val epcToIndex = HashMap<String, Int>()
+
     private var currentScanPower: Int = 10
 
     init {
@@ -48,9 +54,11 @@ class SearchViewModel @Inject constructor(
     var lastSoundTime = 0L
 
     fun startSearch(unmatchedItems: List<BulkItem>, power: Int) {
-        stopSearch() // pehle old scan fully stop karo
+        stopSearch() // stop old scan fully before starting new one
         currentScanPower = power
         _searchItems.clear()
+        epcToIndex.clear() // PERF-FIX: Reset the O(1) lookup map
+
         _searchItems.addAll(unmatchedItems.map { item ->
             val epcValue = when {
                 !item.epc.isNullOrBlank() -> item.epc!!
@@ -66,6 +74,15 @@ class SearchViewModel @Inject constructor(
                 rfid = item.rfid ?: ""
             )
         })
+
+        // PERF-FIX: Build O(1) lookup map after list is populated.
+        // All three identifier fields are indexed so any of them can be matched
+        // in constant time without scanning the entire list.
+        _searchItems.forEachIndexed { index, item ->
+            if (item.epc.isNotBlank()) epcToIndex[item.epc.uppercase()] = index
+            if (item.rfid.isNotBlank()) epcToIndex[item.rfid.uppercase()] = index
+            if (item.itemCode.isNotBlank()) epcToIndex[item.itemCode.uppercase()] = index
+        }
 
         if (readerManager.initReader()) {
             startTagScanning(power)
@@ -93,6 +110,10 @@ class SearchViewModel @Inject constructor(
                     val rssi = tag.rssi
                     val proximity = convertRssiToProximity(rssi)
 
+                    // SOUND-CHANGE: Replaced proximity-based sound mapping with direct RSSI
+                    // absolute-value mapping to match Searchfragment.java logic:
+                    // |RSSI| < 50 → sound 4, 50-60 → sound 2, 60-70 → sound 5, >70 → sound 1
+                    /*
                     val id = when {
                         proximity >= 70 -> 1
                         proximity in 61..69 -> 5
@@ -100,35 +121,29 @@ class SearchViewModel @Inject constructor(
                         proximity in 1..49 -> 4
                         else -> -1
                     }
-                  /* val id = when {
-                        proximity in 1..49 -> 4
-                        proximity in 51..75 -> 2
-                        proximity >= 76 -> 5
+                    */
+                    val rssiAbs = try { Math.abs(rssi.trim().toDouble()) } catch (e: Exception) { 0.0 }
+                    val id = when {
+                        rssiAbs > 0 && rssiAbs < 50 -> 4
+                        rssiAbs > 50 && rssiAbs < 60 -> 2
+                        rssiAbs > 60 && rssiAbs < 70 -> 5
+                        rssiAbs > 70 -> 1
                         else -> -1
-                    }*/
-
-                    val index = _searchItems.indexOfFirst {
-                        it.epc.equals(epc, true) || it.rfid.equals(epc, true) || it.itemCode.equals(epc, true)
                     }
 
-                    if (index != -1 && _searchItems.isNotEmpty()) {
+                    // PERF-FIX: O(1) HashMap lookup replaces O(n) indexOfFirst { } search.
+                    // At high scan rates (100+ tags/sec) with large item lists, the old
+                    // indexOfFirst caused the IO thread to iterate the full list for every
+                    // tag read, creating CPU spikes and stalling the scan buffer reader.
+                    // val index = _searchItems.indexOfFirst { it.epc.equals(epc, true) || it.rfid.equals(epc, true) || it.itemCode.equals(epc, true) }
+                    val index = epcToIndex[epc.uppercase()]
+
+                    if (index != null && index >= 0 && index < _searchItems.size) {
                         withContext(Dispatchers.Main) {
                             _searchItems[index] = _searchItems[index].copy(
                                 rssi = rssi,
                                 proximityPercent = proximity
                             )
-
-                            /*if (id != -1) {
-                                lastSoundId?.let { readerManager.stopSound(it) }
-                                lastSoundId = id
-                                readerManager.playSound(id)
-                            }*/
-
-                      /*      if (lastSoundId != id) {
-                                lastSoundId?.let { readerManager.stopSound(it) }
-                                lastSoundId = id
-                                readerManager.playSound(id)
-                            }*/
 
                             val currentTime = System.currentTimeMillis()
 
@@ -141,13 +156,6 @@ class SearchViewModel @Inject constructor(
                             val searchedEpc = _searchItems[index].epc.trim()
                             val epcMatched = epc.equals(searchedEpc, ignoreCase = true)
 
-                           /* if (epcMatched && proximity >= 40 && lastBlinkEpc != epc) {
-                                lastBlinkEpc = epc
-                                viewModelScope.launch {
-                                    lightTag(epc, searchedEpc)
-                                    lastBlinkEpc = null // reset after blink
-                                }
-                            }*/
                             if (epcMatched && proximity >= 40) {
                                 if (lastBlinkEpc != epc || blinkingJob?.isActive != true) {
                                     startContinuousBlink(epc)
@@ -155,7 +163,6 @@ class SearchViewModel @Inject constructor(
                             } else if (lastBlinkEpc == epc && proximity < 40) {
                                 stopBlinkingEpc()
                             }
-
                         }
                     }
                 } else {
@@ -171,6 +178,7 @@ class SearchViewModel @Inject constructor(
 
     fun clearSearchItems() {
         _searchItems.clear()
+        epcToIndex.clear() // PERF-FIX: Clear lookup map together with the list
     }
 
     fun stopSearch() {

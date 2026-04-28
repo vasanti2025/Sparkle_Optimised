@@ -124,6 +124,10 @@ class UserPreferences @Inject constructor(
         return prefs.getInt(KEY_USER_ID, 0)
     }
 
+    fun setUserId(userId: Int) {
+        prefs.edit { putInt(KEY_USER_ID, userId) }
+    }
+
     fun setLoggedIn(loggedIn: Boolean) {
         prefs.edit { putBoolean(KEY_LOGGED_IN, loggedIn) }
     }
@@ -141,6 +145,7 @@ class UserPreferences @Inject constructor(
     fun logout() {
         //prefs.edit { clear() }
         prefs.edit()
+            .remove(KEY_USER_ID)
             .remove(KEY_USERNAME)
             .remove(KEY_PASSWORD)
             .remove(KEY_REMEMBER_ME)
@@ -281,7 +286,12 @@ class UserPreferences @Inject constructor(
 
     fun saveBranchIds(branchIds: List<Int>) {
         val json = com.google.gson.Gson().toJson(branchIds)
-        prefs.edit().putString("branch_ids", json).apply()
+
+        val saved = prefs.edit()
+            .putString("branch_ids", json)
+            .commit()
+
+        Log.d("USER_PREF", "saveBranchIds saved=$saved json=$json")
     }
 
     fun getBranchIds(): List<Int> {

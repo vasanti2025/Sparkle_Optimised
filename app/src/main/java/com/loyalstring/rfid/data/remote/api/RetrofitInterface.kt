@@ -79,7 +79,10 @@ import com.loyalstring.rfid.data.model.stockVerification.StockVerificationReques
 import com.loyalstring.rfid.data.remote.data.ClearStockDataModelReq
 import com.loyalstring.rfid.data.remote.data.CompanyDetails
 import com.loyalstring.rfid.data.remote.data.DailyRateResponse
+import com.loyalstring.rfid.data.remote.data.DeviceIdData
+import com.loyalstring.rfid.data.remote.data.DeviceIdResponseData
 import com.loyalstring.rfid.data.remote.data.EditDataRequest
+import com.loyalstring.rfid.data.remote.data.RfidScanToDesktopResponse
 import com.loyalstring.rfid.data.remote.data.StockTransferRequest
 import com.loyalstring.rfid.data.remote.data.UserPermissionRequest
 import com.loyalstring.rfid.data.remote.data.UserPermissionResponse
@@ -376,6 +379,16 @@ interface RetrofitInterface {
 
     @POST("api/FaceLogin/GetAllFaceLogin")
     suspend fun getAllFaceData(@Body request: FaceRequest): Response<AllFaceResponse>
+
+    @POST("api/RFIDDevice/GetAllRFIDDetails")
+    suspend fun getAllScantoDesktop(@Body request: ClientCodeRequest): Response<RfidScanToDesktopResponse>
+
+    @POST("api/ClientOnboarding/UpdateMultipleUser")
+    suspend fun addDeviceId(@Body request: List<DeviceIdData>): Response<DeviceIdResponseData>
+
+   /* @POST("api/ProductMaster/GetAllRFIDDetails")
+    suspend fun getDeviceId(@Body request: ClientCodeRequest): Response<DeviceIdData>
+*/
 
 
 }

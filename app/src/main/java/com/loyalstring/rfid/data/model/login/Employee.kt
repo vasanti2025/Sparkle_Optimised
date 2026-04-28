@@ -4,6 +4,7 @@ import com.google.gson.annotations.SerializedName
 
 data class Employee(
     @SerializedName("Id") val id: Int,
+    @SerializedName("DeviceId") val DeviceId: String,
     @SerializedName("EmployeeId") val employeeId: Int,
     @SerializedName("ClientCode") val clientCode: String?,
     @SerializedName("CompanyNo") val companyNo: String?,

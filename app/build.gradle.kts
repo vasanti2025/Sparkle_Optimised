@@ -18,8 +18,8 @@ android {
         applicationId = "com.loyalstring.rfid"
         minSdk = 26
         targetSdk = 36
-       versionCode = 79
-        versionName = "1.78"
+       versionCode = 82
+        versionName = "1.82"
         /*versionCode = 8
         versionName = "1.8"*/
 
@@ -31,7 +31,7 @@ android {
     buildTypes {
         debug {
             signingConfig = signingConfigs.getByName("debug")
-            isDebuggable = false
+            isDebuggable = true
             isMinifyEnabled = false
         }
         

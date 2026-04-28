@@ -1,6 +1,19 @@
 package com.loyalstring.rfid.ui.screens
 
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.compose.runtime.rememberCoroutineScope
+import android.content.Context
+import android.content.Intent
+import androidx.core.content.FileProvider
+import org.apache.poi.xssf.usermodel.XSSFWorkbook
+import java.io.File
+import java.io.FileOutputStream
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.os.Environment
 import android.provider.Settings
 import android.util.Log
 import androidx.appcompat.app.AppCompatDelegate
@@ -21,7 +34,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -53,12 +65,15 @@ import com.loyalstring.rfid.MainActivity
 import com.loyalstring.rfid.R
 import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.data.reader.ScanKeyListener
+import com.loyalstring.rfid.data.remote.data.RfidItem
 import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.ui.utils.ToastUtils
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.BulkViewModel
+import com.loyalstring.rfid.viewmodel.RfidScanToDesktopViewModel
 import com.loyalstring.rfid.worker.LocaleHelper
+import kotlin.collections.forEachIndexed
 
 @SuppressLint("HardwareIds")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -76,6 +91,9 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
 
     var selectedPower by remember { mutableIntStateOf(5) }
     var showExportPopup by remember { mutableStateOf(false) }
+
+    val exportScope = rememberCoroutineScope()
+    var isExporting by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         selectedPower = UserPreferences.getInstance(context).getInt(
             UserPreferences.KEY_PRODUCT_COUNT,
@@ -90,6 +108,12 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
             onBack()
         }
     }
+
+    val rfidExportViewModel: RfidScanToDesktopViewModel = hiltViewModel()
+    val rfidExportList by rfidExportViewModel.rfidList.collectAsState()
+    val exportLoading by rfidExportViewModel.isLoading.collectAsState()
+
+
 
     var clickedIndex by remember { mutableStateOf<Int?>(null) }
     val activity = LocalContext.current as MainActivity
@@ -108,6 +132,12 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
     val currentLocales = AppCompatDelegate.getApplicationLocales()
     val currentLang = currentLocales[0]?.language ?: savedLang
     val localizedContext = LocaleHelper.applyLocale(context, currentLang)
+
+    LaunchedEffect(employee?.clientCode) {
+        employee?.clientCode?.let {
+            rfidExportViewModel.getAllScantoDesktop(it)
+        }
+    }
 
     // ✅ IMPORTANT: whenever tags change → auto fill RFID from DB
     LaunchedEffect(tags) {
@@ -178,13 +208,36 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
             }
         }
     }
+    val finalDeviceId by rfidExportViewModel.finalDeviceId.collectAsState()
 
-    val androidId = Settings.Secure.getString(
+/*    val androidId = Settings.Secure.getString(
         context.contentResolver,
         Settings.Secure.ANDROID_ID
     )
 
-    userPreferences.saveDeviceId(androidId)
+    userPreferences.saveDeviceId(androidId)*/
+
+    val androidId = Settings.Secure.getString(
+        context.contentResolver,
+        Settings.Secure.ANDROID_ID
+    ).orEmpty()
+
+    LaunchedEffect(employee?.id, androidId) {
+        val clientCode = employee?.id
+
+        if (clientCode!=0 && androidId.isNotBlank()) {
+            rfidExportViewModel.setupDeviceId(
+                clientCode = clientCode.toString(),
+                androidId = androidId
+            )
+        }
+    }
+
+    LaunchedEffect(finalDeviceId) {
+        if (!finalDeviceId.isNullOrBlank()) {
+            userPreferences.saveDeviceId(finalDeviceId!!)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -212,7 +265,7 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
         },
         bottomBar = {
             ScanBottomBarDesktop(
-                onSave = {
+              /*  onSave = {
                     viewModel.barcodeReader.close()
                     Log.d("save scanned items", "CLICKED"+tags.size)
 
@@ -220,12 +273,37 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
 
                     // ✅ Better check: tags exist + at least one RFID mapped
                     if (tags.isNotEmpty()) {
-                        viewModel.sendScannedData(tags, shortSerial(userPreferences.getDeviceId().toString()), context)
+                        val deviceId = finalDeviceId ?: userPreferences.getDeviceId()
+
+                        if (tags.isNotEmpty() && !deviceId.isNullOrBlank()) {
+                            viewModel.sendScannedData(tags, deviceId, context)
+                            viewModel.resetScanResults()
+                            viewModel.stopBarcodeScanner()
+                            viewModel.resetProductScanResults()
+                        } else {
+                            ToastUtils.showToast(context, "Please scan RFID tag / Device Id not found")
+                        }
+                        //   viewModel.sendScannedData(tags, shortSerial(userPreferences.getDeviceId().toString()), context)
                         viewModel.resetScanResults()
                         viewModel.stopBarcodeScanner()
                         viewModel.resetProductScanResults()
                     } else {
                         ToastUtils.showToast(context, "Please scan RFID tag / RFID not found in DB")
+                    }
+                },*/
+                onSave = {
+                    viewModel.barcodeReader.close()
+                    Log.d("save scanned items", "CLICKED" + tags.size)
+
+                    val deviceId = finalDeviceId ?: userPreferences.getDeviceId()
+
+                    if (tags.isNotEmpty() && !deviceId.isNullOrBlank()) {
+                        viewModel.sendScannedData(tags, deviceId, context)
+                        viewModel.resetScanResults()
+                        viewModel.stopBarcodeScanner()
+                        viewModel.resetProductScanResults()
+                    } else {
+                        ToastUtils.showToast(context, "Please scan RFID tag / Device Id not found")
                     }
                 },
                 onClear = {
@@ -431,7 +509,7 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                         )
                     }
 
-                    Column(
+                   /* Column(
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
                     ) {
                         Text(
@@ -441,7 +519,13 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                                 .fillMaxWidth()
                                 .clickable {
                                     showExportPopup = false
-                                    exportExcel()
+
+                                    if (rfidExportList.isEmpty()) {
+                                        ToastUtils.showToast(context, "No data found for export")
+                                    } else {
+                                        val file = exportRfidExcel(context, rfidExportList)
+                                        ToastUtils.showToast(context, "Excel downloaded: ${file.name}")
+                                    }
                                 }
                                 .padding(vertical = 12.dp)
                         )
@@ -453,10 +537,120 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                                 .fillMaxWidth()
                                 .clickable {
                                     showExportPopup = false
-                                    sendEmail()
+                                    if (rfidExportList.isEmpty()) {
+                                        ToastUtils.showToast(context, "No data found for email")
+                                    } else {
+                                        val file = exportRfidExcelForEmail(context, rfidExportList)
+                                        //shareExcelByEmail(context, file)
+                                        shareExcelByEmail(context, file)
+                                    }
                                 }
                                 .padding(vertical = 12.dp)
                         )
+                    }*/
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        ExportOptionRow(
+                            title = if (isExporting) "Exporting..." else "Export Excel",
+                            onClick = {
+                                if (isExporting) return@ExportOptionRow
+
+                                showExportPopup = false
+
+                                if (rfidExportList.isEmpty()) {
+                                    ToastUtils.showToast(context, "No data found for export")
+                                    return@ExportOptionRow
+                                }
+
+                                exportScope.launch {
+                                    try {
+                                        isExporting = true
+
+                                        val file = withContext(Dispatchers.IO) {
+                                            exportRfidExcel(context, rfidExportList)
+                                        }
+
+                                        ToastUtils.showToast(
+                                            context,
+                                            "Excel downloaded: ${file.name}"
+                                        )
+
+                                    } catch (e: Exception) {
+                                        Log.e("EXPORT_EXCEL", "Export failed", e)
+                                        ToastUtils.showToast(
+                                            context,
+                                            "Export failed: ${e.message ?: "Unknown error"}"
+                                        )
+                                    } finally {
+                                        isExporting = false
+                                    }
+                                }
+                            }
+                        )
+
+                        ExportOptionRow(
+                            title = if (isExporting) "Preparing..." else "Email",
+                            onClick = {
+                                if (isExporting) return@ExportOptionRow
+
+                                showExportPopup = false
+
+                                if (rfidExportList.isEmpty()) {
+                                    ToastUtils.showToast(context, "No data found for email")
+                                    return@ExportOptionRow
+                                }
+
+                                exportScope.launch {
+                                    try {
+                                        isExporting = true
+
+                                        val file = withContext(Dispatchers.IO) {
+                                            exportRfidExcelForEmail(context, rfidExportList)
+                                        }
+
+                                        shareExcelByEmail(context, file)
+
+                                    } catch (e: Exception) {
+                                        Log.e("EMAIL_EXCEL", "Email failed", e)
+                                        ToastUtils.showToast(
+                                            context,
+                                            "Email failed: ${e.message ?: "Unknown error"}"
+                                        )
+                                    } finally {
+                                        isExporting = false
+                                    }
+                                }
+                            }
+                        )
+                  /*      ExportOptionRow(
+                            title = "Export Excel",
+                            onClick = {
+                                showExportPopup = false
+
+                                if (rfidExportList.isEmpty()) {
+                                    ToastUtils.showToast(context, "No data found for export")
+                                } else {
+                                    val file = exportRfidExcel(context, rfidExportList)
+                                    ToastUtils.showToast(context, "Excel downloaded: ${file.name}")
+                                }
+                            }
+                        )
+
+                        ExportOptionRow(
+                            title = "Email",
+                            onClick = {
+                                showExportPopup = false
+
+                                if (rfidExportList.isEmpty()) {
+                                    ToastUtils.showToast(context, "No data found for email")
+                                } else {
+                                    val file = exportRfidExcelForEmail(context, rfidExportList)
+                                    shareExcelByEmail(context, file)
+                                }
+                            }
+                        )*/
                     }
                 }
             }
@@ -474,13 +668,27 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                     "OK",
                     modifier = Modifier
                         .padding(12.dp)
-                        .clickable {
+                     /*   .clickable {
                             showClearDialog = false
                             val clientCode = employee?.clientCode ?: return@clickable
 
-                            val deviceId = shortSerial(
+                         *//*   val deviceId = shortSerial(
                                 userPreferences.getDeviceId()?.toString()
-                            )
+                            )*//*
+
+                            val deviceId="A42"
+
+                            viewModel.clearStockData(clientCode, deviceId)
+                        }*/.clickable {
+                            showClearDialog = false
+
+                            val clientCode = employee?.clientCode ?: return@clickable
+                            val deviceId = finalDeviceId ?: userPreferences.getDeviceId()
+
+                            if (deviceId.isNullOrBlank()) {
+                                ToastUtils.showToast(context, "Device Id not found")
+                                return@clickable
+                            }
 
                             viewModel.clearStockData(clientCode, deviceId)
                         },
@@ -496,6 +704,43 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                 )
             }
         )
+    }
+}
+
+@Composable
+private fun ExportOptionRow(
+    title: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = Color(0xFFF5F5F5),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                fontFamily = poppins,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF333333),
+                modifier = Modifier.weight(1f)
+            )
+
+            Text(
+                text = ">",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.DarkGray
+            )
+        }
     }
 }
 
@@ -535,6 +780,161 @@ fun shortSerial(serial: String?): String {
     if (serial.length < 2) return "A$serial"
     val lastTwo = serial.takeLast(2)
     return "A$lastTwo"
+}
+
+private fun exportRfidExcelForEmail(
+    context: Context,
+    list: List<RfidItem>
+): File {
+    val workbook = XSSFWorkbook()
+
+    return try {
+        val sheet = workbook.createSheet("RFID Data")
+
+        val headers = listOf(
+            "Sr No",
+            "Client Code",
+            "Device Id",
+            "TID Value",
+            "RFID Code",
+            "Id",
+            "Created On",
+            "Last Updated",
+            "Status"
+        )
+
+        val header = sheet.createRow(0)
+        headers.forEachIndexed { index, title ->
+            header.createCell(index).setCellValue(title)
+        }
+
+        list.forEachIndexed { index, item ->
+            val row = sheet.createRow(index + 1)
+            row.createCell(0).setCellValue((index + 1).toDouble())
+            row.createCell(1).setCellValue(item.ClientCode)
+            row.createCell(2).setCellValue(item.DeviceId)
+            row.createCell(3).setCellValue(item.TIDValue)
+            row.createCell(4).setCellValue(item.RFIDCode)
+            row.createCell(5).setCellValue(item.Id.toDouble())
+            row.createCell(6).setCellValue(item.CreatedOn)
+            row.createCell(7).setCellValue(item.LastUpdated)
+            row.createCell(8).setCellValue(item.StatusType.toString())
+        }
+
+        val file = File(
+            context.cacheDir,
+            "rfid_scan_to_desktop_${System.currentTimeMillis()}.xlsx"
+        )
+
+        FileOutputStream(file).use { outputStream ->
+            workbook.write(outputStream)
+        }
+
+        file
+
+    } finally {
+        workbook.close()
+    }
+}
+
+private fun exportRfidExcel(
+    context: Context,
+    list: List<RfidItem>
+): File {
+    val workbook = XSSFWorkbook()
+
+    return try {
+        val sheet = workbook.createSheet("RFID Data")
+
+        val headers = listOf(
+            "Sr No",
+            "Client Code",
+            "Device Id",
+            "TID Value",
+            "RFID Code",
+            "Id",
+            "Created On",
+            "Last Updated",
+            "Status"
+        )
+
+        val header = sheet.createRow(0)
+        headers.forEachIndexed { index, title ->
+            header.createCell(index).setCellValue(title)
+        }
+
+        list.forEachIndexed { index, item ->
+            val row = sheet.createRow(index + 1)
+
+            row.createCell(0).setCellValue((index + 1).toDouble())
+            row.createCell(1).setCellValue(item.ClientCode)
+            row.createCell(2).setCellValue(item.DeviceId)
+            row.createCell(3).setCellValue(item.TIDValue)
+            row.createCell(4).setCellValue(item.RFIDCode)
+            row.createCell(5).setCellValue(item.Id.toDouble())
+            row.createCell(6).setCellValue(item.CreatedOn)
+            row.createCell(7).setCellValue(item.LastUpdated)
+            row.createCell(8).setCellValue(item.StatusType.toString())
+        }
+
+        for (i in headers.indices) {
+            sheet.setColumnWidth(i, 5000)
+        }
+
+        val dir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+            ?: context.filesDir
+
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
+
+        val file = File(
+            dir,
+            "rfid_scan_to_desktop_${System.currentTimeMillis()}.xlsx"
+        )
+
+        FileOutputStream(file).use { outputStream ->
+            workbook.write(outputStream)
+        }
+
+        file
+
+    } finally {
+        workbook.close()
+    }
+}
+
+private fun shareExcelByEmail(
+    context: Context,
+    file: File
+) {
+    val uri = FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.provider",
+        file
+    )
+
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+        putExtra(Intent.EXTRA_SUBJECT, "RFID Scan To Desktop Excel")
+        putExtra(Intent.EXTRA_TEXT, "Please find attached RFID scan data excel file.")
+        putExtra(Intent.EXTRA_STREAM, uri)
+
+        clipData = ClipData.newUri(
+            context.contentResolver,
+            "RFID Excel",
+            uri
+        )
+
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+
+    context.startActivity(
+        Intent.createChooser(intent, "Send Excel File").apply {
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    )
 }
 
 

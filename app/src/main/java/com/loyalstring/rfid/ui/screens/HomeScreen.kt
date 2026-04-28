@@ -1,5 +1,9 @@
 package com.loyalstring.rfid.ui.screens
 
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.runtime.livedata.observeAsState
+import com.loyalstring.rfid.data.model.login.Employee
+import com.loyalstring.rfid.viewmodel.UserPermissionViewModel
 import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
@@ -56,6 +60,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.os.ConfigurationCompat
 import androidx.navigation.NavController
 import com.loyalstring.rfid.R
+import com.loyalstring.rfid.getBranchIdsFromBranchSelectionJson
 import com.loyalstring.rfid.navigation.NavItems
 import com.loyalstring.rfid.navigation.listOfNavItems
 import com.loyalstring.rfid.ui.utils.ToastUtils
@@ -83,6 +88,10 @@ fun HomeScreen(
         }
     }
     val context: Context = LocalContext.current
+    val userPermissionViewModel: UserPermissionViewModel = hiltViewModel()
+
+    val allEmployeesState by userPermissionViewModel.allEmployees.observeAsState()
+    val allEmployees = allEmployeesState ?: emptyList()
 
     // PERF-FIX: Both AppCompatDelegate.getApplicationLocales() AND applyLocale() wrapped
     // inside a single remember{} block so NEITHER runs on recomposition.
@@ -110,6 +119,82 @@ fun HomeScreen(
         val savedLang = UserPreferences.getInstance(context).getAppLanguage().ifBlank { "en" }
         val currentLang = currentLocales[0]?.language ?: savedLang
         LocaleHelper.applyLocale(context, currentLang)
+    }
+
+    LaunchedEffect(Unit) {
+        val prefs = UserPreferences.getInstance(context)
+        val employee = prefs.getEmployee(Employee::class.java)
+
+        if (employee == null) {
+            Log.d("HOME_BRANCH", "Employee null")
+            return@LaunchedEffect
+        }
+
+        val clientCode = employee.clientCode
+
+        if (clientCode.isNullOrBlank()) {
+            Log.d("HOME_BRANCH", "ClientCode blank")
+            return@LaunchedEffect
+        }
+
+        Log.d("HOME_BRANCH", "Calling permission API from Home, clientCode=$clientCode")
+
+        userPermissionViewModel.loadPermissionsAll(clientCode)
+    }
+
+    LaunchedEffect(allEmployees) {
+        val prefs = UserPreferences.getInstance(context)
+        val employee = prefs.getEmployee(Employee::class.java)
+
+        if (employee == null) {
+            Log.d("HOME_BRANCH", "Employee null while saving branch")
+            return@LaunchedEffect
+        }
+
+        if (allEmployees.isEmpty()) {
+            Log.d("HOME_BRANCH", "Permission employee list empty")
+            return@LaunchedEffect
+        }
+
+        val prefUserId = prefs.getUserId()
+        val employeeTableId = employee.id
+        val employeeId = employee.employeeId
+
+        Log.d("HOME_BRANCH", "prefUserId=$prefUserId")
+        Log.d("HOME_BRANCH", "employee.id=$employeeTableId")
+        Log.d("HOME_BRANCH", "employee.employeeId=$employeeId")
+        Log.d("HOME_BRANCH", "allEmployees size=${allEmployees.size}")
+
+        val selectedUser = allEmployees.firstOrNull { user ->
+            val apiUserId = user.UserId?.toString()?.trim()
+
+            apiUserId == prefUserId?.toString()?.trim() ||
+                    apiUserId == employeeTableId?.toString()?.trim() ||
+                    apiUserId == employeeId?.toString()?.trim()
+        }
+
+        if (selectedUser == null) {
+            Log.d("HOME_BRANCH", "No matching user found")
+            return@LaunchedEffect
+        }
+
+        Log.d("HOME_BRANCH", "SelectedUserId=${selectedUser.UserId}")
+        Log.d("HOME_BRANCH", "branchSelectionJson=${selectedUser.branchSelectionJson}")
+
+        val branchIds = getBranchIdsFromBranchSelectionJson(
+            selectedUser.branchSelectionJson
+        )
+
+        Log.d("HOME_BRANCH", "parsed branchIds=$branchIds")
+
+        if (branchIds.isEmpty()) {
+            Log.d("HOME_BRANCH", "branchIds empty, not saving")
+            return@LaunchedEffect
+        }
+
+        prefs.saveBranchIds(branchIds)
+
+        Log.d("HOME_BRANCH", "saved branchIds=${prefs.getBranchIds()}")
     }
     val topBarBrush = remember {
         Brush.horizontalGradient(

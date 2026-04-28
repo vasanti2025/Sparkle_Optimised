@@ -1,6 +1,7 @@
 package com.loyalstring.rfid.ui.screens
 
-
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.Priority
 
@@ -74,6 +75,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -177,6 +179,14 @@ fun SettingsScreen(
 
     var locationAutoSyncEnabled by remember {
         mutableStateOf(userPreferences.isAutoSyncEnabled() ?: true)
+    }
+
+    var localWifiModeEnabled by remember {
+        mutableStateOf(userPreferences.isLocalWifiModeEnabled())
+    }
+
+    var androidDeviceIp by remember {
+        mutableStateOf(getAndroidDeviceIp())
     }
     var showLocationList by remember { mutableStateOf(false) }
 
@@ -564,7 +574,64 @@ fun SettingsScreen(
             navController.navigate(Screens.AddFaceScreen.route)
             //navController.navigate(Screens.FaceManagement.route)
         }
-    )
+    ),
+        SettingsMenuItem(
+            key = "local_wifi_mode",
+            title = "Local WiFi Mode",
+            icon = Icons.Default.Settings,
+            type = SettingType.Action,
+            subtitle = if (localWifiModeEnabled) {
+                if (androidDeviceIp.isNotBlank()) {
+                    "http://$androidDeviceIp:8080/rfid-data"
+                } else {
+                    "Device IP not found"
+                }
+            } else {
+                "Using internet connection"
+            },
+            hasToggle = true,
+            isToggled = localWifiModeEnabled,
+            onToggleChange = { newValue ->
+
+                if (newValue) {
+                    val latestIp = getAndroidDeviceIp()
+
+                    if (isConnectedToWifi(context) && latestIp.isNotBlank()) {
+                        androidDeviceIp = latestIp
+                        localWifiModeEnabled = true
+                        userPreferences.setLocalWifiMode(true)
+
+                        ToastUtils.showToast(
+                            context,
+                            "Local WiFi Mode Enabled: http://$latestIp:8080/rfid-data"
+                        )
+                    } else {
+                        androidDeviceIp = ""
+                        localWifiModeEnabled = false
+                        userPreferences.setLocalWifiMode(false)
+
+                        ToastUtils.showToast(
+                            context,
+                            "Please connect to WiFi for Local Mode"
+                        )
+                    }
+                } else {
+                    localWifiModeEnabled = false
+                    userPreferences.setLocalWifiMode(false)
+
+                    val internetAvailable = hasInternetConnection(context)
+
+                    ToastUtils.showToast(
+                        context,
+                        if (internetAvailable) {
+                            "Internet Mode Enabled"
+                        } else {
+                            "Internet Mode Enabled, but no internet found"
+                        }
+                    )
+                }
+            }
+        )
     )
 
     Scaffold(
@@ -874,6 +941,41 @@ fun SettingsScreen(
       )*/
 
 
+}
+
+fun getCurrentNetworkType(context: Context): String {
+    val connectivityManager =
+        context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+    val network = connectivityManager.activeNetwork ?: return "No Connection"
+    val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return "No Connection"
+
+    return when {
+        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "WiFi"
+        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "Mobile Internet"
+        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "Ethernet"
+        else -> "Unknown"
+    }
+}
+
+fun isConnectedToWifi(context: Context): Boolean {
+    val connectivityManager =
+        context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+    val network = connectivityManager.activeNetwork ?: return false
+    val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+
+    return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+}
+
+fun hasInternetConnection(context: Context): Boolean {
+    val connectivityManager =
+        context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+    val network = connectivityManager.activeNetwork ?: return false
+    val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+
+    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
 }
 
 @Composable
@@ -1787,12 +1889,31 @@ fun MenuItemRow(
 
                 is SettingType.Action -> {
                     if (item.hasToggle) {
-                        Switch(
-                            checked = item.isToggled,
-                            onCheckedChange = { newValue -> item.onToggleChange?.invoke(newValue) }
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = item.subtitle ?: "",
+                                color = Color.Gray,
+                                fontSize = 12.sp,
+                                fontFamily = poppins,
+                                modifier = Modifier.width(145.dp)
+                            )
+                            Switch(
+                                checked = item.isToggled,
+                                onCheckedChange = { newValue ->
+                                    item.onToggleChange?.invoke(newValue)
+                                },
+                                modifier = Modifier.scale(0.75f)
+                            )
+                        }
                     } else {
-                        Text(item.subtitle ?: "", color = Color.Gray, fontSize = 13.sp)
+                        Text(
+                            item.subtitle ?: "",
+                            color = Color.Gray,
+                            fontSize = 13.sp,
+                            fontFamily = poppins
+                        )
                     }
                 }
             }
@@ -1850,6 +1971,7 @@ fun SheetInputDialog(
             }
         }
     )
+
 
 
 }

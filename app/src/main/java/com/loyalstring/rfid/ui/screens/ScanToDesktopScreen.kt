@@ -1,18 +1,14 @@
 package com.loyalstring.rfid.ui.screens
+//import java.net.HttpURLConnection
+//import java.net.URL
 
+//import android.net.wifi.WifiManager
+//import android.text.format.Formatter
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import androidx.compose.runtime.rememberCoroutineScope
-import android.content.Context
-import android.content.Intent
-import androidx.core.content.FileProvider
-import org.apache.poi.xssf.usermodel.XSSFWorkbook
-import java.io.File
-import java.io.FileOutputStream
 import android.annotation.SuppressLint
 import android.content.ClipData
+import android.content.Context
+import android.content.Intent
 import android.os.Environment
 import android.provider.Settings
 import android.util.Log
@@ -48,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +56,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.loyalstring.rfid.MainActivity
@@ -73,7 +71,17 @@ import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.BulkViewModel
 import com.loyalstring.rfid.viewmodel.RfidScanToDesktopViewModel
 import com.loyalstring.rfid.worker.LocaleHelper
-import kotlin.collections.forEachIndexed
+import fi.iki.elonen.NanoHTTPD
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.apache.poi.xssf.usermodel.XSSFWorkbook
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
+import java.net.Inet4Address
+import java.net.NetworkInterface
 
 @SuppressLint("HardwareIds")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,6 +89,27 @@ import kotlin.collections.forEachIndexed
 fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
     val viewModel: BulkViewModel = hiltViewModel()
     val context = LocalContext.current
+    val localServer = remember { RfidLocalServer(8080) }
+
+    DisposableEffect(Unit) {
+        try {
+            if (!localServer.isAlive) {
+                localServer.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false)
+                Log.d("LOCAL_SERVER", "Android local server started")
+            }
+        } catch (e: Exception) {
+            Log.e("LOCAL_SERVER", "Server start failed", e)
+        }
+
+        onDispose {
+            try {
+                localServer.stop()
+                Log.d("LOCAL_SERVER", "Android local server stopped")
+            } catch (e: Exception) {
+                Log.e("LOCAL_SERVER", "Server stop failed", e)
+            }
+        }
+    }
 
     val tags by viewModel.scannedTags.collectAsState()
     val items by viewModel.scannedItems.collectAsState()
@@ -93,6 +122,7 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
     var showExportPopup by remember { mutableStateOf(false) }
 
     val exportScope = rememberCoroutineScope()
+
     var isExporting by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         selectedPower = UserPreferences.getInstance(context).getInt(
@@ -114,7 +144,6 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
     val exportLoading by rfidExportViewModel.isLoading.collectAsState()
 
 
-
     var clickedIndex by remember { mutableStateOf<Int?>(null) }
     val activity = LocalContext.current as MainActivity
     var isScanning by remember { mutableStateOf(false) }
@@ -132,10 +161,13 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
     val currentLocales = AppCompatDelegate.getApplicationLocales()
     val currentLang = currentLocales[0]?.language ?: savedLang
     val localizedContext = LocaleHelper.applyLocale(context, currentLang)
-
-    LaunchedEffect(employee?.clientCode) {
-        employee?.clientCode?.let {
-            rfidExportViewModel.getAllScantoDesktop(it)
+    val isLocalWifiMode = userPreferences.isLocalWifiModeEnabled()
+    //  just for testing
+    if (!isLocalWifiMode) {
+        LaunchedEffect(employee?.clientCode) {
+            employee?.clientCode?.let {
+                rfidExportViewModel.getAllScantoDesktop(it)
+            }
         }
     }
 
@@ -194,7 +226,6 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
     }
 
 
-
     // ✅ success / error message show once
     LaunchedEffect(success, error) {
         when {
@@ -202,6 +233,7 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                 ToastUtils.showToast(context, "✅ Cleared ${deleted} records successfully")
                 viewModel.clearClearStockResult()  // reset so it won’t re-toast
             }
+
             error != null -> {
                 ToastUtils.showToast(context, "❌ ${error}")
                 viewModel.clearClearStockResult()
@@ -210,7 +242,7 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
     }
     val finalDeviceId by rfidExportViewModel.finalDeviceId.collectAsState()
 
-/*    val androidId = Settings.Secure.getString(
+    /*    val androidId = Settings.Secure.getString(
         context.contentResolver,
         Settings.Secure.ANDROID_ID
     )
@@ -222,6 +254,8 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
         Settings.Secure.ANDROID_ID
     ).orEmpty()
 
+    //just for testing
+    if (!isLocalWifiMode) {
     LaunchedEffect(employee?.id, androidId) {
         val clientCode = employee?.id
 
@@ -231,6 +265,14 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                 androidId = androidId
             )
         }
+    }
+    } else {
+
+        LaunchedEffect(androidId) {
+            if (androidId.isNotBlank()) {
+                userPreferences.saveDeviceId(androidId)
+            }
+    }
     }
 
     LaunchedEffect(finalDeviceId) {
@@ -291,19 +333,142 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                         ToastUtils.showToast(context, "Please scan RFID tag / RFID not found in DB")
                     }
                 },*/
-                onSave = {
-                    viewModel.barcodeReader.close()
-                    Log.d("save scanned items", "CLICKED" + tags.size)
+                /* onSave = {
+                     viewModel.barcodeReader.close()
+                     Log.d("save scanned items", "CLICKED" + tags.size)
 
-                    val deviceId = finalDeviceId ?: userPreferences.getDeviceId()
+                     val deviceId = finalDeviceId ?: userPreferences.getDeviceId()
 
-                    if (tags.isNotEmpty() && !deviceId.isNullOrBlank()) {
+                   *//*  if (tags.isNotEmpty() && !deviceId.isNullOrBlank()) {
                         viewModel.sendScannedData(tags, deviceId, context)
                         viewModel.resetScanResults()
                         viewModel.stopBarcodeScanner()
                         viewModel.resetProductScanResults()
                     } else {
                         ToastUtils.showToast(context, "Please scan RFID tag / Device Id not found")
+                    }*//*
+                    
+                    
+                    //local
+                    if (tags.isNotEmpty() && !deviceId.isNullOrBlank() && employee!!.clientCode!!.isNotBlank()) {
+
+                        val itemsArray = JSONArray()
+
+                        tags.forEachIndexed { index, tag ->
+                            val itemObject = JSONObject().apply {
+                                put("EPC", tag.epc.orEmpty())
+                                put("RFIDCode", rfidMap[index].orEmpty())
+                            }
+
+                            itemsArray.put(itemObject)
+                        }
+
+                        val requestBody = JSONObject().apply {
+                            put("ClientCode", employee!!.clientCode)
+                            put("DeviceId", deviceId)
+                            put("Items", itemsArray)
+                        }
+
+                        localServer.latestJson = requestBody.toString()
+
+                        val androidIp = getAndroidDeviceIp()
+
+                        if (androidIp.isBlank()) {
+                            ToastUtils.showToast(
+                                context,
+                                "Device IP not found. Connect RFID and desktop to same hotspot."
+                            )
+                        } else {
+                            val desktopUrl = "http://$androidIp:8080/rfid-data"
+
+                            Log.d("LOCAL_SERVER", "Open this URL on desktop: $desktopUrl")
+                            Log.d("LOCAL_SERVER", "Data = $requestBody")
+
+                            ToastUtils.showToast(
+                                context,
+                                "Open on desktop: $desktopUrl"
+                            )
+                        }
+
+                      *//*  Log.d("LOCAL_SERVER", "Open this URL on desktop: $desktopUrl")
+                        Log.d("LOCAL_SERVER", "Data = $requestBody")
+
+                        ToastUtils.showToast(
+                            context,
+                            "Open on desktop: $desktopUrl"
+                        )*//*
+
+                    } else {
+                        ToastUtils.showToast(context, "Please scan RFID tag / Device Id not found")
+                    }
+                },*/
+                onSave = {
+                    viewModel.barcodeReader.close()
+                    Log.d("save scanned items", "CLICKED" + tags.size)
+
+                    val deviceId = finalDeviceId ?: userPreferences.getDeviceId()
+                    val clientCode = employee?.clientCode.orEmpty()
+
+                    if (tags.isEmpty() || deviceId.isNullOrBlank() || clientCode.isBlank()) {
+                        ToastUtils.showToast(context, "Please scan RFID tag / Device Id not found")
+                        return@ScanBottomBarDesktop
+                    }
+
+
+
+                    if (isLocalWifiMode) {
+                        // ✅ LOCAL WIFI MODE
+                        val itemsArray = JSONArray()
+
+                        tags.forEachIndexed { index, tag ->
+                            val itemObject = JSONObject().apply {
+                                put("EPC", tag.epc.orEmpty())
+                                put("RFIDCode", rfidMap[index].orEmpty())
+                            }
+
+                            itemsArray.put(itemObject)
+                        }
+
+                        val requestBody = JSONObject().apply {
+                            put("ClientCode", clientCode)
+                            put("DeviceId", deviceId)
+                            put("Items", itemsArray)
+                        }
+
+                        localServer.latestJson = requestBody.toString()
+
+                        val androidIp = getAndroidDeviceIp()
+
+                        if (androidIp.isBlank()) {
+                            ToastUtils.showToast(
+                                context,
+                                "Device IP not found. Connect RFID and desktop to same WiFi/hotspot."
+                            )
+                            return@ScanBottomBarDesktop
+                        }
+
+                        val desktopUrl = "http://$androidIp:8080/rfid-data"
+
+                        Log.d("LOCAL_SERVER", "Open this URL on desktop: $desktopUrl")
+                        Log.d("LOCAL_SERVER", "Data = $requestBody")
+
+                        ToastUtils.showToast(
+                            context,
+                            "Local Mode: Open on desktop: $desktopUrl"
+                        )
+
+                    } else {
+                        // ✅ ONLINE / INTERNET API MODE
+                        viewModel.sendScannedData(tags, deviceId, context)
+
+                        ToastUtils.showToast(
+                            context,
+                            "Internet Mode: Data sent to server"
+                        )
+
+                        viewModel.resetScanResults()
+                        viewModel.stopBarcodeScanner()
+                        viewModel.resetProductScanResults()
                     }
                 },
                 onClear = {
@@ -396,7 +561,9 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                         ) {
                             Text(
                                 "${index + 1}",
-                                Modifier.width(100.dp).background(Color.Transparent),
+                                Modifier
+                                    .width(100.dp)
+                                    .background(Color.Transparent),
                                 color = Color.DarkGray,
                                 fontFamily = poppins,
                                 fontSize = 11.sp
@@ -404,7 +571,9 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
 
                             Text(
                                 item.epc,
-                                Modifier.width(100.dp).background(Color.Transparent),
+                                Modifier
+                                    .width(100.dp)
+                                    .background(Color.Transparent),
                                 color = Color.DarkGray,
                                 fontFamily = poppins,
                                 fontSize = 11.sp
@@ -668,7 +837,7 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                     "OK",
                     modifier = Modifier
                         .padding(12.dp)
-                     /*   .clickable {
+                        /*   .clickable {
                             showClearDialog = false
                             val clientCode = employee?.clientCode ?: return@clickable
 
@@ -706,6 +875,97 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
         )
     }
 }
+
+fun getAndroidDeviceIp(): String {
+    return try {
+        val interfaces = NetworkInterface.getNetworkInterfaces()
+
+        for (networkInterface in interfaces) {
+            val interfaceName = networkInterface.name ?: ""
+
+            // wlan0 = Wi-Fi client
+            // ap0 / swlan0 / wlan1 can appear in hotspot/tethering cases
+            if (
+                !interfaceName.contains("wlan", ignoreCase = true) &&
+                !interfaceName.contains("ap", ignoreCase = true)
+            ) {
+                continue
+            }
+
+            val addresses = networkInterface.inetAddresses
+
+            for (address in addresses) {
+                if (
+                    !address.isLoopbackAddress &&
+                    address is Inet4Address
+                ) {
+                    val ip = address.hostAddress ?: ""
+
+                    if (
+                        ip.isNotBlank() &&
+                        ip != "0.0.0.0" &&
+                        !ip.startsWith("127.")
+                    ) {
+                        Log.d("LOCAL_SERVER", "Found IP: $ip on interface=$interfaceName")
+                        return ip
+                    }
+                }
+            }
+        }
+
+        ""
+    } catch (e: Exception) {
+        Log.e("LOCAL_SERVER", "IP fetch failed", e)
+        ""
+    }
+}
+
+private class RfidLocalServer(
+    port: Int = 8080
+) : NanoHTTPD(port) {
+
+    var latestJson: String = "{}"
+
+    override fun serve(session: IHTTPSession): Response {
+        return when (session.uri) {
+            "/rfid-data" -> {
+                newFixedLengthResponse(
+                    Response.Status.OK,
+                    "application/json",
+                    latestJson
+                ).apply {
+                    addHeader("Access-Control-Allow-Origin", "*")
+                }
+            }
+
+            "/" -> {
+                newFixedLengthResponse(
+                    Response.Status.OK,
+                    "text/html",
+                    """
+                    <html>
+                        <body>
+                            <h2>RFID Local Server Running</h2>
+                            <p>Open <b>/rfid-data</b> to view scanned RFID data.</p>
+                        </body>
+                    </html>
+                    """.trimIndent()
+                )
+            }
+
+            else -> {
+                newFixedLengthResponse(
+                    Response.Status.NOT_FOUND,
+                    "text/plain",
+                    "Not Found"
+                )
+            }
+        }
+    }
+
+
+}
+
 
 @Composable
 private fun ExportOptionRow(
@@ -935,6 +1195,8 @@ private fun shareExcelByEmail(
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
     )
+
+
 }
 
 

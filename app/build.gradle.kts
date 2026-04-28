@@ -177,6 +177,7 @@ dependencies {
     implementation("com.google.dagger:hilt-android:2.51")
     kapt("com.google.dagger:hilt-compiler:2.51")
     implementation ("org.apache.poi:poi-ooxml:5.2.3")
+
     //LiveData
     implementation(libs.androidx.lifecycle.livedata.ktx)// or latest
 
@@ -195,5 +196,8 @@ dependencies {
     implementation("androidx.camera:camera-view:1.3.4")
 
     implementation ("org.tensorflow:tensorflow-lite:2.14.0")
+
+    /*wifi*/
+    implementation("org.nanohttpd:nanohttpd:2.3.1")
 
 }

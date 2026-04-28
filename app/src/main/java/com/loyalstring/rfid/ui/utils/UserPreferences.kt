@@ -43,6 +43,8 @@ class UserPreferences @Inject constructor(
         const val DEVICE_ID="device_id"
         private const val KEY_APP_LANGUAGE = "app_language"
 
+        private  const val KEY_LOCAL_WIFI_MODE = "local_wifi_mode"
+
         private val gson = Gson()
 
         @Volatile
@@ -298,6 +300,17 @@ class UserPreferences @Inject constructor(
         val json = prefs.getString("branch_ids", "[]") ?: "[]"
         val type = object : com.google.gson.reflect.TypeToken<List<Int>>() {}.type
         return com.google.gson.Gson().fromJson(json, type)
+    }
+
+
+    fun setLocalWifiMode(enabled: Boolean) {
+        prefs.edit()
+            .putBoolean(KEY_LOCAL_WIFI_MODE, enabled)
+            .apply()
+    }
+
+    fun isLocalWifiModeEnabled(): Boolean {
+        return prefs.getBoolean(KEY_LOCAL_WIFI_MODE, false)
     }
 }
 

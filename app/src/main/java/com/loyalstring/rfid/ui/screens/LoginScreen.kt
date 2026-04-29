@@ -1,6 +1,11 @@
 package com.loyalstring.rfid.ui.screens
 
+import androidx.compose.material3.Surface
+import androidx.compose.ui.window.Dialog
+
+import android.content.Context
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -57,6 +64,7 @@ import com.loyalstring.rfid.data.remote.resource.Resource
 import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.ui.utils.BackGroundLinerGradient
 import com.loyalstring.rfid.ui.utils.BackgroundGradient
+import com.loyalstring.rfid.ui.utils.GradientButtonIcon
 import com.loyalstring.rfid.ui.utils.NetworkUtils
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
@@ -64,7 +72,12 @@ import com.loyalstring.rfid.viewmodel.BulkViewModel
 import com.loyalstring.rfid.viewmodel.LoginViewModel
 import com.loyalstring.rfid.viewmodel.ScanDisplayViewModel
 import com.loyalstring.rfid.viewmodel.UserPermissionViewModel
+import com.loyalstring.rfid.worker.LocaleHelper
 import kotlinx.coroutines.launch
+
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltViewModel()) {
@@ -80,12 +93,21 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
     var passwordVisible by remember { mutableStateOf(false) }
     var rememberMe by remember { mutableStateOf(false) }
 
+    var showExpiryPopup by remember { mutableStateOf(false) }
+    var expiryPopupMessage by remember { mutableStateOf("") }
+    var pendingLoginResponse by remember { mutableStateOf<LoginResponse?>(null) }
+
     val loginResponse by viewModel.loginResponse.observeAsState()
     val isLoading = loginResponse is Resource.Loading
     val errorMessage = (loginResponse as? Resource.Error)?.message
     val loginSuccess = loginResponse is Resource.Success
     val permissionResponse by userPermissionViewModel.permissionResponse.observeAsState()
 
+    val userPreferences = UserPreferences.getInstance(context)
+    val savedLang = userPreferences.getAppLanguage().ifBlank { "en" }
+    val currentLocales = AppCompatDelegate.getApplicationLocales()
+    val currentLang = currentLocales[0]?.language ?: savedLang
+    val localizedContext = LocaleHelper.applyLocale(context, currentLang)
 
     LaunchedEffect(permissionResponse) {
         when (permissionResponse) {
@@ -111,32 +133,106 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
         }
     }
 
+    /* LaunchedEffect(loginSuccess) {
+         if (loginSuccess){
+             val loginData = (loginResponse as? Resource.Success<LoginResponse>)?.data
+             loginData?.let { response ->
+                 userPrefs.saveToken(response.token.orEmpty())
+                 userPrefs.saveUserName(response.employee?.username.toString())
+                 userPrefs.saveEmployee(response.employee)
+                 userPrefs.setLoggedIn(true)
+                 userPrefs.saveBranchId(response.employee!!.defaultBranchId)
+                 userPrefs.saveClient(response.employee?.clients!!)
+                 userPrefs.saveOrganization(response.employee?.clients!!.organisationName.toString())
+
+                 response.employee.empEmail?.let { scanDisplayViewModel.saveEmail(it) }
+
+                 userPrefs.saveLoginCredentials(username, password, rememberMe,response.employee.clients.rfidType.toString(),response.employee.id,response.employee.defaultBranchId,response.employee.clients.organisationName.toString())
+
+                 // Sync RFID data in background — does not block navigation
+                 launch {
+                     bulkviewmodel.syncRFIDDataIfNeeded(context)
+                 }
+
+                 // PERF-FIX: Load permissions first; navigation to HomeScreen is handled
+                 // ONLY in the permissionResponse LaunchedEffect below (Resource.Success branch).
+                 // Previously, navigate(HomeScreen) was called HERE as well, causing the app to
+                 // navigate twice: once immediately after login and once after permissions loaded.
+                 // This double-navigate pushed HomeScreen twice onto the back stack, causing
+                 // back-button freezes and unexpected navigation behavior.
+                 response.employee.clientCode?.let {
+                     userPermissionViewModel.loadPermissions(it, response.employee.id)
+                 } ?: run {
+                     // No clientCode — navigate directly since permissions cannot be loaded
+                     navController.navigate(Screens.HomeScreen.route) {
+                         popUpTo(Screens.LoginScreen.route) { inclusive = true }
+                     }
+                 }
+
+             }
+         }
+     }*/
+
+    fun completeLogin(response: LoginResponse) {
+        userPrefs.saveToken(response.token.orEmpty())
+        userPrefs.saveUserName(response.employee?.username.toString())
+        userPrefs.saveEmployee(response.employee)
+        userPrefs.setUserId(response.employee!!.id)
+        userPrefs.setLoggedIn(true)
+        userPrefs.saveBranchId(response.employee!!.defaultBranchId)
+        userPrefs.saveClient(response.employee?.clients!!)
+        userPrefs.saveOrganization(response.employee?.clients!!.organisationName.toString())
+
+        response.employee.empEmail?.let { scanDisplayViewModel.saveEmail(it) }
+
+        userPrefs.saveLoginCredentials(
+            username,
+            password,
+            rememberMe,
+            response.employee.clients.rfidType.toString(),
+            response.employee.id,
+            response.employee.defaultBranchId,
+            response.employee.clients.organisationName.toString()
+        )
+
+        response.employee.clientCode?.let {
+            userPermissionViewModel.loadPermissions(it, response.employee.id)
+        }
+
+        navController.navigate(Screens.HomeScreen.route) {
+            popUpTo(Screens.LoginScreen.route) { inclusive = true }
+        }
+    }
+
     LaunchedEffect(loginSuccess) {
-        if (loginSuccess){
+        if (loginSuccess) {
             val loginData = (loginResponse as? Resource.Success<LoginResponse>)?.data
             loginData?.let { response ->
-                userPrefs.saveToken(response.token.orEmpty())
-                userPrefs.saveUserName(response.employee?.username.toString())
-                userPrefs.setUserId(response.employee!!.id)
-                userPrefs.saveEmployee(response.employee)
-                userPrefs.setLoggedIn(true)
-                userPrefs.saveBranchId(response.employee!!.defaultBranchId)
-                userPrefs.saveClient(response.employee?.clients!!)
-                userPrefs.saveOrganization(response.employee?.clients!!.organisationName.toString())
 
-                response.employee.empEmail?.let { scanDisplayViewModel.saveEmail(it) }
+                //  val expiryDateStr = response.employee?.clients?.expiryDate
+                val expiryDateStr =response.employee?.clients?.planExpiryDate
+                val daysRemaining = getDaysRemaining(expiryDateStr)
 
-                userPrefs.saveLoginCredentials(username, password, rememberMe,response.employee.clients.rfidType.toString(),response.employee.id,response.employee.defaultBranchId,response.employee.clients.organisationName.toString())
+                when {
+                    daysRemaining == null -> completeLogin(response)
 
-                response.employee.clientCode?.let {
-                    userPermissionViewModel.loadPermissions(it, response.employee.id)
+                    daysRemaining < 0 -> {
+                        Toast.makeText(
+                            context,
+                            localizedContext.getString(R.string.your_subscription_has_expired_please_contact_support),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+
+                    daysRemaining in 0..15 -> {
+                        pendingLoginResponse = response
+                        expiryPopupMessage =
+                            localizedContext.getString(R.string.subscription_expiry_warning, daysRemaining)
+                        showExpiryPopup = true
+                    }
+
+                    else -> completeLogin(response)
                 }
-
-                launch {
-                    bulkviewmodel.syncRFIDDataIfNeeded(context)
-                }
-
-                navController.navigate(Screens.HomeScreen.route)
             }
         }
     }
@@ -152,60 +248,159 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            CurvedGradientHeader()
+            CurvedGradientHeader(localizedContext=localizedContext)
 
-            Spacer(modifier = Modifier.height(20.dp))
-
-            OutlinedTextField(
-                value = username,
-                onValueChange = { username = it },
-                label = { Text("Username") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text("Password") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                singleLine = true,
-                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = {
-                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                        Icon(
-                            painter = painterResource(id = if (passwordVisible) R.drawable.ic_action_eye else R.drawable.ic_action_eye_off),
-                            contentDescription = if (passwordVisible) "Hide password" else "Show password",
-                            tint = Color.DarkGray
-                        )
-                    }
-                }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = rememberMe, onCheckedChange = { rememberMe = it })
-                    Text("Remember Me", fontSize = 14.sp)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (selectedLoginMode == "password") BackgroundGradient
+                            else androidx.compose.ui.graphics.Brush.linearGradient(
+                                listOf(Color(0xFFE0E0E0), Color(0xFFCCCCCC))
+                            )
+                        )
+                        .clickable { selectedLoginMode = "password" }
+                        .padding(vertical = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = localizedContext.getString(R.string.login),
+                        color = if (selectedLoginMode == "password") Color.White else Color.Black,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        fontFamily = poppins
+                    )
                 }
 
-                Text("Forgot Password?", color = Color.Blue, fontWeight = FontWeight.Medium)
-            }
+                /*     Box(
+                         modifier = Modifier
+                             .weight(1f)
+                             .clip(RoundedCornerShape(12.dp))
+                             .background(
+                                 if (selectedLoginMode == "face") BackgroundGradient
+                                 else androidx.compose.ui.graphics.Brush.linearGradient(
+                                     listOf(Color(0xFFE0E0E0), Color(0xFFCCCCCC))
+                                 )
+                             )
+                             .clickable { selectedLoginMode = "face" }
+                             .padding(vertical = 14.dp),
+                         contentAlignment = Alignment.Center
+                     ) {
+                         Text(
+                             text = localizedContext.getString(R.string.face_login),
+                             color = if (selectedLoginMode == "face") Color.White else Color.Black,
+                             fontWeight = FontWeight.Bold,
+                             fontSize = 15.sp,
+                             fontFamily = poppins
+                         )
+                     }*/
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (selectedLoginMode == "face") BackgroundGradient
+                            else androidx.compose.ui.graphics.Brush.linearGradient(
+                                listOf(Color(0xFFE0E0E0), Color(0xFFCCCCCC))
+                            )
+                        )
+                        .clickable { selectedLoginMode = "face" },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.face_svg),
+                        contentDescription = localizedContext.getString(R.string.face_login),
+                        tint = if (selectedLoginMode == "face") Color.White else Color.DarkGray,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            }
+            if (selectedLoginMode == "password") {
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it },
+                    label = { Text(localizedContext.getString(R.string.username)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text(localizedContext.getString(R.string.password)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    singleLine = true,
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                painter = painterResource(id = if (passwordVisible) R.drawable.ic_action_eye else R.drawable.ic_action_eye_off),
+                                contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                                tint = Color.DarkGray
+                            )
+                        }
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = rememberMe, onCheckedChange = { rememberMe = it })
+                        Text(localizedContext.getString(R.string.remember_me), fontSize = 14.sp)
+                    }
+
+                    Text(localizedContext.getString(R.string.forgot_password), color = Color.Blue, fontWeight = FontWeight.Medium)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+            if (selectedLoginMode == "face") {
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Text(
+                    text = localizedContext.getString(R.string.use_face_detection_to_continue_login),
+                    fontSize = 15.sp,
+                    color = Color.Gray,
+                    fontFamily = poppins
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Icon(
+                    painter = painterResource(id = R.drawable.face_lock),
+                    contentDescription = "Face Login",
+                    tint = Color(0xFFC7C7C9),
+                    modifier = Modifier.size(72.dp)
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+            }
 
             Box(
                 modifier = Modifier
@@ -215,25 +410,39 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
                     .clip(RoundedCornerShape(12.dp))
                     .background(BackgroundGradient)
                     .clickable(enabled = !isLoading) {
-                        if (username.isBlank() || password.isBlank()) {
-                            Toast.makeText(
-                                context,
-                                "Please enter username and password",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                            return@clickable
-                        }
                         if (!NetworkUtils.isNetworkAvailable(context)) {
                             Toast.makeText(
                                 context,
-                                "Please Check Your Internet Connection",
+                                localizedContext.getString(R.string.please_check_your_internet_connection),
                                 Toast.LENGTH_SHORT
                             ).show()
                             return@clickable
                         }
 
-                        viewModel.login(LoginRequest(username, password), rememberMe)
-                        userPrefs.saveLoginCredentials(username, password, rememberMe,"",0,0,"")
+                        if (selectedLoginMode == "password") {
+                            if (username.isBlank() || password.isBlank()) {
+                                Toast.makeText(
+                                    context,
+                                    localizedContext.getString(R.string.please_enter_username_and_password),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                return@clickable
+                            }
+
+                            viewModel.login(LoginRequest(username, password), rememberMe)
+                            userPrefs.saveLoginCredentials(
+                                username,
+                                password,
+                                rememberMe,
+                                "",
+                                0,
+                                0,
+                                ""
+                            )
+                        } else {
+                            navController.navigate(Screens.RecogniseFaceLogin.route)
+                        }
+
 
                     },
                 contentAlignment = Alignment.Center
@@ -242,7 +451,9 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
                     CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp)
                 } else {
                     Text(
-                        "Login",
+                        text = if (selectedLoginMode == "password") localizedContext.getString(R.string.login) else localizedContext.getString(
+                            R.string.login_with_face
+                        ),
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
@@ -254,22 +465,126 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
             Spacer(modifier = Modifier.height(24.dp))
 
             TroubleLoginText {
-                Toast.makeText(context, "Contact Us clicked", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context,
+                    localizedContext.getString(R.string.contact_us_clicked), Toast.LENGTH_SHORT).show()
             }
 
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
+    if (showExpiryPopup) {
+        Dialog(onDismissRequest = { }) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color.White,
+                tonalElevation = 4.dp,
+                modifier = Modifier.fillMaxWidth(0.92f)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.White, RoundedCornerShape(12.dp))
+                ) {
+                    // Header same like below popup
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF3A3A3A))
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(start = 16.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_warning), // apna icon de
+                                contentDescription = localizedContext.getString(R.string.expiry_warning),
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            Text(
+                                text = localizedContext.getString(R.string.expiry_warning),
+                                fontSize = 18.sp,
+                                color = Color.White,
+                                fontFamily = poppins
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Content
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = expiryPopupMessage,
+                            fontSize = 14.sp,
+                            color = Color.DarkGray,
+                            fontFamily = poppins
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Buttons same size like below popup
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        GradientButtonIcon(
+                            text = localizedContext.getString(R.string.cancel),
+                            onClick = {
+                                showExpiryPopup = false
+                                pendingLoginResponse = null
+                            },
+                            icon = painterResource(id = R.drawable.ic_cancel),
+                            iconDescription = localizedContext.getString(R.string.cancel),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp)
+                                .padding(end = 6.dp)
+                        )
+
+                        GradientButtonIcon(
+                            text = localizedContext.getString(R.string.continue_text),
+                            onClick = {
+                                showExpiryPopup = false
+                                pendingLoginResponse?.let { completeLogin(it) }
+                                pendingLoginResponse = null
+                            },
+                            icon = painterResource(id = R.drawable.check_circle),
+                            iconDescription = localizedContext.getString(R.string.continue_text),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp)
+                                .padding(start = 6.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
+
 @Composable
-fun CurvedGradientHeader() {
+fun CurvedGradientHeader(localizedContext: Context) {
     val headerHeight = 250.dp
 
     Box(
         modifier = Modifier
             .width(550.13666.dp)
-            .height(300.8201.dp)
+            .height(285.8201.dp)
     ) {
         Canvas(
             Modifier
@@ -302,14 +617,14 @@ fun CurvedGradientHeader() {
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                "Welcome to",
+                localizedContext.getString(R.string.welcome_to),
                 color = Color.White,
                 fontSize = 35.sp,
                 fontFamily = poppins,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                "Sparkle RFID",
+                localizedContext.getString(R.string.sparkle_rfid),
                 color = Color.White,
                 fontSize = 35.sp,
                 fontFamily = poppins,
@@ -317,7 +632,7 @@ fun CurvedGradientHeader() {
             )
             Spacer(modifier = Modifier.height(40.dp))
             Text(
-                "Please log in to continue",
+                localizedContext.getString(R.string.please_log_in_to_continue),
                 color = Color.White,
                 fontSize = 14.sp,
                 fontFamily = poppins,
@@ -329,11 +644,17 @@ fun CurvedGradientHeader() {
 
 @Composable
 fun TroubleLoginText(onContactClick: () -> Unit) {
+    val context = LocalContext.current
+    val userPreferences = UserPreferences.getInstance(context)
+    val savedLang = userPreferences.getAppLanguage().ifBlank { "en" }
+    val currentLocales = AppCompatDelegate.getApplicationLocales()
+    val currentLang = currentLocales[0]?.language ?: savedLang
+    val localizedContext = LocaleHelper.applyLocale(context, currentLang)
     val annotatedText = buildAnnotatedString {
-        append("Trouble login? ")
+        append(localizedContext.getString(R.string.trouble_login))
         pushStringAnnotation(tag = "contact", annotation = "contact")
         withStyle(style = SpanStyle(color = Color.Blue, fontWeight = FontWeight.Bold)) {
-            append("Contact US")
+            append(localizedContext.getString(R.string.contact_us))
         }
         pop()
     }
@@ -352,3 +673,19 @@ fun TroubleLoginText(onContactClick: () -> Unit) {
         )
     }
 }
+
+fun getDaysRemaining(expiryDateStr: String?): Long? {
+    return try {
+        if (expiryDateStr.isNullOrBlank()) return null
+
+        val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+        val expiryDate = LocalDate.parse(expiryDateStr, formatter)
+        val today = LocalDate.now()
+
+        ChronoUnit.DAYS.between(today, expiryDate)
+    } catch (e: Exception) {
+        null
+    }
+}
+
+

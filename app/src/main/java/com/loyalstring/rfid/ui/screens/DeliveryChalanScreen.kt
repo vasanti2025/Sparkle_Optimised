@@ -907,7 +907,7 @@ fun DeliveryChalanScreen(
 
         Log.d("@@","branchId"+branchId)
         val request = AddDeliveryChallanRequest(
-            BranchId = branchId,
+            BranchId = branchId?.toInt() ?: userPreferences.getBranchID()!!.toInt(),
             TransactionAmtType = "Cash",
             TransactionMetalType = "Gold",
             MetalType = "Gold",

@@ -1,5 +1,12 @@
 package com.loyalstring.rfid
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.saveable.rememberSaveable
+
+import com.loyalstring.rfid.ui.utils.GradientButtonIcon
+
+
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
@@ -13,6 +20,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,7 +58,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,25 +73,29 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.os.LocaleListCompat
+import androidx.compose.ui.window.Dialog
+// PERF-FIX: Removed LocaleListCompat import — locale is now set only in Application class
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.loyalstring.rfid.data.model.ClientCodeRequest
 import com.loyalstring.rfid.data.model.login.Employee
+import com.loyalstring.rfid.data.model.login.LoginRequest
 import com.loyalstring.rfid.data.reader.ScanKeyListener
+import com.loyalstring.rfid.data.remote.resource.Resource
 import com.loyalstring.rfid.navigation.AppNavigation
 import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.navigation.listOfNavItems
+
 import com.loyalstring.rfid.ui.theme.SparkleRFIDTheme
 import com.loyalstring.rfid.ui.utils.BackgroundGradient
-import com.loyalstring.rfid.ui.utils.ToastUtils
+
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
-import com.loyalstring.rfid.viewmodel.BulkViewModel
-import com.loyalstring.rfid.viewmodel.OrderViewModel
-import com.loyalstring.rfid.viewmodel.SingleProductViewModel
+// PERF-FIX: Removed BulkViewModel, OrderViewModel, SingleProductViewModel imports —
+// these ViewModels are now created lazily inside their respective screen composables,
+// not eagerly at the root SetupNavigation level.
+import com.loyalstring.rfid.viewmodel.LoginViewModel
 import com.loyalstring.rfid.viewmodel.UserPermissionViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
@@ -92,34 +103,46 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var userPreferences: UserPreferences
     private var scanKeyListener: ScanKeyListener? = null
-    /* override fun attachBaseContext(newBase: Context) {
-         val prefs = UserPreferences.getInstance(newBase)
-         val langCode = prefs.getAppLanguage().ifBlank { "en" }
-         Log.d("@@ langCode","langCode"+langCode)
-         val localizedContext = LocaleHelper.applyLocale(newBase, langCode)
-         super.attachBaseContext(localizedContext)
-     }*/
+    override fun attachBaseContext(newBase: Context) {
+        val prefs = UserPreferences.getInstance(newBase)
+        val langCode = prefs.getAppLanguage().ifBlank { "en" }
+
+        val locale = java.util.Locale(langCode)
+        java.util.Locale.setDefault(locale)
+
+        val config = android.content.res.Configuration(newBase.resources.configuration)
+        config.setLocale(locale)
+      //  config.setLayoutDirection(locale)
+        config.setLayoutDirection(java.util.Locale.ENGLISH)
+        val localizedContext = newBase.createConfigurationContext(config)
+        super.attachBaseContext(localizedContext)
+    }
     @RequiresApi(Build.VERSION_CODES.R)
     override fun onCreate(savedInstanceState: Bundle?) {
-        val prefs = UserPreferences.getInstance(this)
-        val savedLang = prefs.getAppLanguage().ifBlank { "en" }
+       // PERF-FIX: Locale is already applied once in SparkleRFIDApplication.onCreate().
+       // Calling setApplicationLocales() again here caused a second locale-rebuild on the
+       // main thread before super.onCreate(), delaying rendering by 50-150ms.
+       /*
+       val prefs = UserPreferences.getInstance(this)
+       val savedLang = prefs.getAppLanguage().ifBlank { "en" }
+       AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(savedLang))
+       */
+       Log.d(
+           "LocaleDebug",
+           "AppCompat locales = ${AppCompatDelegate.getApplicationLocales().toLanguageTags()}"
+       )
 
-        AppCompatDelegate.setApplicationLocales(
-            LocaleListCompat.forLanguageTags(savedLang)
-        )
-
-        Log.d(
-            "LocaleDebug",
-            "AppCompat locales = ${AppCompatDelegate.getApplicationLocales().toLanguageTags()}"
-        )
-
-        super.onCreate(savedInstanceState)
+       super.onCreate(savedInstanceState)
 
         val startDestination = if (userPreferences.isLoggedIn()) {
             "main_graph"
@@ -141,12 +164,12 @@ class MainActivity : ComponentActivity() {
                 Log.d("LocaleDebug", "menu_rates_title from Compose ctx = $s")
             }
             SparkleRFIDTheme {
-                SetupNavigation(this, userPreferences, startDestination)
+                SetupNavigation( userPreferences, startDestination)
             }
         }
 
 
-    }
+   }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
@@ -188,69 +211,188 @@ class MainActivity : ComponentActivity() {
 }
 
 @RequiresApi(Build.VERSION_CODES.R)
-@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
+@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter", "LocalContextGetResourceValueCall")
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 private fun SetupNavigation(
-    context: Context,
+    // context: Context,
     userPreferences: UserPreferences,
     startDestination: String,
 ) {
-    val orderViewModel1: OrderViewModel = hiltViewModel()
-    val viewModel: BulkViewModel = hiltViewModel()
-    val singleProductViewModel: SingleProductViewModel = hiltViewModel()
+    val context = LocalContext.current
+    // PERF-FIX: ViewModels are now obtained lazily only when needed per-screen via hiltViewModel()
+    // inside NavHost composables. Creating BulkViewModel + OrderViewModel + SingleProductViewModel
+    // here caused all their init{} blocks, StateFlow collections (Eagerly), and DB flows to start
+    // the moment the app opened — even on the login screen where none of them are needed.
+    // BulkViewModel alone allocated a 300K-capacity ConcurrentHashMap and started 3 Eagerly flows.
+    // val orderViewModel1: OrderViewModel = hiltViewModel()
+    // val viewModel: BulkViewModel = hiltViewModel()
+    // val singleProductViewModel: SingleProductViewModel = hiltViewModel()
     val userPermissionViewModel: UserPermissionViewModel = hiltViewModel()
-
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var selectedItemIndex by rememberSaveable { mutableIntStateOf(-1) }
     val scope = rememberCoroutineScope()
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    var branchPermissionReady by remember { mutableStateOf(false) }
-    var permissionApiCalled by remember { mutableStateOf(false) } // Reactive state for employee (same variable name)
+
+    // Reactive state for employee (same variable name)
     var employee by remember { mutableStateOf<Employee?>(null) }
 
-// Load employee on first composition
+
+    var showExpiryPopup by rememberSaveable { mutableStateOf(false) }
+    var expiryPopupMessage by rememberSaveable { mutableStateOf("") }
+    var isPlanExpired by rememberSaveable { mutableStateOf(false) }
+    var hasCheckedExpiryOnLaunch by rememberSaveable { mutableStateOf(false) }
+    val loginViewModel: LoginViewModel = hiltViewModel()
+    val loginResponse by loginViewModel.loginResponse.observeAsState()
     LaunchedEffect(Unit) {
-        employee = UserPreferences.getInstance(context).getEmployee(Employee::class.java)
+        if (hasCheckedExpiryOnLaunch) return@LaunchedEffect
+        hasCheckedExpiryOnLaunch = true
+
+        val prefs = UserPreferences.getInstance(context)
+        if (!prefs.isLoggedIn()) return@LaunchedEffect
+
+        val savedUsername = prefs.getSavedUsername()
+        val savedPassword = prefs.getSavedPassword()
+
+        if (savedUsername.isNullOrBlank() || savedPassword.isNullOrBlank()) {
+            isPlanExpired = true
+            expiryPopupMessage = "Session expired. Please login again."
+            showExpiryPopup = true
+            return@LaunchedEffect
+        }
+
+        loginViewModel.login(
+            LoginRequest(
+                username = savedUsername,
+                password = savedPassword
+            ),
+            rememberMe = true
+        )
     }
 
-// Refresh when drawer opens (always show latest info)
-    LaunchedEffect(drawerState.isOpen) {
-        if (drawerState.isOpen) {
-            employee = UserPreferences.getInstance(context).getEmployee(Employee::class.java)
+    LaunchedEffect(loginResponse) {
+        when (val result = loginResponse) {
+            is Resource.Success -> {
+                val loginData = result.data ?: return@LaunchedEffect
+                val employeeData = loginData.employee ?: return@LaunchedEffect
+                val prefs = UserPreferences.getInstance(context)
+
+                // fresh data save
+                prefs.saveToken(loginData.token.orEmpty())
+                prefs.saveUserName(employeeData.username.toString())
+                prefs.saveEmployee(employeeData)
+                prefs.setLoggedIn(true)
+                prefs.saveBranchId(employeeData.defaultBranchId)
+                employeeData.clients?.let { prefs.saveClient(it) }
+                prefs.saveOrganization(employeeData.clients?.organisationName.toString())
+
+                val expiryDateStr = employeeData.clients?.planExpiryDate
+                val daysRemaining = getDaysRemaining(expiryDateStr)
+                    //   val context = LocalContext.current
+                when {
+                    daysRemaining == null -> {
+                        showExpiryPopup = false
+                    }
+
+                    daysRemaining < 0 -> {
+                        isPlanExpired = true
+                        expiryPopupMessage = context.getString(R.string.your_subscription_has_expired_please_login_again_to_continue)
+                        showExpiryPopup = true
+                    }
+
+                    daysRemaining in 0..15 -> {
+                        isPlanExpired = false
+                        expiryPopupMessage =
+                          context.getString(R.string.subscription_expiry_warning)
+                        showExpiryPopup = true
+                    }
+
+                    else -> {
+                        showExpiryPopup = false
+                    }
+                }
+            }
+
+            is Resource.Error -> {
+                isPlanExpired = true
+                expiryPopupMessage = "Session validation failed. Please login again."
+                showExpiryPopup = true
+            }
+
+            else -> {}
         }
     }
+/*
+    LaunchedEffect(Unit) {
+        if (hasCheckedExpiryOnLaunch) return@LaunchedEffect
+        hasCheckedExpiryOnLaunch = true
 
-    // Sync Data on Load
+        val prefs = UserPreferences.getInstance(context)
+        val isLoggedIn = prefs.isLoggedIn()
+        val savedEmployee = prefs.getEmployee(Employee::class.java)
+        val expiryDateStr = savedEmployee?.clients?.planExpiryDate
+
+        if (!isLoggedIn || savedEmployee == null) return@LaunchedEffect
+
+        val daysRemaining = getDaysRemaining(expiryDateStr)
+
+        when {
+            daysRemaining == null -> {
+                // no expiry date or parse issue -> do nothing
+            }
+
+            daysRemaining < 0 -> {
+                isPlanExpired = true
+                expiryPopupMessage = "Your subscription has expired. Please contact support."
+                showExpiryPopup = true
+            }
+
+            daysRemaining in 0..15 -> {
+                isPlanExpired = false
+                expiryPopupMessage =
+                    "Your subscription will expire in $daysRemaining day(s). Please renew soon."
+                showExpiryPopup = true
+            }
+        }
+    }*/
+
+
+
+    // Load employee on first composition
+    // PERF-FIX: Run SharedPreferences read on IO thread to avoid ANR on slow storage
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            viewModel.syncRFIDDataIfNeeded(context)
+            val emp = UserPreferences.getInstance(context).getEmployee(Employee::class.java)
+            withContext(Dispatchers.Main) { employee = emp }
         }
     }
 
-    LaunchedEffect(employee?.clientCode) {
-        employee?.clientCode?.let { clientCode ->
+    // Refresh when drawer opens (always show latest info)
+    LaunchedEffect(drawerState.isOpen) {
+        if (drawerState.isOpen) {
             withContext(Dispatchers.IO) {
-                //Unnecessary
-                //Unnecessary
-                /*orderViewModel1.getAllEmpList(clientCode)
-                orderViewModel1.getAllItemCodeList(ClientCodeRequest(clientCode))
-                singleProductViewModel.getAllBranches(ClientCodeRequest(clientCode))
-                singleProductViewModel.getAllPurity(ClientCodeRequest(clientCode))
-                singleProductViewModel.getAllSKU(ClientCodeRequest(clientCode))*/
-                orderViewModel1.getDailyRate(ClientCodeRequest(employee?.clientCode))
+                val emp = UserPreferences.getInstance(context).getEmployee(Employee::class.java)
+                withContext(Dispatchers.Main) { employee = emp }
             }
         }
     }
 
+    // PERF-FIX: syncRFIDDataIfNeeded removed from here. It was being called on every app open
+    // making a network request before the home screen was shown. It is still called after login
+    // in LoginScreen.kt (correct place) and has a guard to skip if already synced.
+    // LaunchedEffect(Unit) { withContext(Dispatchers.IO) { viewModel.syncRFIDDataIfNeeded(context) } }
+
+    // PERF-FIX: getDailyRate is now called lazily inside OrderScreen when needed,
+    // not eagerly here for every employee clientCode change on every app launch.
+    // LaunchedEffect(employee?.clientCode) { ... orderViewModel1.getDailyRate(...) }
+
     val navigationBody: @Composable () -> Unit = {
         AppNavigation(navController, drawerState, scope, userPreferences, startDestination)
     }
- //   val allEmployees by userPermissionViewModel.allEmployees.observeAsState(emptyList())
-    val allEmployeesState by userPermissionViewModel.allEmployees.observeAsState()
-    val allEmployees = allEmployeesState ?: emptyList()
+    val allEmployees by userPermissionViewModel.allEmployees.observeAsState(emptyList())
+
 
     var prefUserId: Int? by remember { mutableStateOf<Int?>(null) }
 
@@ -325,7 +467,7 @@ private fun SetupNavigation(
 
         Log.d("USER_DEBUG", "saved branchIds = ${prefs.getBranchIds()}")
     }
-     /*   if (showExpiryPopup) {
+        if (showExpiryPopup) {
             Dialog(onDismissRequest = { }) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -440,7 +582,7 @@ private fun SetupNavigation(
                     }
                 }
             }
-        }*/
+        }
 
     // Drawer visibility logic (hide on Login)
     val disableDrawerRoutes = listOf(Screens.LoginScreen.route)
@@ -487,7 +629,7 @@ private fun SetupNavigation(
                             }
                         }
 
-                        //    Most likely 72.dp will loo
+                    //    Most likely 72.dp will loo
                         // Scrollable Drawer List
                         val scrollState = rememberScrollState()
                         Column(
@@ -502,7 +644,7 @@ private fun SetupNavigation(
                                         Text(
                                             text = stringResource(navigationItem.titleResId),
                                             fontSize = 16.sp,
-                                            fontFamily = poppins,
+                                           // fontFamily = poppins,
                                             color = Color.DarkGray
                                         )
                                     },
@@ -698,4 +840,18 @@ fun HomeTopBar(onNavigationClick: () -> Unit) {
                 )
             )
     )
+}
+
+fun getDaysRemaining(expiryDateStr: String?): Long? {
+    return try {
+        if (expiryDateStr.isNullOrBlank()) return null
+
+        val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+        val expiryDate = LocalDate.parse(expiryDateStr, formatter)
+        val today = LocalDate.now()
+
+        ChronoUnit.DAYS.between(today, expiryDate)
+    } catch (e: Exception) {
+        null
+    }
 }

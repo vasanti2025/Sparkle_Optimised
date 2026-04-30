@@ -37,6 +37,7 @@ import com.google.gson.Gson
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import com.loyalstring.rfid.R
+import com.loyalstring.rfid.data.model.face.FaceData
 import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.ui.utils.FaceRecognizerHelper
@@ -78,6 +79,10 @@ fun RecogniseFaceLogin(
     var isProcessing by remember { mutableStateOf(false) }
     var isFaceMatched by remember { mutableStateOf(false) }
 
+    var showExpiryPopup by remember { mutableStateOf(false) }
+    var expiryPopupMessage by remember { mutableStateOf("") }
+    //var pendingFace by remember { mutableStateOf<com.yourpackage.FaceResponseType?>(null) }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -98,7 +103,7 @@ fun RecogniseFaceLogin(
         }
     }
 
-    LaunchedEffect(matchedFace) {
+   /* LaunchedEffect(matchedFace) {
         matchedFace?.let { face ->
             if (!isFaceMatched) {
                 isFaceMatched = true
@@ -146,7 +151,90 @@ fun RecogniseFaceLogin(
                 }
             }
         }
+    }*/
+
+    LaunchedEffect(matchedFace) {
+        matchedFace?.let { face ->
+            if (!isFaceMatched && !showExpiryPopup) {
+                isProcessing = false
+
+                val employeeObj: Employee? = try {
+                    Gson().fromJson(face.EmployeeJson, Employee::class.java)
+                } catch (e: Exception) {
+                    null
+                }
+
+                val expiryDateStr = employeeObj?.clients?.planExpiryDate
+                val daysRemaining = getDaysRemaining(expiryDateStr)
+
+                when {
+                    daysRemaining == null -> {
+                        isProcessing = true
+                        Toast.makeText(
+                            context,
+                            "Unable to verify expiry date. Face login blocked.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        navController.popBackStack()
+                        return@let
+                    }
+
+                    daysRemaining < 0 -> {
+                        isProcessing = true
+                        Toast.makeText(
+                            context,
+                            localizedContext.getString(R.string.your_subscription_has_expired_please_contact_support),
+                            Toast.LENGTH_LONG
+                        ).show()
+                        return@let
+                    }
+
+                    daysRemaining in 0..15 -> {
+                        expiryPopupMessage =
+                            localizedContext.getString(R.string.subscription_expiry_warning, daysRemaining)
+                        showExpiryPopup = true
+                    }
+
+                    else -> {
+                        isFaceMatched = true
+
+                        userPrefs.saveUserName(face.Username ?: "")
+                        userPrefs.setLoggedIn(true)
+                        userPrefs.saveBranchId(face.BranchId ?: 0)
+
+                        employeeObj?.let {
+                            userPrefs.saveEmployee(it)
+                        }
+
+                        userPrefs.saveLoginCredentials(
+                            face.Username ?: "",
+                            "",
+                            true,
+                            employeeObj?.clients?.rfidType.toString(),
+                            face.EmployeeId ?: 0,
+                            face.BranchId ?: 0,
+                            employeeObj?.clients?.organisationName.toString()
+                        )
+
+                        face.ClientCode?.let { clientCode ->
+                            face.EmployeeId?.let { empId ->
+                                permissionViewModel.loadPermissions(clientCode, empId)
+                            }
+                        }
+
+                        navController.navigate(Screens.HomeScreen.route) {
+                            popUpTo(Screens.LoginScreen.route) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
+                }
+            }
+        }
     }
+
+
+
+
 
     Column(modifier = Modifier.fillMaxSize()) {
         if (hasPermission) {
@@ -256,3 +344,5 @@ fun RecogniseFaceLogin(
         }
     }
 }
+
+

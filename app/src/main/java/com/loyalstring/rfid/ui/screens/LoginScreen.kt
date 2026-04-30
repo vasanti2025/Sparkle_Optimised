@@ -87,6 +87,7 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
     val userPermissionViewModel: UserPermissionViewModel = hiltViewModel()
     val userPrefs = remember { UserPreferences(context) }
     var selectedLoginMode by remember { mutableStateOf("password") }
+    var shouldNavigateAfterPermission by remember { mutableStateOf(false) }
 
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -109,14 +110,18 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
     val currentLang = currentLocales[0]?.language ?: savedLang
     val localizedContext = LocaleHelper.applyLocale(context, currentLang)
 
-    LaunchedEffect(permissionResponse) {
+    LaunchedEffect(permissionResponse, shouldNavigateAfterPermission) {
+        if (!shouldNavigateAfterPermission) return@LaunchedEffect
+
         when (permissionResponse) {
             is Resource.Success -> {
+                shouldNavigateAfterPermission = false
                 navController.navigate(Screens.HomeScreen.route) {
                     popUpTo(Screens.LoginScreen.route) { inclusive = true }
                 }
             }
             is Resource.Error -> {
+                shouldNavigateAfterPermission = false
                 Toast.makeText(
                     context,
                     (permissionResponse as Resource.Error).message,
@@ -174,6 +179,7 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
      }*/
 
     fun completeLogin(response: LoginResponse) {
+        shouldNavigateAfterPermission = true
         userPrefs.saveToken(response.token.orEmpty())
         userPrefs.saveUserName(response.employee?.username.toString())
         userPrefs.saveEmployee(response.employee)
@@ -273,7 +279,7 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = localizedContext.getString(R.string.login),
+                        text = localizedContext.getString(R.string.password),
                         color = if (selectedLoginMode == "password") Color.White else Color.Black,
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
@@ -678,12 +684,14 @@ fun getDaysRemaining(expiryDateStr: String?): Long? {
     return try {
         if (expiryDateStr.isNullOrBlank()) return null
 
-        val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-        val expiryDate = LocalDate.parse(expiryDateStr, formatter)
-        val today = LocalDate.now()
+        val cleanDate = expiryDateStr.trim().take(10)
+        val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")
+        val expiryDate = java.time.LocalDate.parse(cleanDate, formatter)
+        val today = java.time.LocalDate.now()
 
-        ChronoUnit.DAYS.between(today, expiryDate)
+        java.time.temporal.ChronoUnit.DAYS.between(today, expiryDate)
     } catch (e: Exception) {
+        android.util.Log.e("FACE_LOGIN", "Date parse failed: $expiryDateStr", e)
         null
     }
 }

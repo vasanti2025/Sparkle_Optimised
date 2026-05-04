@@ -134,8 +134,13 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
     val localizedContext = LocaleHelper.applyLocale(context, currentLang)
 
     LaunchedEffect(employee?.clientCode) {
-        employee?.clientCode?.let {
-            rfidExportViewModel.getAllScantoDesktop(it)
+        val clientCode = employee?.clientCode
+        val deviceId = shortSerial(
+            userPreferences.getDeviceId()?.toString()
+        )
+
+        if (!clientCode.isNullOrBlank() && deviceId.isNotBlank()) {
+            rfidExportViewModel.getAllScantoDesktop(clientCode, deviceId)
         }
     }
 

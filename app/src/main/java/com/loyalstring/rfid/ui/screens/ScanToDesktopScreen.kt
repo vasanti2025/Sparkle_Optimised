@@ -1,9 +1,5 @@
 package com.loyalstring.rfid.ui.screens
-//import java.net.HttpURLConnection
-//import java.net.URL
 
-//import android.net.wifi.WifiManager
-//import android.text.format.Formatter
 
 import android.annotation.SuppressLint
 import android.content.ClipData
@@ -82,6 +78,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.Inet4Address
 import java.net.NetworkInterface
+import kotlin.collections.forEachIndexed
 
 @SuppressLint("HardwareIds")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -122,7 +119,6 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
     var showExportPopup by remember { mutableStateOf(false) }
 
     val exportScope = rememberCoroutineScope()
-
     var isExporting by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         selectedPower = UserPreferences.getInstance(context).getInt(
@@ -144,6 +140,7 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
     val exportLoading by rfidExportViewModel.isLoading.collectAsState()
 
 
+
     var clickedIndex by remember { mutableStateOf<Int?>(null) }
     val activity = LocalContext.current as MainActivity
     var isScanning by remember { mutableStateOf(false) }
@@ -162,12 +159,14 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
     val currentLang = currentLocales[0]?.language ?: savedLang
     val localizedContext = LocaleHelper.applyLocale(context, currentLang)
     val isLocalWifiMode = userPreferences.isLocalWifiModeEnabled()
-    //  just for testing
-    if (!isLocalWifiMode) {
-        LaunchedEffect(employee?.clientCode) {
-            employee?.clientCode?.let {
-                rfidExportViewModel.getAllScantoDesktop(it)
-            }
+    LaunchedEffect(employee?.clientCode) {
+        val clientCode = employee?.clientCode
+        val deviceId = shortSerial(
+            userPreferences.getDeviceId()?.toString()
+        )
+
+        if (!clientCode.isNullOrBlank() && deviceId.isNotBlank()) {
+            rfidExportViewModel.getAllScantoDesktop(clientCode, deviceId)
         }
     }
 
@@ -226,6 +225,7 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
     }
 
 
+
     // ✅ success / error message show once
     LaunchedEffect(success, error) {
         when {
@@ -233,53 +233,19 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                 ToastUtils.showToast(context, "✅ Cleared ${deleted} records successfully")
                 viewModel.clearClearStockResult()  // reset so it won’t re-toast
             }
-
             error != null -> {
                 ToastUtils.showToast(context, "❌ ${error}")
                 viewModel.clearClearStockResult()
             }
         }
     }
-    val finalDeviceId by rfidExportViewModel.finalDeviceId.collectAsState()
-
-    /*    val androidId = Settings.Secure.getString(
-        context.contentResolver,
-        Settings.Secure.ANDROID_ID
-    )
-
-    userPreferences.saveDeviceId(androidId)*/
 
     val androidId = Settings.Secure.getString(
         context.contentResolver,
         Settings.Secure.ANDROID_ID
-    ).orEmpty()
+    )
 
-    //just for testing
-    if (!isLocalWifiMode) {
-    LaunchedEffect(employee?.id, androidId) {
-        val clientCode = employee?.id
-
-        if (clientCode!=0 && androidId.isNotBlank()) {
-            rfidExportViewModel.setupDeviceId(
-                clientCode = clientCode.toString(),
-                androidId = androidId
-            )
-        }
-    }
-    } else {
-
-        LaunchedEffect(androidId) {
-            if (androidId.isNotBlank()) {
-                userPreferences.saveDeviceId(androidId)
-            }
-    }
-    }
-
-    LaunchedEffect(finalDeviceId) {
-        if (!finalDeviceId.isNullOrBlank()) {
-            userPreferences.saveDeviceId(finalDeviceId!!)
-        }
-    }
+    userPreferences.saveDeviceId(androidId)
 
     Scaffold(
         topBar = {
@@ -307,32 +273,32 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
         },
         bottomBar = {
             ScanBottomBarDesktop(
-              /*  onSave = {
-                    viewModel.barcodeReader.close()
-                    Log.d("save scanned items", "CLICKED"+tags.size)
+                /*  onSave = {
+                      viewModel.barcodeReader.close()
+                      Log.d("save scanned items", "CLICKED"+tags.size)
 
 
 
-                    // ✅ Better check: tags exist + at least one RFID mapped
-                    if (tags.isNotEmpty()) {
-                        val deviceId = finalDeviceId ?: userPreferences.getDeviceId()
+                      // ✅ Better check: tags exist + at least one RFID mapped
+                      if (tags.isNotEmpty()) {
+                          val deviceId = finalDeviceId ?: userPreferences.getDeviceId()
 
-                        if (tags.isNotEmpty() && !deviceId.isNullOrBlank()) {
-                            viewModel.sendScannedData(tags, deviceId, context)
-                            viewModel.resetScanResults()
-                            viewModel.stopBarcodeScanner()
-                            viewModel.resetProductScanResults()
-                        } else {
-                            ToastUtils.showToast(context, "Please scan RFID tag / Device Id not found")
-                        }
-                        //   viewModel.sendScannedData(tags, shortSerial(userPreferences.getDeviceId().toString()), context)
-                        viewModel.resetScanResults()
-                        viewModel.stopBarcodeScanner()
-                        viewModel.resetProductScanResults()
-                    } else {
-                        ToastUtils.showToast(context, "Please scan RFID tag / RFID not found in DB")
-                    }
-                },*/
+                          if (tags.isNotEmpty() && !deviceId.isNullOrBlank()) {
+                              viewModel.sendScannedData(tags, deviceId, context)
+                              viewModel.resetScanResults()
+                              viewModel.stopBarcodeScanner()
+                              viewModel.resetProductScanResults()
+                          } else {
+                              ToastUtils.showToast(context, "Please scan RFID tag / Device Id not found")
+                          }
+                          //   viewModel.sendScannedData(tags, shortSerial(userPreferences.getDeviceId().toString()), context)
+                          viewModel.resetScanResults()
+                          viewModel.stopBarcodeScanner()
+                          viewModel.resetProductScanResults()
+                      } else {
+                          ToastUtils.showToast(context, "Please scan RFID tag / RFID not found in DB")
+                      }
+                  },*/
                 /* onSave = {
                      viewModel.barcodeReader.close()
                      Log.d("save scanned items", "CLICKED" + tags.size)
@@ -347,8 +313,8 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                     } else {
                         ToastUtils.showToast(context, "Please scan RFID tag / Device Id not found")
                     }*//*
-                    
-                    
+
+
                     //local
                     if (tags.isNotEmpty() && !deviceId.isNullOrBlank() && employee!!.clientCode!!.isNotBlank()) {
 
@@ -406,7 +372,9 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                     viewModel.barcodeReader.close()
                     Log.d("save scanned items", "CLICKED" + tags.size)
 
-                    val deviceId = finalDeviceId ?: userPreferences.getDeviceId()
+                    val deviceId = shortSerial(
+                        userPreferences.getDeviceId()?.toString()
+                    )
                     val clientCode = employee?.clientCode.orEmpty()
 
                     if (tags.isEmpty() || deviceId.isNullOrBlank() || clientCode.isBlank()) {
@@ -561,9 +529,7 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                         ) {
                             Text(
                                 "${index + 1}",
-                                Modifier
-                                    .width(100.dp)
-                                    .background(Color.Transparent),
+                                Modifier.width(100.dp).background(Color.Transparent),
                                 color = Color.DarkGray,
                                 fontFamily = poppins,
                                 fontSize = 11.sp
@@ -571,9 +537,7 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
 
                             Text(
                                 item.epc,
-                                Modifier
-                                    .width(100.dp)
-                                    .background(Color.Transparent),
+                                Modifier.width(100.dp).background(Color.Transparent),
                                 color = Color.DarkGray,
                                 fontFamily = poppins,
                                 fontSize = 11.sp
@@ -837,27 +801,13 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                     "OK",
                     modifier = Modifier
                         .padding(12.dp)
-                        /*   .clickable {
+                        .clickable {
                             showClearDialog = false
                             val clientCode = employee?.clientCode ?: return@clickable
 
-                         *//*   val deviceId = shortSerial(
+                            val deviceId = shortSerial(
                                 userPreferences.getDeviceId()?.toString()
-                            )*//*
-
-                            val deviceId="A42"
-
-                            viewModel.clearStockData(clientCode, deviceId)
-                        }*/.clickable {
-                            showClearDialog = false
-
-                            val clientCode = employee?.clientCode ?: return@clickable
-                            val deviceId = finalDeviceId ?: userPreferences.getDeviceId()
-
-                            if (deviceId.isNullOrBlank()) {
-                                ToastUtils.showToast(context, "Device Id not found")
-                                return@clickable
-                            }
+                            )
 
                             viewModel.clearStockData(clientCode, deviceId)
                         },
@@ -1195,8 +1145,6 @@ private fun shareExcelByEmail(
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
     )
-
-
 }
 
 

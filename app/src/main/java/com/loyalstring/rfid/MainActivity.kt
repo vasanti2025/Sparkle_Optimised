@@ -246,7 +246,7 @@ private fun SetupNavigation(
     var hasCheckedExpiryOnLaunch by rememberSaveable { mutableStateOf(false) }
     val loginViewModel: LoginViewModel = hiltViewModel()
     val loginResponse by loginViewModel.loginResponse.observeAsState()
-    LaunchedEffect(Unit) {
+  /*   for testing  LaunchedEffect(Unit) {
         if (hasCheckedExpiryOnLaunch) return@LaunchedEffect
         hasCheckedExpiryOnLaunch = true
 
@@ -323,7 +323,7 @@ private fun SetupNavigation(
 
             else -> {}
         }
-    }
+    }*/
 /*
     LaunchedEffect(Unit) {
         if (hasCheckedExpiryOnLaunch) return@LaunchedEffect

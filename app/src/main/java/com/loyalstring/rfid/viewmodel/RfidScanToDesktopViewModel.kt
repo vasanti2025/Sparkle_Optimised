@@ -52,22 +52,43 @@ class RfidScanToDesktopViewModel @Inject constructor(
         _getDeviceIdState.asStateFlow()
 
 
-    fun getAllScantoDesktop(clientCode: String) {
+    fun getAllScantoDesktop(clientCode: String, savedDeviceId: String) {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
 
-            val result = repository.getAllScantoDesktop(
-                ClientCodeRequest(clientCode)
-            )
+            try {
+                android.util.Log.e("SCAN_DEBUG", "clientCode = |$clientCode|")
+                android.util.Log.e("SCAN_DEBUG", "savedDeviceId = |$savedDeviceId|")
 
-            result.onSuccess { response ->
-                _rfidList.value = response.data ?: emptyList()
-            }.onFailure { error ->
-                _errorMessage.value = error.message
+                val result = repository.getAllScantoDesktop(
+                    ClientCodeRequest(clientCode)
+                )
+
+                result.onSuccess { response ->
+                    val fullList = response.data ?: emptyList()
+
+                    android.util.Log.e("SCAN_DEBUG", "fullList size = ${fullList.size}")
+
+                    val filteredList = fullList.filter { item ->
+                        item.DeviceId?.trim().orEmpty()
+                            .equals(savedDeviceId, ignoreCase = true)
+                    }
+
+                    android.util.Log.e("SCAN_DEBUG", "filteredList size = ${filteredList.size}")
+
+                    _rfidList.value = filteredList
+                }.onFailure { error ->
+                    _errorMessage.value = error.message
+                    android.util.Log.e("SCAN_DEBUG", "API failed = ${error.message}")
+                }
+
+            } catch (e: Exception) {
+                _errorMessage.value = e.message
+                android.util.Log.e("SCAN_DEBUG", "Exception = ${e.message}", e)
+            } finally {
+                _isLoading.value = false
             }
-
-            _isLoading.value = false
         }
     }
 

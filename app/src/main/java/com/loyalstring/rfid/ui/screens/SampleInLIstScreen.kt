@@ -240,9 +240,13 @@ fun SampleInTable(
                                 .weight(1f)
                                 .horizontalScroll(sharedScrollState)
                         ) {
-                          /*  val designNames = challan.IssueItems.joinToString(", ") {
+                           /* val designNames = challan.IssueItems.joinToString(", ") {
                                 it.DesignName ?: ""
                             }*/
+
+
+
+
 
                             val values = listOf(
                                 (index + 1).toString(),
@@ -251,8 +255,8 @@ fun SampleInTable(
                                 formatCreatedOn(challan.createdOn),
                                 challan.sampleInDate ?: "",
                                 challan.description ?: "",
-                                "",
-                                //designNames,
+                                challan.productName,
+
                                 challan.totalWt ?: "0.000",
                                 challan.grossWt ?: "0.000",
                                 challan.stoneWeight ?: "0.000",

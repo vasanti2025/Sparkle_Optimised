@@ -1,5 +1,8 @@
 package com.loyalstring.rfid.ui.screens
+import java.text.SimpleDateFormat
+import java.util.Date
 
+import java.util.TimeZone
 import android.annotation.SuppressLint
 import android.util.Log
 import android.widget.Toast
@@ -1454,6 +1457,8 @@ fun SampleOutScreen(
                             TotalNetWt = productList.sumOf { it.NetWt.toDoubleOrNull() ?: 0.0 }.toString(),
                             TotalStoneWeight = productList.sumOf { it.StoneAmt.toDoubleOrNull() ?: 0.0 }.toString(),
                             TotalWt = productList.sumOf { it.TotalWt.toDoubleOrNull() ?: 0.0 }.toString(),
+                            StatusType = true,
+                            SampleInDate = getCurrentUtcDateTime(),
                             IssueItems = productList.map { challan ->
                                 SampleOutIssueItem(
                                     ItemCode = challan.ItemCode,
@@ -1491,8 +1496,8 @@ fun SampleOutScreen(
                                     BranchId = employee?.branchNo?.toInt(),
                                     LabelledStockId = challan.LabelledStockId ?: 0,
                                     CustomerName = customerName,
-                                    SampleInDate = "2025-12-06",
-                                    CreatedOn = "2025-12-06",
+                                    SampleInDate = getCurrentUtcDateTime(),
+                                    CreatedOn = getCurrentUtcDateTime(),
                                     Customer = null
                                 )
                             }
@@ -1715,6 +1720,12 @@ fun SampleOutScreen(
     }
 
 
+}
+
+fun getCurrentUtcDateTime(): String {
+    val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+    sdf.timeZone = TimeZone.getTimeZone("UTC")
+    return sdf.format(Date())
 }
 
 fun addItemToList(

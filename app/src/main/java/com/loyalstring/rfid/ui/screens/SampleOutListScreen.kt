@@ -243,9 +243,14 @@ fun SampleOutTable(
                                 .weight(1f)
                                 .horizontalScroll(sharedScrollState)
                         ) {
-                            val designNames = challan.IssueItems.joinToString(", ") {
-                                it.DesignName ?: ""
-                            }
+                            val productNames = challan.IssueItems
+                                .mapNotNull { item ->
+                                    item.ProductName
+                                        ?.takeIf { it.isNotBlank() }
+                                        ?: item.DesignName?.takeIf { it.isNotBlank() }
+                                        ?: item.ItemCode?.takeIf { it.isNotBlank() }
+                                }
+                                .joinToString(", ")
 
                             val values = listOf(
                                 (index + 1).toString(),
@@ -254,7 +259,7 @@ fun SampleOutTable(
                                 formatCreatedOn(challan.CreatedOn),
                                 challan.ReturnDate ?: "",
                                 challan.Description ?: "",
-                                designNames,
+                                productNames,
                                 challan.TotalWt ?: "0.000",
                                 challan.TotalGrossWt ?: "0.000",
                                 challan.TotalStoneWeight ?: "0.000",

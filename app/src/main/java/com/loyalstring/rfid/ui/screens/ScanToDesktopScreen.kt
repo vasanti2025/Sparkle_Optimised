@@ -545,7 +545,15 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
 
                             // ✅ AUTO-FILLED FROM DB (via viewModel.autoFillRfidFromDb)
                             val rfid = rfidMap[index]
-                            val itemCode = hexToAscii(item.epc) ?: ""
+                           // val itemCode = hexToAscii(item.epc) ?: ""
+
+                            val epcValue = item.epc.trim()
+
+                            val itemCode = if (epcValue.startsWith("E", ignoreCase = true)) {
+                                itemCodeMap[epcValue.uppercase()].orEmpty()
+                            } else {
+                                hexToAscii(epcValue)
+                            }
                             Log.d("itemCode","itemCode"+itemCode)
 
                             val displayText =

@@ -51,6 +51,7 @@ import com.loyalstring.rfid.R
 import com.loyalstring.rfid.data.model.ClientCodeRequest
 import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.data.model.sampleOut.IssueItemDto
+import com.loyalstring.rfid.data.model.sampleOut.SampleOutCustomer
 import com.loyalstring.rfid.data.model.sampleOut.SampleOutFields
 import com.loyalstring.rfid.data.model.sampleOut.SampleOutIssueItem
 import com.loyalstring.rfid.data.model.sampleOut.SampleOutListResponse
@@ -156,6 +157,17 @@ fun SampleInScreen(
     val viewModelSampleIn: SampleInViewModel = hiltViewModel()
     val viewModelSampleOut: SampleOutViewModel=hiltViewModel()
     val challanList by viewModelSampleOut.sampleOutList.collectAsState()
+
+    val customerWiseChallanList by derivedStateOf {
+        if (customerId == null || customerId == 0) {
+            emptyList()
+        } else {
+            challanList.filter { challan ->
+                challan.CustomerId == customerId ||
+                        challan.Customer?.Id == customerId
+            }
+        }
+    }
 
     val updateSampleOut by sampleOutViewModel.updateResult.collectAsState()
 
@@ -317,28 +329,158 @@ fun SampleInScreen(
         val query = itemCode.text.trim()
         if (query.isEmpty()) return@LaunchedEffect
 
-
-        // ✅ match only in challanList
-        val challan = challanList.firstOrNull {
+        val challan = customerWiseChallanList.firstOrNull {
             it.SampleOutNo.equals(query, ignoreCase = true)
-        } ?: return@LaunchedEffect
+        }
 
-        // ✅ no duplicate in productList (by SampleOutNo)
-        if (productList.any { it.SampleOutNo.equals(challan.SampleOutNo, ignoreCase = true) }) {
-            Log.d("ManualEntry", "⚠️ Already exists SampleOutNo: ${challan.SampleOutNo}")
-            itemCode = TextFieldValue("")
+        if (challan == null) {
+            Log.d("ManualEntry", "No challan found for SampleOutNo: $query")
             return@LaunchedEffect
         }
-        selectedItem = challan
 
-        // ✅ add directly (challan already SampleOutDetails type)
+        if (productList.any { it.SampleOutNo.equals(challan.SampleOutNo, ignoreCase = true) }) {
+            Log.d("ManualEntry", "Already exists SampleOutNo: ${challan.SampleOutNo}")
+            return@LaunchedEffect
+        }
+
+        selectedItem = challan
         productList.add(challan)
 
-        Log.d("ManualEntry", "✅ Added by SampleOutNo: ${challan.SampleOutNo}")
-        itemCode = TextFieldValue("")
+        Log.d("ManualEntry", "Added by SampleOutNo: ${challan.SampleOutNo}")
     }
+    LaunchedEffect(tags.size, tags.lastOrNull()?.epc, productList.size) {
+        Log.d("RFID_DEBUG", "========== EFFECT START ==========")
+        Log.d("RFID_DEBUG", "tags.size=${tags.size}")
+        Log.d("RFID_DEBUG", "lastTag=${tags.lastOrNull()?.epc}")
+        Log.d("RFID_DEBUG", "productList.size=${productList.size}")
 
-    LaunchedEffect(tags, challanList, allItems) {
+        if (tags.isEmpty()) {
+            Log.w("RFID_DEBUG", "STOP: tags empty")
+            return@LaunchedEffect
+        }
+
+        if (productList.isEmpty()) {
+            Log.w("RFID_DEBUG", "STOP: productList empty")
+            return@LaunchedEffect
+        }
+
+        fun norm(v: String?) = v
+            ?.trim()
+            ?.uppercase()
+            ?.replace(" ", "")
+            ?.replace("-", "")
+            ?: ""
+
+        val selectedIssues = productList.flatMap { it.IssueItems.orEmpty() }
+
+        Log.d("RFID_DEBUG", "selectedIssues.size=${selectedIssues.size}")
+
+        if (selectedIssues.isEmpty()) {
+            Log.w("RFID_DEBUG", "STOP: IssueItems empty")
+            return@LaunchedEffect
+        }
+
+        val updatedScanned = scannedCodes.toMutableSet()
+
+        tags.forEach { tagInfo ->
+
+            val scannedCode = norm(tagInfo.getEPC())
+
+            Log.d("RFID_DEBUG", "Checking scannedCode=$scannedCode")
+
+            if (scannedCode.isEmpty()) {
+                Log.w("RFID_DEBUG", "STOP: scannedCode empty")
+                return@forEach
+            }
+
+            val matchedIssue = selectedIssues.firstOrNull { issue ->
+
+                val itemCode = norm(issue.ItemCode)
+                val rfidCode = norm(issue.RFIDCode)
+                val tidNumber = norm(issue.TIDNumber)
+
+                val isMatch =
+                    itemCode == scannedCode ||
+                            rfidCode == scannedCode ||
+                            tidNumber == scannedCode
+
+                Log.d(
+                    "RFID_MATCH_DEBUG",
+                    """
+                -------------------------
+                Scanned EPC : $scannedCode
+                ItemCode    : $itemCode
+                RFIDCode    : $rfidCode
+                TIDNumber   : $tidNumber
+                Final Match : $isMatch
+                -------------------------
+                """.trimIndent()
+                )
+
+                isMatch
+            }
+
+            if (matchedIssue == null) {
+                Log.w("RFID_DEBUG", "NO MATCH for scanned=$scannedCode")
+                return@forEach
+            }
+
+            updatedScanned.add(norm(matchedIssue.ItemCode))
+            updatedScanned.add(norm(matchedIssue.RFIDCode))
+            updatedScanned.add(norm(matchedIssue.TIDNumber))
+
+            Log.d("RFID_DEBUG", "GREEN TICK ADDED=${norm(matchedIssue.ItemCode)}")
+        }
+
+        scannedCodes = updatedScanned.toSet()
+
+        Log.d("RFID_DEBUG", "Final scannedCodes=$scannedCodes")
+        Log.d("RFID_DEBUG", "========== EFFECT END ==========")
+    }
+ /*   LaunchedEffect(tags, allItems, productList.size) {
+        if (tags.isEmpty()) return@LaunchedEffect
+        if (productList.isEmpty()) {
+            Log.w("RFIDScan", "Please select SampleOutNo first")
+            return@LaunchedEffect
+        }
+        if (allItems.isEmpty()) {
+            Log.e("RFIDScan", "allItems EMPTY")
+            return@LaunchedEffect
+        }
+
+        fun norm(v: String?) = v?.trim()?.uppercase()?.replace(" ", "") ?: ""
+
+        val selectedItemCodes = productList
+            .flatMap { it.IssueItems.orEmpty() }
+            .mapNotNull { it.ItemCode }
+            .map { norm(it) }
+            .toSet()
+
+        val updatedScanned = scannedCodes.toMutableSet()
+
+        tags.forEach { tagInfo ->
+            val scannedEpc = norm(tagInfo.getEPC())
+            if (scannedEpc.isEmpty()) return@forEach
+
+            val matchedItem = allItems.firstOrNull {
+                norm(it.epc) == scannedEpc
+            } ?: return@forEach
+
+            val scannedItemCodeNorm = norm(matchedItem.itemCode)
+
+            if (scannedItemCodeNorm in selectedItemCodes) {
+                updatedScanned.add(scannedItemCodeNorm)
+
+                Log.d("RFIDScan", "Matched selected item: $scannedItemCodeNorm")
+            } else {
+                Log.d("RFIDScan", "Ignored outside selected SampleOutNo item: $scannedItemCodeNorm")
+            }
+        }
+
+        scannedCodes = updatedScanned.toSet()
+    }*/
+
+   /* LaunchedEffect(tags, challanList, allItems) {
 
         if (tags.isEmpty()) return@LaunchedEffect
         if (challanList.isEmpty()) {
@@ -382,11 +524,15 @@ fun SampleInScreen(
             updatedScanned.add(scannedItemCodeNorm) // ✅ status green by itemcode
 
             // 4️⃣ find challan in challanList whose IssueItems contains this itemCode
-            val challan = challanList.firstOrNull { ch ->
-                val items = ch.IssueItems ?: emptyList()
-                items.any { itItem ->
-                    (itItem.ItemCode ?: "").trim().equals(scannedItemCode, ignoreCase = true)
+            val challan = productList.firstOrNull { ch ->
+                ch.IssueItems.orEmpty().any { itItem ->
+                    itItem.ItemCode?.trim().equals(scannedItemCode, ignoreCase = true)
                 }
+            }
+
+            if (challan == null) {
+                Log.w("RFIDScan", "Scanned item not in selected SampleOut list: $scannedItemCode")
+                return@forEach
             }
 
             if (challan == null) {
@@ -395,10 +541,10 @@ fun SampleInScreen(
             }
 
             // 5️⃣ duplicate check ONLY in productList (by SampleOutNo)
-            if (productList.any { it.SampleOutNo.equals(challan.SampleOutNo, ignoreCase = true) }) {
+       *//*     if (productList.any { it.SampleOutNo.equals(challan.SampleOutNo, ignoreCase = true) }) {
                 Log.d("RFIDScan", "⚠️ Duplicate challan skipped: ${challan.SampleOutNo}")
                 return@forEach
-            }
+            }*//*
             selectedItem = challan
             // ✅ add challan once
             productList.add(challan)
@@ -407,7 +553,7 @@ fun SampleInScreen(
 
         // ✅ update scanned set once at end
         scannedCodes = updatedScanned.toSet()
-    }
+    }*/
     val selectedSet = selectedReturnCodes // normalized set
 
 // Filter only selected IssueItems (you can build payload from this)
@@ -892,11 +1038,15 @@ fun SampleInScreen(
                     val selectedNorm = selectedReturnCodes.map { norm(it) }.toSet()
 
                     // ✅ ONLY selected if ReturnMode, else all
-                    val pairsToSend = if (isReturnMode) {
+                  /*  val pairsToSend = if (isReturnMode) {
                         allPairs.filter { (_, issue) -> norm(issue.ItemCode) in selectedNorm }
                     } else {
                         allPairs
-                    }
+                    }*/
+
+                    val scannedNorm = scannedCodes.map { norm(it) }.toSet()
+
+                    val pairsToSend = allPairs
 
                     if (isReturnMode && pairsToSend.isEmpty()) {
                         Log.d("SAVE", "❌ No checkbox selected")
@@ -915,10 +1065,26 @@ fun SampleInScreen(
 
                     val first = productList.firstOrNull()
                     Log.d("@@", "selectedItem?.Id" + selectedItem?.Id)
+
+
+                    val allItemCodes = allPairs
+                        .map { (_, issue) -> norm(issue.ItemCode) }
+                        .filter { it.isNotBlank() }
+                        .toSet()
+
+                    val allItemsMatched =
+                        allItemCodes.isNotEmpty() && allItemCodes.all { it in scannedNorm }
+
+                    val mainStatus = if (allItemsMatched) {
+                        "SampleIn"
+                    } else {
+                        "SampleOut"
+                    }
+
                     val request = SampleOutUpdateRequest(
                         Id = selectedItem?.Id ?: productList.firstOrNull()?.Id ?: 0,
                         ClientCode = employee?.clientCode.orEmpty(),
-                        BranchId = employee?.branchNo?.toInt(),
+                        BranchId = (employee?.branchNo as? String)?.toIntOrNull() ?: 1,
                         CustomerId = customerId ?: 0,
                         SampleOutNo = sampleOutNoFinal,
 
@@ -926,7 +1092,7 @@ fun SampleInScreen(
                         Description = first?.Description ?: "",
                         Date = first?.Date ?: "",
 
-                        SampleStatus = "SampleIn",
+                        SampleStatus =mainStatus ,
                         Quantity = issuesToSend.size,
 
                         TotalDiamondWeight = totalDiamond,
@@ -934,8 +1100,17 @@ fun SampleInScreen(
                         TotalNetWt = totalNet,
                         TotalStoneWeight = totalStone,
                         TotalWt = totalWt,
+                       StatusType=true,
+                        SampleInDate = getCurrentUtcDateTime(),
+
 
                         IssueItems = pairsToSend.map { (parent, issue) ->
+
+                            val itemStatus = if (norm(issue.ItemCode) in scannedNorm) {
+                                "SampleIn"
+                            } else {
+                                "SampleOut"
+                            }
                             SampleOutIssueItem(
                                 ItemCode = issue.ItemCode,
                                 SKU = issue.SKU,
@@ -960,7 +1135,7 @@ fun SampleInScreen(
                                 MetalAmount = issue.MetalAmount,
 
                                 Description = issue.Description ?: "",
-                                SampleStatus = "SampleIn",
+                                SampleStatus = itemStatus,
                                 ClientCode = employee?.clientCode.orEmpty(),
 
                                 StoneAmount = issue.StoneAmount ?: "0.00",
@@ -972,7 +1147,7 @@ fun SampleInScreen(
                                 PurityName = issue.PurityName ?: "",
                                 DesignName = issue.DesignName ?: "",
 
-                                Id = selectedItem?.Id ?: 0,
+                                Id = issue.Id ?: 0,
                                 CustomerId = customerId ?: 0,
                                 VendorId = 0,
                                 BranchId = (employee?.branchNo as? String)?.toIntOrNull() ?: 1,
@@ -984,9 +1159,9 @@ fun SampleInScreen(
                                 // ✅ parent challan no
                                 SampleOutNo = parent.SampleOutNo ?: SampleOutNo.orEmpty(),
 
-                                SampleInDate = "2025-12-06",
-                                CreatedOn = "2025-12-06",
-                                Customer = null
+                                SampleInDate = getCurrentUtcDateTime(),
+                                CreatedOn = getCurrentUtcDateTime(),
+                                Customer = selectedCustomer as SampleOutCustomer?
                             )
                         }
                     )
@@ -1056,7 +1231,13 @@ fun SampleInScreen(
                 filteredCustomers = filteredCustomers,
                 isLoading = false,
                 onCustomerSelected = { customerName = "${it.FirstName.orEmpty()} ${it.LastName.orEmpty()}".trim()
-                    customerId = it.Id ?: 0},
+                    customerId = it.Id ?: 0
+                    itemCode = TextFieldValue("")
+                    productList.clear()
+                    selectedItem = null
+                  //  scannedCodes = emptySet()
+                   // selectedReturnCodes = emptySet()
+                                     },
                 coroutineScope = coroutineScope,
                 fetchSuggestions = {orderViewModel.getAllEmpList(clientCode = employee?.clientCode.toString()) },
                 expanded = false,
@@ -1080,19 +1261,34 @@ fun SampleInScreen(
                 ) {
 
                     SampleOutInputRowData(
+                       /* itemCode = itemCode,
+                        onItemCodeChange = { itemCode = it },
+                        showDropdown = showDropdownItemcode,
+                        setShowDropdown = { showDropdownItemcode = it },
+                        context = context,
+                       *//* onScanClicked = {   // Start RFID scan when QR icon clicked
+                            viewModel.startBarcodeScanning(context)
+                        },*//*
+                        onClearClicked = { itemCode = TextFieldValue("") },
+                        filteredList = customerWiseChallanList,
+                        isLoading = isLoading,
+                        onItemSelected = { item ->
+                            selectedItem = item
+                            Log.d("SelectedSampleOut", "Selected Id = ${item.Id}")
+                        }*/
                         itemCode = itemCode,
                         onItemCodeChange = { itemCode = it },
                         showDropdown = showDropdownItemcode,
                         setShowDropdown = { showDropdownItemcode = it },
                         context = context,
-                       /* onScanClicked = {   // Start RFID scan when QR icon clicked
-                            viewModel.startBarcodeScanning(context)
-                        },*/
                         onClearClicked = { itemCode = TextFieldValue("") },
-                        filteredList = challanList,
+                        filteredList = customerWiseChallanList,
                         isLoading = isLoading,
                         onItemSelected = { item ->
+                          //  scannedCodes = emptySet()
+                           // selectedReturnCodes = emptySet()
                             selectedItem = item
+                            itemCode = TextFieldValue(item.SampleOutNo ?: "")
                             Log.d("SelectedSampleOut", "Selected Id = ${item.Id}")
                         }
                     )

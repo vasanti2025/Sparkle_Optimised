@@ -37,4 +37,7 @@ data class IssueItemDto( val ItemCode: String,
                          val SampleInDate: String?,        // null in JSON
                          val BranchId: Int?,               // null in JSON
                          val Customer: SampleCustomerDto?, // currently null, but structure ready
-                         val LabelledStockId: Int)
+                         val LabelledStockId: Int,
+                         val RFIDCode: String,
+                         val TIDNumber: String
+)

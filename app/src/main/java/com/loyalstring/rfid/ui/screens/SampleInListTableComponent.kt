@@ -243,13 +243,13 @@ fun SampleInListTableComponent(
                             selectedItem = row.parent
                             selectedIndex = row.parentIndex
                             showDialog = true
-                            Log.d("SampleIn", "Row clicked code=${row.issue.ItemCode}")
+                            Log.d("SampleIn", "Row clicked code=${row.issue.ProductName}")
                         },
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // ✅ Product Name (parent) - change this to your real field if needed
                     Text(
-                        text = (""?: ""), // if ProductName exists
+                        text = row.issue.ProductName?:"-", // if ProductName exists
                         modifier = Modifier
                             .width(110.dp)
                             .padding(horizontal = 2.dp),

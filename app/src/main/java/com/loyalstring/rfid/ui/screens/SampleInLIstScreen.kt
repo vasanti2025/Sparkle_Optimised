@@ -1,5 +1,11 @@
 package com.loyalstring.rfid.ui.screens
+import android.content.Intent
 
+import android.graphics.Paint
+import android.graphics.pdf.PdfDocument
+import androidx.core.content.FileProvider
+import java.io.File
+import java.io.FileOutputStream
 import android.content.Context
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.background
@@ -36,6 +42,9 @@ import androidx.navigation.NavHostController
 import com.loyalstring.rfid.R
 import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.data.model.sampleIn.SampleInResponse
+import com.loyalstring.rfid.data.model.sampleOut.SampleOutListResponse
+import com.loyalstring.rfid.data.model.sampleOut.SampleOutPrintData
+import com.loyalstring.rfid.data.model.sampleOut.SampleOutPrintItem
 import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
@@ -321,8 +330,8 @@ fun SampleInTable(
                             IconButton(onClick = {
                                 CoroutineScope(Dispatchers.Main).launch {
                                     val sampleOutNoSafe = challan.sampleOutNo ?: ""
-                                   // val data = challan.toSampleOutPrintData(context)
-                                    //generateSampleOutPrintPdf(context, data)
+                                   // val data = challan.toSampleOutPrintData1(context)
+                                    generateSampleInPrintPdf1(context, challan)
                                   //  Log.d("Print", "PRINT Screen $sampleOutNoSafe challan.Id ${challan.Id}")
                                 }
                             }) {
@@ -341,6 +350,259 @@ fun SampleInTable(
             }
         }
     }
+}
+
+fun generateSampleInPrintPdf1(context: Context, challan: SampleInResponse) {
+    try {
+        val pdfDocument = android.graphics.pdf.PdfDocument()
+
+        val paint = android.graphics.Paint().apply {
+            color = android.graphics.Color.BLACK
+            textSize = 10f
+            style = android.graphics.Paint.Style.FILL
+            isAntiAlias = true
+        }
+
+        val titlePaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.BLACK
+            textSize = 18f
+            isFakeBoldText = true
+            textAlign = android.graphics.Paint.Align.CENTER
+            isAntiAlias = true
+        }
+
+        val linePaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.BLACK
+            strokeWidth = 1f
+            style = android.graphics.Paint.Style.STROKE
+            isAntiAlias = true
+        }
+
+        val pageWidth = 595
+        val pageHeight = 842
+
+        val pageInfo = android.graphics.pdf.PdfDocument.PageInfo
+            .Builder(pageWidth, pageHeight, 1)
+            .create()
+
+        val page = pdfDocument.startPage(pageInfo)
+        val canvas = page.canvas
+
+        var y = 40f
+
+        canvas.drawText("SAMPLE IN", pageWidth / 2f, y, titlePaint)
+        y += 28f
+
+        paint.textSize = 10f
+        paint.isFakeBoldText = true
+
+        canvas.drawText("Sample In No: ${challan.sampleOutNo.orEmpty()}", 30f, y, paint)
+        canvas.drawText("Date: ${formatCreatedOn(challan.createdOn)}", 400f, y, paint)
+        y += 18f
+
+        paint.isFakeBoldText = false
+        canvas.drawText(
+            "Customer Name: ${challan.customer?.FirstName.orEmpty()}",
+            30f,
+            y,
+            paint
+        )
+        y += 18f
+
+        canvas.drawText(
+            "Return Date: ${formatCreatedOn(challan.sampleInDate)}",
+            30f,
+            y,
+            paint
+        )
+        y += 18f
+
+        canvas.drawText(
+            "Description: ${challan.description.orEmpty()}",
+            30f,
+            y,
+            paint
+        )
+        y += 24f
+
+        val startX = 30f
+        val rowHeight = 26f
+
+        val colWidths = listOf(
+            35f,   // Sr
+            155f,  // Product
+            70f,   // Gross Wt
+            70f,   // Stone Wt
+            80f,   // Diamond Wt
+            70f,   // Net Wt
+            45f    // Qty
+        )
+
+        val headers = listOf(
+            "Sr",
+            "Product",
+            "Gross Wt",
+            "Stone Wt",
+            "Diamond Wt",
+            "Net Wt",
+            "Qty"
+        )
+
+        fun drawTextInsideCell(
+            text: String,
+            x: Float,
+            topY: Float,
+            width: Float,
+            bold: Boolean = false
+        ) {
+            paint.color = android.graphics.Color.BLACK
+            paint.style = android.graphics.Paint.Style.FILL
+            paint.textSize = 8.5f
+            paint.isFakeBoldText = bold
+
+            val safeText = text.ifBlank { "-" }
+            val maxChars = when {
+                width >= 150f -> 26
+                width >= 80f -> 12
+                width >= 70f -> 10
+                else -> 6
+            }
+
+            canvas.drawText(
+                safeText.take(maxChars),
+                x + 4f,
+                topY + 17f,
+                paint
+            )
+        }
+
+        fun drawTableRow(values: List<String>, topY: Float, bold: Boolean = false) {
+            var x = startX
+
+            values.forEachIndexed { index, value ->
+                val width = colWidths[index]
+
+                canvas.drawRect(
+                    x,
+                    topY,
+                    x + width,
+                    topY + rowHeight,
+                    linePaint
+                )
+
+                drawTextInsideCell(
+                    text = value,
+                    x = x,
+                    topY = topY,
+                    width = width,
+                    bold = bold
+                )
+
+                x += width
+            }
+        }
+
+        drawTableRow(headers, y, true)
+        y += rowHeight
+
+        val rowValues: List<String> = listOf(
+            "1",
+            challan.productName.orEmpty(),
+            challan.grossWt.orEmpty().ifBlank { "0.000" },
+            challan.stoneWeight.orEmpty().ifBlank { "0.000" },
+            challan.diamondWeight.orEmpty().ifBlank { "0.000" },
+            challan.totalWt.orEmpty().ifBlank { "0.000" },
+            challan.quantity.toString().ifBlank { "0" }
+        )
+
+        drawTableRow(rowValues, y)
+        y += rowHeight + 24f
+
+        paint.textSize = 10f
+        paint.isFakeBoldText = true
+        paint.style = android.graphics.Paint.Style.FILL
+        paint.color = android.graphics.Color.BLACK
+
+      /*  canvas.drawText("Total Weight: ${challan.totalWt.orEmpty().ifBlank { "0.000" }}", 30f, y, paint)
+        y += 18f
+        canvas.drawText("Gross Weight: ${challan.grossWt.orEmpty().ifBlank { "0.000" }}", 30f, y, paint)
+        y += 18f
+        canvas.drawText("Stone Weight: ${challan.stoneWeight.orEmpty().ifBlank { "0.000" }}", 30f, y, paint)
+        y += 18f
+        canvas.drawText("Diamond Weight: ${challan.diamondWeight.orEmpty().ifBlank { "0.000" }}", 30f, y, paint)
+        y += 18f
+        canvas.drawText("Quantity: ${challan.quantity.toString().ifBlank { "0" }}", 30f, y, paint)*/
+
+        paint.isFakeBoldText = false
+        paint.textSize = 8f
+        canvas.drawText(
+            "Generated by LoyalString RFID App",
+            30f,
+            pageHeight - 35f,
+            paint
+        )
+
+        pdfDocument.finishPage(page)
+
+        val fileName = "SampleIn_${challan.sampleOutNo ?: System.currentTimeMillis()}.pdf"
+        val file = java.io.File(context.cacheDir, fileName)
+
+        pdfDocument.writeTo(java.io.FileOutputStream(file))
+        pdfDocument.close()
+
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.provider",
+            file
+        )
+
+        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/pdf")
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+
+        context.startActivity(intent)
+
+    } catch (e: Exception) {
+        e.printStackTrace()
+        android.widget.Toast.makeText(
+            context,
+            "PDF generate error: ${e.message}",
+            android.widget.Toast.LENGTH_LONG
+        ).show()
+    }
+}
+
+fun SampleOutListResponse.toSampleOutPrintData1(context: Context): SampleOutPrintData {
+    val org = UserPreferences.getInstance(context).getOrganization()
+    val companyName = org?.toString().orEmpty() // agar model me Name field hai to use karo
+
+    val items = (this.IssueItems ?: emptyList()).map { it ->
+        SampleOutPrintItem(
+            itemDetails = listOfNotNull(it.CategoryName, it.ProductName, it.DesignName, it.PurityName)
+                .filter { s -> s.isNotBlank() }
+                .joinToString(" - "),
+            grossWt = it.GrossWt ?: "0.000",
+            stoneWt = it.StoneWeight ?: "0.000",
+            diamondWt = it.DiamondWeight ?: "0.000",
+            netWt = it.NetWt ?: "0.000",
+            pieces = it.Pieces ?: "1",
+            status = "Sample Out",
+            //imageUrl = it.Image // agar backend me image aa raha hai
+        )
+    }
+
+    return SampleOutPrintData(
+        companyName = companyName,
+        customerName = listOfNotNull(this.Customer?.FirstName, this.Customer?.LastName).joinToString(" ").trim(),
+        addressCity = this.Customer?.CurrAddTown.orEmpty(),
+        contactNo = this.Customer?.Mobile.orEmpty(),
+        sampleOutNo = this.SampleOutNo.orEmpty(),
+        date = formatCreatedOn(this.CreatedOn), // tumhara existing fn
+        returnDate = this.ReturnDate.orEmpty(),
+        items = items
+    )
 }
 
 /*fun SampleOutListResponse.toSampleOutPrintData(context: Context): SampleOutPrintData {

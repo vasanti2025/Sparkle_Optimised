@@ -325,7 +325,7 @@ fun SampleInScreen(
        selectedReturnCodes = emptySet<String>()
     } */
 
-    LaunchedEffect(itemCode.text) {
+  /*  LaunchedEffect(itemCode.text) {
         val query = itemCode.text.trim()
         if (query.isEmpty()) return@LaunchedEffect
 
@@ -347,7 +347,7 @@ fun SampleInScreen(
         productList.add(challan)
 
         Log.d("ManualEntry", "Added by SampleOutNo: ${challan.SampleOutNo}")
-    }
+    }*/
     LaunchedEffect(tags.size, tags.lastOrNull()?.epc, productList.size) {
         Log.d("RFID_DEBUG", "========== EFFECT START ==========")
         Log.d("RFID_DEBUG", "tags.size=${tags.size}")
@@ -1284,11 +1284,28 @@ fun SampleInScreen(
                         onClearClicked = { itemCode = TextFieldValue("") },
                         filteredList = customerWiseChallanList,
                         isLoading = isLoading,
-                        onItemSelected = { item ->
+                       /* onItemSelected = { item ->
                           //  scannedCodes = emptySet()
                            // selectedReturnCodes = emptySet()
                             selectedItem = item
                             itemCode = TextFieldValue(item.SampleOutNo ?: "")
+                            Log.d("SelectedSampleOut", "Selected Id = ${item.Id}")
+                        }*/
+
+                        onItemSelected = { item ->
+                            selectedItem = item
+                            itemCode = TextFieldValue(item.SampleOutNo ?: "")
+                            showDropdownItemcode = false
+
+                            val alreadyAdded = productList.any {
+                                it.SampleOutNo.equals(item.SampleOutNo, ignoreCase = true)
+                            }
+
+                            if (!alreadyAdded) {
+                                productList.clear() // agar ek hi SampleOutNo chahiye
+                                productList.add(item)
+                            }
+
                             Log.d("SelectedSampleOut", "Selected Id = ${item.Id}")
                         }
                     )

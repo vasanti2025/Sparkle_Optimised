@@ -1376,10 +1376,32 @@ fun SampleInScreen(
                 for (i in productList.indices) {
                     val old = productList[i]
                     productList[i] = old.copy(
-
-                        Date = fields.date,
-                        Description = fields.description,
-                        ReturnDate = fields.returnDate
+                        Id = old.Id ?: 0,
+                        SampleStatus = old.SampleStatus.orEmpty(),
+                        SampleOutNo = old.SampleOutNo.orEmpty(),
+                        StatusType = old.StatusType ?: false,
+                        CreatedOn = old.CreatedOn.orEmpty(),
+                        LastUpdated = old.LastUpdated.orEmpty(),
+                        CustomerId = old.CustomerId ?: 0,
+                        Quantity = old.Quantity ?: 0,
+                        TotalWt = old.TotalWt?.takeIf { it.isNotBlank() } ?: "0",
+                        PackingWeight = old.PackingWeight?.takeIf { it.isNotBlank() } ?: "0",
+                        Status = old.Status?.takeIf { it.isNotBlank() } ?: "SampleIn",
+                        TotalGrossWt = old.TotalGrossWt?.takeIf { it.isNotBlank() } ?: "0",
+                        TotalNetWt = old.TotalNetWt?.takeIf { it.isNotBlank() } ?: "0",
+                        VendorId = old.VendorId ?: 0,
+                        FineWastagePercent = old.FineWastagePercent?.takeIf { it.isNotBlank() } ?: "0",
+                        FineWastageWt = old.FineWastageWt?.takeIf { it.isNotBlank() } ?: "0",
+                        TotalStoneWeight = old.TotalStoneWeight?.takeIf { it.isNotBlank() } ?: "0",
+                        TotalDiamondWeight = old.TotalDiamondWeight?.takeIf { it.isNotBlank() } ?: "0",
+                        ReturnDate = fields.returnDate.orEmpty(),
+                        Description = fields.description.orEmpty(),
+                        ClientCode = old.ClientCode.orEmpty(),
+                        SampleInDate = old.SampleInDate.orEmpty(),
+                        BranchId = old.BranchId ?: 0,
+                        IssueItems = old.IssueItems ?: emptyList(),
+                        Customer = old.Customer,
+                        Date = fields.date.orEmpty()
                     )
                 }
             }

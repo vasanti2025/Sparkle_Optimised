@@ -1,30 +1,30 @@
 package com.loyalstring.rfid.data.model.sampleOut
 
 data class SampleOutListResponse(
-    val Id: Int,
-    val SampleStatus: String,
-    val SampleOutNo: String,
-    val StatusType: Boolean,
-    val CreatedOn: String,
-    val LastUpdated: String,
-    val CustomerId: Int,
-    val Quantity: Int,
-    val TotalWt: String,
-    val PackingWeight: String,
-    val Status: String,
-    val TotalGrossWt: String,
-    val TotalNetWt: String,
-    val VendorId: Int,
-    val FineWastagePercent: String,
-    val FineWastageWt: String,
-    val TotalStoneWeight: String,
-    val TotalDiamondWeight: String,
-    val ReturnDate: String?,      // null in JSON
-    val Description: String?,     // can be ""
-    val ClientCode: String,
-    val SampleInDate: String?,    // null in JSON
-    val BranchId: Int?,           // null in JSON
-    val IssueItems: List<IssueItemDto>,
-    val Customer: SampleCustomerDto?,
-    val Date: String
+    val Id: Int = 0,
+    val SampleStatus: String = "",
+    val SampleOutNo: String = "",
+    val StatusType: Boolean = false,
+    val CreatedOn: String = "",
+    val LastUpdated: String = "",
+    val CustomerId: Int = 0,
+    val Quantity: Int = 0,
+    val TotalWt: String = "0",
+    val PackingWeight: String = "0",
+    val Status: String = "",
+    val TotalGrossWt: String = "0",
+    val TotalNetWt: String = "0",
+    val VendorId: Int = 0,
+    val FineWastagePercent: String = "0",
+    val FineWastageWt: String = "0",
+    val TotalStoneWeight: String = "0",
+    val TotalDiamondWeight: String = "0",
+    val ReturnDate: String? = "",
+    val Description: String? = "",
+    val ClientCode: String = "",
+    val SampleInDate: String? = "",
+    val BranchId: Int? = 0,
+    val IssueItems: List<IssueItemDto> = emptyList(),
+    val Customer: SampleCustomerDto? = null,
+    val Date: String = ""
 )

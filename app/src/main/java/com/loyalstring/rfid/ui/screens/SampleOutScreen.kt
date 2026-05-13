@@ -132,6 +132,7 @@ fun SampleOutScreen(
     var gstAmount by remember { mutableStateOf(0.0) }
     var totalWithGst by remember { mutableStateOf(0.0) }
     var pendingMatchedItem by remember { mutableStateOf<BulkItem?>(null) }
+    var isSaveClicked by remember { mutableStateOf(false) }
 
     val errorMsg by sampleOutViewModel.error.collectAsState()
     val loading by sampleOutViewModel.loading.collectAsState()
@@ -807,7 +808,7 @@ fun SampleOutScreen(
     val lastSampleOutNo by sampleOutViewModel.lastSampleOutNo.collectAsState()
 
     LaunchedEffect(lastSampleOutNo) {
-
+        if (!isSaveClicked) return@LaunchedEffect
         // Only run when a new value is emitted
         val lastNo = lastSampleOutNo ?: return@LaunchedEffect
         Log.e("SampleOut", "lastNo"+lastNo)
@@ -963,8 +964,8 @@ fun SampleOutScreen(
         printData = SampleOutPrintData(
             companyName =  UserPreferences.getInstance(context).getOrganization().toString(), // or from branch/company api
             customerName = customerName,
-            addressCity = result.Customer.CurrAddTown.toString(), // map from customer if you have
-            contactNo =  result.Customer.Mobile,    // map from customer
+            addressCity = result.Customer?.CurrAddTown.orEmpty(), // map from customer if you have
+            contactNo = result.Customer?.Mobile.orEmpty(),    // map from customer
             sampleOutNo = sampleNo,
             date = date,
             returnDate = returnDate,
@@ -1512,6 +1513,7 @@ fun SampleOutScreen(
                     val branchId = employee.branchNo ?: 1
 
                     // 🔹 Step 1: Fetch last challan no
+                        isSaveClicked = true
                     sampleOutViewModel.fetchLastSampleOutNo(clientCode, branchId)
 
                 }},

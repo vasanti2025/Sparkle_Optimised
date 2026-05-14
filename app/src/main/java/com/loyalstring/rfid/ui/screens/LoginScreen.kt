@@ -88,7 +88,7 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
     val userPrefs = remember { UserPreferences(context) }
     var selectedLoginMode by remember { mutableStateOf("password") }
     var shouldNavigateAfterPermission by remember { mutableStateOf(false) }
-
+    var showCustomApiDialog by remember { mutableStateOf(false) }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -476,6 +476,134 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
             }
 
             Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = "Configure Custom API",
+                color = Color.Blue,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable {
+                    showCustomApiDialog = true
+                }
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+
+    if (showCustomApiDialog) {
+
+        var customApi by remember {
+            mutableStateOf(
+                userPrefs.getCustomApi() ?: ""
+            )
+        }
+
+        Dialog(
+            onDismissRequest = {
+                showCustomApiDialog = false
+            }
+        ) {
+
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color.White,
+                modifier = Modifier.fillMaxWidth(0.92f)
+            ) {
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp)
+                ) {
+                    Text(
+                        text = "Configure Custom API",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Ensure the API URL belongs to an authorized RRGOLD server.",
+                        fontSize = 13.sp,
+                        color = Color.Gray,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    OutlinedTextField(
+                        value = customApi,
+                        onValueChange = {
+                            customApi = it
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = {
+                            Text("Enter API URL")
+                        },
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+
+                        GradientButtonIcon(
+                            text = "Cancel",
+                            onClick = {
+                                showCustomApiDialog = false
+                            },
+                            icon = painterResource(id = R.drawable.ic_cancel),
+                            iconDescription = "Cancel",
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp)
+                                .padding(end = 6.dp)
+                        )
+
+                        GradientButtonIcon(
+                            text = "Save",
+                            onClick = {
+
+                                var finalUrl = customApi.trim()
+
+                                if (finalUrl.isNotEmpty()) {
+
+                                    if (!finalUrl.startsWith("http://") &&
+                                        !finalUrl.startsWith("https://")
+                                    ) {
+                                        finalUrl = "http://$finalUrl"
+                                    }
+
+                                    if (!finalUrl.endsWith("/")) {
+                                        finalUrl += "/"
+                                    }
+                                }
+
+                                userPrefs.saveCustomApi(finalUrl)
+
+                                Toast.makeText(
+                                    context,
+                                    "Custom API Saved",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+
+                                showCustomApiDialog = false
+                            },
+                            icon = painterResource(id = R.drawable.check_circle),
+                            iconDescription = "Save",
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp)
+                                .padding(start = 6.dp)
+                        )
+                    }
+                }
+            }
         }
     }
     if (showExpiryPopup) {

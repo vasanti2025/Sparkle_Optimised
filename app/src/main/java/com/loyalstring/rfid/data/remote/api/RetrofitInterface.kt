@@ -142,23 +142,11 @@ interface RetrofitInterface {
     @POST("api/ProductMaster/GetAllPurity")
     suspend fun getAllPurityDetails(@Body request: ClientCodeRequest): Response<List<PurityModel>>
 
-   /* //Get all stock
+    //Get all stock
     @POST("api/ProductMaster/GetAllStockAndroid")
     suspend fun getAllLabeledStock(@Body request: RequestBody): Response<List<AlllabelResponse.LabelItem>>
 
     @POST("api/ProductMaster/GetAllStockAndroid")
-    @Streaming
-    suspend fun getAllLabeledStockNew(
-        @Body request: RequestBody
-    ): Response<ResponseBody>*/
-
-
-    @POST("api/ProductMaster/branch-labelled-stocks/search")
-    suspend fun getAllLabeledStock(
-        @Body request: RequestBody
-    ): Response<BranchLabelledStocksResponse>
-
-    @POST("api/ProductMaster/branch-labelled-stocks/search")
     @Streaming
     suspend fun getAllLabeledStockNew(
         @Body request: RequestBody

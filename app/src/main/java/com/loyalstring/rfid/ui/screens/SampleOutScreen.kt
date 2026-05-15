@@ -1540,7 +1540,7 @@ fun SampleOutScreen(
                                     ProductName = challan.ProductName ?: "",
                                     PurityName = challan.Purity ?: "",
                                     DesignName = challan.DesignName ?: "",
-                                    Id = challan.Id?.takeIf { it != 0 } ?: (challan.LabelledStockId ?: 0),
+                                    Id = challan.Id,
                                     CustomerId = custId,
                                     VendorId = 0,
                                     BranchId = branchId,

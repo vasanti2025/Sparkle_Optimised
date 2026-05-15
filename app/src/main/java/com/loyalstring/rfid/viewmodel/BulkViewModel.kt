@@ -151,6 +151,10 @@ class BulkViewModel @Inject constructor(
 
     private val existingTags = mutableListOf<UHFTAGInfo>()
     private val duplicateTags = mutableListOf<UHFTAGInfo>()
+    // O(1) EPC lookup sets — avoid O(n) .any{} on every scanned tag
+    private val existingEpcSet: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+    private val allScannedTagEpcSet: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+    private val duplicateEpcSet: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 
     private val _allScannedTags = mutableStateOf<List<UHFTAGInfo>>(emptyList())
     val allScannedTags: State<List<UHFTAGInfo>> = _allScannedTags
@@ -172,6 +176,10 @@ class BulkViewModel @Inject constructor(
     // automatically if more entries are needed, so 10K is a safe starting point.
     // val scannedEpcList: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet(300_000)
     val scannedEpcList: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet(10_000)
+
+    // Persistent seen-EPC set for O(1) duplicate checks in addTagUnique and autoFillRfidFromDb
+    private val seenTagEpcSet: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet(10_000)
+    private val autoFillFetchedEpcs: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet(10_000)
 
     private val _matchedItems = mutableStateListOf<BulkItem>()
     val matchedItems: List<BulkItem> get() = _matchedItems
@@ -720,8 +728,9 @@ class BulkViewModel @Inject constructor(
 
             // Loop: only update matched set; avoid remapping list on main thread per tag
             scanJob = viewModelScope.launch(Dispatchers.IO) {
-                var tagCount = 0
-                var lastUpdateTime = System.currentTimeMillis()
+                // Seed from previous session so stop→start preserves the existing count
+                val localMatchedSet = HashSet<String>(_matchedEpcSet.value)
+                var lastUiUpdate = System.currentTimeMillis()
 
                 while (isActive) {
                     try {
@@ -729,38 +738,33 @@ class BulkViewModel @Inject constructor(
                         if (tag != null) {
                             val scannedEpc = tag.epc?.trim()?.uppercase()
 
-                            // Track seen EPCs - null-safe check
                             if (!scannedEpc.isNullOrBlank()) {
                                 scannedEpcList.add(scannedEpc)
-                                tagCount++
 
-                                // EPC match - update matched set
                                 if (filteredDbEpcSet.contains(scannedEpc)) {
-                                    val currentE = _matchedEpcSet.value
-                                    if (!currentE.contains(scannedEpc)) {
-                                        _matchedEpcSet.value = currentE + scannedEpc
-                                    }
+                                    localMatchedSet.add(scannedEpc)
                                 }
 
-                                // Yield periodically to prevent UI freeze on high-volume scanning
-                                // Update UI every 100 tags or every 100ms
-                                if (tagCount % 100 == 0) {
-                                    val now = System.currentTimeMillis()
-                                    if (now - lastUpdateTime > 100) {
-                                        yield()
-                                        lastUpdateTime = now
-                                    }
+                                // Throttle StateFlow updates to max once per 300ms
+                                // This prevents O(n²) Set copies and recomposition storms
+                                val now = System.currentTimeMillis()
+                                if (now - lastUiUpdate >= 300) {
+                                    _matchedEpcSet.value = localMatchedSet.toHashSet()
+                                    lastUiUpdate = now
+                                    yield()
                                 }
                             }
                         } else {
-                            // No tag available, small delay to prevent tight loop
                             delay(1)
                         }
                     } catch (e: Exception) {
                         Log.e("RFID", "Error in scan loop: ${e.message}")
-                        delay(10) // Brief delay on error to prevent spam
+                        delay(10)
                     }
                 }
+
+                // Push final state after scanning stops
+                _matchedEpcSet.value = localMatchedSet.toHashSet()
             }
         }
     }
@@ -991,6 +995,11 @@ class BulkViewModel @Inject constructor(
             _matchedItems.clear()
             _unmatchedItems.clear()
             scannedEpcList.clear()
+            seenTagEpcSet.clear()
+            autoFillFetchedEpcs.clear()
+            existingEpcSet.clear()
+            allScannedTagEpcSet.clear()
+            duplicateEpcSet.clear()
             delay(50) // Allow recomposition to process empty lists
             _matchedEpcSet.value = emptySet()
             // _matchedTidSet.value = emptySet() // TID matching disabled
@@ -1005,6 +1014,8 @@ class BulkViewModel @Inject constructor(
             _matchedItems.clear()
             _unmatchedItems.clear()
             scannedEpcList.clear()
+            seenTagEpcSet.clear()
+            autoFillFetchedEpcs.clear()
             _scannedKeySet.value = emptySet()
             delay(50) // Allow recomposition to process empty lists
             _matchedEpcSet.value = emptySet()
@@ -1037,13 +1048,10 @@ class BulkViewModel @Inject constructor(
     }
 
     private fun addTagUnique(tag: UHFTAGInfo?) {
-        // Null safety check - skip if tag or epc is null
         if (tag == null || tag.epc.isNullOrBlank()) return
-
-        val current = _scannedTags.value
-        val tagEpc = tag.epc?.trim()?.uppercase()
-        if (tagEpc != null && current.none { it.epc?.trim()?.uppercase() == tagEpc }) {
-            // Defer emitting to reduce recompositions under rapid scans
+        val tagEpc = tag.epc?.trim()?.uppercase() ?: return
+        // O(1) duplicate check — avoids linear scan over the growing list
+        if (seenTagEpcSet.add(tagEpc)) {
             synchronized(pendingTagsBufferLock) {
                 pendingTagsBuffer.add(tag)
             }
@@ -1058,28 +1066,15 @@ class BulkViewModel @Inject constructor(
     private var flushJob: Job? = null
 
     private fun schedulePendingFlush() {
-        // Emit immediately to avoid visible buffering
         val snapshot: List<UHFTAGInfo>
         synchronized(pendingTagsBufferLock) {
             if (pendingTagsBuffer.isEmpty()) return
             snapshot = pendingTagsBuffer.toList()
             pendingTagsBuffer.clear()
         }
-
+        // seenTagEpcSet already guaranteed uniqueness in addTagUnique — no need to rebuild set here
         val existing = _scannedTags.value
-        val existingEpcSet = existing.mapNotNull { it.epc?.trim()?.uppercase() }.toSet()
-
-        val merged = buildList(existing.size + snapshot.size) {
-            addAll(existing)
-            snapshot.forEach { t ->
-                // Null-safe check for epc
-                val tEpc = t.epc?.trim()?.uppercase()
-                if (tEpc != null && !existingEpcSet.contains(tEpc)) {
-                    add(t)
-                }
-            }
-        }
-        _scannedTags.value = merged
+        _scannedTags.value = existing + snapshot
     }
 
     private fun flushPendingTags() {
@@ -1089,21 +1084,8 @@ class BulkViewModel @Inject constructor(
             snapshot = pendingTagsBuffer.toList()
             pendingTagsBuffer.clear()
         }
-
         val existing = _scannedTags.value
-        val existingEpcSet = existing.mapNotNull { it.epc?.trim()?.uppercase() }.toSet()
-
-        val merged = buildList(existing.size + snapshot.size) {
-            addAll(existing)
-            snapshot.forEach { t ->
-                // Null-safe check for epc
-                val tEpc = t.epc?.trim()?.uppercase()
-                if (tEpc != null && !existingEpcSet.contains(tEpc)) {
-                    add(t)
-                }
-            }
-        }
-        _scannedTags.value = merged
+        _scannedTags.value = existing + snapshot
     }
 
     fun getLocalCounters(): List<String> =
@@ -1176,7 +1158,6 @@ class BulkViewModel @Inject constructor(
     }
 
     private suspend fun handleScannedTag(tag: UHFTAGInfo?) {
-        // Null safety check - skip if tag or epc is null/blank
         if (tag == null) return
         val epc = tag.epc?.trim()?.uppercase()
         if (epc.isNullOrBlank()) return
@@ -1184,32 +1165,36 @@ class BulkViewModel @Inject constructor(
         // 1) Update UI list immediately
         addTagUnique(tag)
 
-        // 2) Resolve duplicate/existing info off the critical path
+        // 2) Resolve duplicate/existing info — O(1) HashSet checks, no per-tag DB query
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val exists = isTagExistsInDatabase(epc)
-                withContext(Dispatchers.Main) {
-                    val alreadyInExisting = existingTags.any { it.epc?.trim()?.uppercase() == epc }
-                    val alreadyInScanned = _allScannedTags.value.any { it.epc?.trim()?.uppercase() == epc }
-                    val alreadyInDuplicates = duplicateTags.any { it.epc?.trim()?.uppercase() == epc }
+                val alreadyInExisting = existingEpcSet.contains(epc)
+                val alreadyInScanned = allScannedTagEpcSet.contains(epc)
+                val alreadyInDuplicates = duplicateEpcSet.contains(epc)
 
-                    if (!alreadyInExisting) {
-                        if (alreadyInScanned) {
-                            if (!alreadyInDuplicates) {
+                if (!alreadyInExisting) {
+                    if (alreadyInScanned) {
+                        if (duplicateEpcSet.add(epc)) {
+                            withContext(Dispatchers.Main) {
                                 duplicateTags.add(tag)
                                 setLastEpc(epc)
                                 _duplicateItems.value = duplicateTags.toList()
                             }
-                        } else {
+                        }
+                    } else {
+                        allScannedTagEpcSet.add(epc)
+                        // Only hit DB for truly new tags; cache result in existingEpcSet
+                        val exists = isTagExistsInDatabase(epc)
+                        withContext(Dispatchers.Main) {
                             _allScannedTags.value += tag
                             if (exists && !alreadyInDuplicates) {
+                                existingEpcSet.add(epc)
                                 existingTags.add(tag)
                                 setLastEpc(epc)
                                 _existingItems.value = existingTags.toList()
                             }
                         }
                     }
-                    Log.d("RFID", "Processed EPC: $epc")
                 }
             } catch (e: Exception) {
                 Log.e("RFID", "Error processing tag: ${e.message}")
@@ -2489,6 +2474,17 @@ class BulkViewModel @Inject constructor(
 
 
     }*/
+
+    fun hexToAscii(hex: String): String {
+        return try {
+            hex.chunked(2)
+                .map { it.toInt(16).toChar() }
+                .joinToString("")
+                .trim()
+        } catch (e: Exception) {
+            ""
+        }
+    }
     fun sendScannedData(
         tags: List<UHFTAGInfo>,
         androidId: String,
@@ -2712,18 +2708,20 @@ class BulkViewModel @Inject constructor(
 
                 val currentMap = _rfidMap.value.toMutableMap()
 
-                // Collect EPCs
-                val epcs = tags.mapNotNull { it.epc?.trim()?.uppercase() }
-                    .filter { it.isNotBlank() }
-                    .distinct()
+                // Only query EPCs we haven't fetched before — avoids re-querying all 15k tags each call
+                val newEpcs = tags.mapNotNull { it.epc?.trim()?.uppercase() }
+                    .filter { it.isNotBlank() && autoFillFetchedEpcs.add(it) }
 
-                if (epcs.isEmpty()) return@withLock
+                val byEpc = if (newEpcs.isNotEmpty()) {
+                    // Chunk to stay under SQLite's 999-variable limit
+                    newEpcs.chunked(500)
+                        .flatMap { chunk -> bulkItemDao.getItemsByEpcs(chunk) }
+                        .associateBy { it.epc?.trim()?.uppercase().orEmpty() }
+                } else {
+                    emptyMap()
+                }
 
-                // ✅ single DB call (batch)
-                val dbItems = bulkItemDao.getItemsByEpcs(epcs)
-
-                // Map by EPC
-                val byEpc = dbItems.associateBy { it.epc?.trim()?.uppercase().orEmpty() }
+                if (byEpc.isEmpty() && currentMap.isNotEmpty()) return@withLock
 
                 // Fill rfidMap only if index empty (do not override manual barcode edits)
                 tags.forEachIndexed { index, tag ->

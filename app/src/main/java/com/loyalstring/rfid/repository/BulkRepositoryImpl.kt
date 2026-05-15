@@ -1,8 +1,10 @@
 package com.loyalstring.rfid.repository
 
+import android.content.Context
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonSyntaxException
 import com.google.gson.stream.JsonReader
@@ -19,16 +21,20 @@ import com.loyalstring.rfid.data.remote.response.AlllabelResponse
 import com.loyalstring.rfid.data.remote.response.ClearStockDataModelResponse
 import com.loyalstring.rfid.di.NormalRetrofit
 import com.loyalstring.rfid.di.SyncRetrofit
+import com.loyalstring.rfid.ui.utils.UserPreferences
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.bouncycastle.crypto.params.Blake3Parameters.context
 import java.io.EOFException
 import java.net.SocketException
 import javax.inject.Inject
 
 class BulkRepositoryImpl @Inject constructor(
+    @ApplicationContext private val context: Context,
     @SyncRetrofit private val syncApi: RetrofitInterface,
     @NormalRetrofit private val apiService: RetrofitInterface,
     override val bulkItemDao: BulkItemDao,
@@ -119,34 +125,55 @@ class BulkRepositoryImpl @Inject constructor(
         throw Exception("API Error: ${res.code()} ${res.message()} | $err")
     }
 
-
-    override suspend fun syncBulkItemsFromServer(request: ClientCodeRequest): List<AlllabelResponse.LabelItem> {
+    override suspend fun syncBulkItemsFromServer(
+        request: ClientCodeRequest
+    ): List<AlllabelResponse.LabelItem> {
         Log.d("SYNC_ITEM", "Server API syncBulkItemsFromServer Called Repository")
+
+        val savedBranchIds = UserPreferences.getInstance(context).getBranchIds()
+        Log.d("savedBranchIds", savedBranchIds.toString())
+
         val jsonObject = JsonObject().apply {
             addProperty("ClientCode", request.clientcode)
+            addProperty("ReturnAll",true)
+
+            val branchIdsArray = JsonArray()
+            savedBranchIds.forEach { id ->
+                branchIdsArray.add(id)
+            }
+
+            add("branchIds", branchIdsArray)
         }
 
-// Convert it to pretty JSON
-        val gson = GsonBuilder().setPrettyPrinting().create()
+        val gson = GsonBuilder()
+            .setPrettyPrinting()
+            .create()
+
         val prettyJson = gson.toJson(jsonObject)
 
-// Convert string to RequestBody
-        val requestBody = prettyJson.toRequestBody("application/json".toMediaType())
+        val requestBody = prettyJson
+            .toRequestBody("application/json".toMediaType())
 
         return try {
             val response = apiService.getAllLabeledStock(requestBody)
+
             if (response.isSuccessful) {
-               // Log.d("## response","response"+response)
-                response.body() ?: emptyList()
+                val body = response.body()
+                body?.Items ?: emptyList()
             } else {
+                Log.e(
+                    "SYNC_ITEM",
+                    "API failed: code=${response.code()}, message=${response.message()}"
+                )
                 emptyList()
             }
         } catch (e: Exception) {
+            Log.e("SYNC_ITEM", "Exception in syncBulkItemsFromServer", e)
             emptyList()
         }
     }
 
-    suspend fun updateScannedStatus(epc: String, status: String) {
+  suspend fun updateScannedStatus(epc: String, status: String) {
         bulkItemDao.updateScannedStatus(epc, status)
     }
 
@@ -400,7 +427,7 @@ class BulkRepositoryImpl @Inject constructor(
 
 
 
-    override suspend fun syncBulkItemsFromServer(
+  /*  override suspend fun syncBulkItemsFromServer(
         request: ClientCodeRequest,
         tagType: String,
         mapItem: suspend (AlllabelResponse.LabelItem) -> BulkItem?,
@@ -411,6 +438,13 @@ class BulkRepositoryImpl @Inject constructor(
         var totalCount = 0;
         val requestBody = JsonObject().apply {
             addProperty("ClientCode", request.clientcode)
+
+            val branchIdsArray = JsonArray().apply {
+                add(1)
+                add(2)
+            }
+
+            add("branchIds", branchIdsArray)
         }.toString().toRequestBody("application/json".toMediaType())
 
         val response = try {
@@ -425,7 +459,7 @@ class BulkRepositoryImpl @Inject constructor(
             return@withContext
         }
 
-        val body = response.body() ?: return@withContext
+        val body = response.body()?: return@withContext
 
         val gson = GsonBuilder()
             .disableHtmlEscaping()
@@ -501,6 +535,139 @@ class BulkRepositoryImpl @Inject constructor(
         }
 
         onProgress(processed, synced, totalCount)
+    }*/
+
+    override suspend fun syncBulkItemsFromServer(
+        request: ClientCodeRequest,
+        tagType: String,
+        mapItem: suspend (AlllabelResponse.LabelItem) -> BulkItem?,
+        onProgress: suspend (processed: Int, synced: Int, totalCount: Int) -> Unit
+    ) = withContext(Dispatchers.IO) {
+
+        Log.d("SYNC_ITEM", "Server API New Called: ${request.clientcode}")
+        var totalCount = 0
+        val savedBranchIds = UserPreferences.getInstance(context).getBranchIds()
+        Log.d("savedBranchIds", savedBranchIds.toString())
+        val requestBody = JsonObject().apply {
+            addProperty("ClientCode", request.clientcode)
+            addProperty("ReturnAll",true)
+            val branchIdsArray = JsonArray()
+            savedBranchIds.forEach { id ->
+                branchIdsArray.add(id)
+            }
+
+            add("branchIds", branchIdsArray)
+        }.toString().toRequestBody("application/json".toMediaType())
+
+        val response = try {
+            syncApi.getAllLabeledStockNew(requestBody)
+        } catch (e: Exception) {
+            Log.e("SYNC_ITEM", "API call failed", e)
+            return@withContext
+        }
+
+        if (!response.isSuccessful) {
+            Log.e("SYNC_ITEM", "API failed: ${response.code()}")
+            return@withContext
+        }
+
+        val body = response.body() ?: return@withContext
+
+        val gson = GsonBuilder()
+            .disableHtmlEscaping()
+            .create()
+
+        val BATCH_SIZE = 500
+        val batch = ArrayList<BulkItem>(BATCH_SIZE)
+
+        var processed = 0
+        var synced = 0
+
+        val PROGRESS_INTERVAL = 1000L
+        var lastProgressTime = System.currentTimeMillis()
+
+        body.charStream().use { stream ->
+            val reader = JsonReader(stream).apply {
+                isLenient = true
+            }
+
+            try {
+                reader.beginObject()
+
+                while (reader.hasNext()) {
+                    when (reader.nextName()) {
+                        "TotalCount" -> {
+                            totalCount = reader.nextInt()
+                        }
+
+                        "PageNumber" -> {
+                            reader.skipValue()
+                        }
+
+                        "PageSize" -> {
+                            reader.skipValue()
+                        }
+
+                        "Items" -> {
+                            reader.beginArray()
+
+                            while (reader.hasNext()) {
+                                val serverItem: AlllabelResponse.LabelItem = gson.fromJson(
+                                    reader,
+                                    AlllabelResponse.LabelItem::class.java
+                                )
+
+                                processed++
+
+                                val bulkItem = mapItem(serverItem)
+                                if (bulkItem != null) {
+                                    batch.add(bulkItem)
+                                    synced++
+                                }
+
+                                if (batch.size == BATCH_SIZE) {
+                                    bulkItemDao.insertBulkItem(batch)
+                                    batch.clear()
+                                }
+
+                                val now = System.currentTimeMillis()
+                                if (now - lastProgressTime >= PROGRESS_INTERVAL) {
+                                    onProgress(processed, synced, totalCount)
+                                    lastProgressTime = now
+                                }
+                            }
+
+                            reader.endArray()
+                        }
+
+                        else -> {
+                            reader.skipValue()
+                        }
+                    }
+                }
+
+                reader.endObject()
+
+            } catch (e: SocketException) {
+                Log.e("SYNC_ITEM", "Connection reset during sync", e)
+
+            } catch (e: EOFException) {
+                Log.e("SYNC_ITEM", "Partial response received", e)
+
+            } catch (e: JsonSyntaxException) {
+                Log.e("SYNC_ITEM", "Malformed JSON from server", e)
+
+            } catch (e: Exception) {
+                Log.e("SYNC_ITEM", "Unexpected sync error", e)
+            }
+        }
+
+        if (batch.isNotEmpty()) {
+            bulkItemDao.insertBulkItem(batch)
+            batch.clear()
+        }
+
+        onProgress(processed, synced, totalCount)
     }
 
 
@@ -527,11 +694,14 @@ class BulkRepositoryImpl @Inject constructor(
     }
 
     suspend fun getItemsByEpcsPaged(epcs: List<String>, limit: Int, offset: Int): List<BulkItem> {
-        return bulkItemDao.getItemsByEpcsPaged(epcs, limit, offset)
+        return epcs.chunked(500)
+            .flatMap { chunk -> bulkItemDao.getItemsByEpcsPaged(chunk, Int.MAX_VALUE, 0) }
+            .drop(offset)
+            .take(limit)
     }
 
     suspend fun getItemCountByEpcs(epcs: List<String>): Int {
-        return bulkItemDao.getItemCountByEpcs(epcs)
+        return epcs.chunked(500).sumOf { chunk -> bulkItemDao.getItemCountByEpcs(chunk) }
     }
 
     suspend fun insertBulkItemWithDetails(

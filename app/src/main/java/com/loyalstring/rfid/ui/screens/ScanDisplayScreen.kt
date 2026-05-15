@@ -35,6 +35,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -626,47 +627,50 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
     val stickyUnmatchedIds by bulkViewModel.filteredUnmatchedIds.collectAsState()
 
     val _asyncDisplayItems = remember { MutableStateFlow<List<ScannedBulkItem>>(emptyList()) }
-    val displayItems by _asyncDisplayItems.collectAsState() // Use collectAsState for flow
+    val displayItems by _asyncDisplayItems.collectAsState()
+    var isComputingDisplay by remember { mutableStateOf(false) }
 
-    // Optimized: Debounce the computation to avoid excessive recomputations during rapid scanning
     LaunchedEffect(scannedItemsSequence, selectedMenu, stickyUnmatchedIds) {
-        // Small delay to debounce rapid updates during scanning
+        // During active scanning debounce more aggressively — matchedEpcs fires every 300ms
+        // so we only recompute at most once per second while scanning
         if (isScanning) {
-            delay(50) // Debounce during active scanning to reduce computation frequency
+            delay(700)
         }
 
-        scope.launch(Dispatchers.Default) {
+        isComputingDisplay = true
+        withContext(Dispatchers.Default) {
             try {
                 val currentScannedSequence = scannedItemsSequence
 
-                val computedItems = if (currentScannedSequence.iterator().hasNext().not()) {
+                val computedItems = if (!currentScannedSequence.iterator().hasNext()) {
                     emptyList()
                 } else {
-                    val filteredSequence = when (selectedMenu) {
-                        MENU_MATCHED -> {
+                    when (selectedMenu) {
+                        MENU_MATCHED ->
                             currentScannedSequence
                                 .filter { it.currentScannedStatus == "Matched" }
-                        }
+                                .toList()
                         MENU_UNMATCHED -> {
-                            val stickySet = stickyUnmatchedIds.toSet()
+                            val stickySet = stickyUnmatchedIds.toHashSet()
                             val unmatchedNow = currentScannedSequence
                                 .filter { it.currentScannedStatus == "Unmatched" }
-                            val sticky = currentScannedSequence
-                                .filter {
-                                    val id = it.epc?.trim()?.uppercase()
-                                    id != null && stickySet.contains(id)
-                                }
-                            (unmatchedNow + sticky).distinctBy { it.epc?.trim()?.uppercase() }
+                                .toList()
+                            val stickyExtra = currentScannedSequence
+                                .filter { it.epc?.trim()?.uppercase()?.let { e -> stickySet.contains(e) } == true }
+                                .toList()
+                            // Use LinkedHashSet for O(1) dedup while preserving order
+                            val seen = LinkedHashSet<String?>(unmatchedNow.size + stickyExtra.size)
+                            (unmatchedNow + stickyExtra).filter { seen.add(it.epc?.trim()?.uppercase()) }
                         }
-                        else -> currentScannedSequence
+                        else -> currentScannedSequence.toList()
                     }
-                    filteredSequence.toList() // Materialize only once at the end
                 }
                 _asyncDisplayItems.value = computedItems
             } catch (e: Exception) {
                 Log.e("ScanDisplayScreen", "Error computing display items: ${e.message}")
             }
         }
+        isComputingDisplay = false
     }
 
 
@@ -998,6 +1002,15 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
                         .toList()
                 }
 
+                // Progress bar — visible while display items are being computed on Dispatchers.Default
+                if (isComputingDisplay) {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFF6200EE),
+                        trackColor = Color(0xFFE0E0E0)
+                    )
+                }
+
                 // ---------- L A Z Y   C O L U M N   (drill-down + multi-select friendly) ----------
                 LazyColumn(modifier = Modifier.weight(1f)) {
                     when (currentLevel) {
@@ -1095,7 +1108,7 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
                                 items(
                                     designItemsList,
                                     key = {
-                                        it.epc ?: it.itemCode ?: it.design ?: it.originalBulkItem.hashCode().toString()
+                                        it.epc ?: it.itemCode ?: "${it.design}_${it.originalBulkItem.bulkItemId}"
                                     }) { item ->
                                     DesignItemRow(item) { clickedItem ->
                                         selectedItem = clickedItem.originalBulkItem
@@ -1946,8 +1959,8 @@ private fun BulkItem.toItem(status1: String): Item {
         itemCode = this.itemCode ?: "",
         status = status1,
 
-        grossWeight = this.grossWeight?.toDoubleOrNull() ?: 0.0,
-        netWeight = this.netWeight?.toDoubleOrNull() ?: 0.0,
+        grossWeight = this.grossWeight?.toDoubleOrNull()?.takeIf { it.isFinite() } ?: 0.0,
+        netWeight = this.netWeight?.toDoubleOrNull()?.takeIf { it.isFinite() } ?: 0.0,
         quantity = 1, // agar BulkItem me qty hai to yaha use kar dena
 
         counterName = this.counterName,
@@ -2224,23 +2237,24 @@ fun SummaryRow(currentLevel: String, items: List<ScannedBulkItem>, selectedMenu:
     // ✅ Optimized: Use derivedStateOf and sequence for better performance
     val totals by remember(items) {
         derivedStateOf {
+            // Single pass — avoids building intermediate lists and BigDecimal per item
+            var totalWt = 0.0
+            var matchedQty = 0
+            var matchedWt = 0.0
+            for (it in items) {
+                val w = it.grossWeight?.toDoubleOrNull() ?: 0.0
+                totalWt += w
+                if (it.currentScannedStatus == "Matched") {
+                    matchedQty++
+                    matchedWt += w
+                }
+            }
             val totalQty = items.size
-            val totalWt = items.asSequence()
-                .fold(BigDecimal.ZERO) { acc, it -> acc + parseWeightToBigDecimal(it.grossWeight) }
-
-            val matched = items.asSequence()
-                .filter { it.currentScannedStatus == "Matched" } // Use currentScannedStatus
-                .toList()
-            val matchedQty = matched.size
-            val matchedWt = matched.asSequence()
-                .fold(BigDecimal.ZERO) { acc, it -> acc + parseWeightToBigDecimal(it.grossWeight) }
-
             val unmatchedQty = totalQty - matchedQty
-            val unmatchedWt = totalWt.subtract(matchedWt)
-
+            val unmatchedWt = totalWt - matchedWt
             Triple(
-                Triple(totalQty, totalWt, matchedQty),
-                Triple(matchedWt, unmatchedQty, unmatchedWt),
+                Triple(totalQty, totalWt.toBigDecimal(), matchedQty),
+                Triple(matchedWt.toBigDecimal(), unmatchedQty, unmatchedWt.toBigDecimal()),
                 Unit
             )
         }
@@ -2356,29 +2370,35 @@ fun TableHeader(currentLevel: String,localizedContext:Context) {
 @Composable
 fun TableDataRow(row: TableRow, currentLevel: String, onRowClick: () -> Unit) {
     // ✅ Optimized: Use sequence and memoize computations
+    // Single pass: qty, weights, matched count, and row status all at once
     val computedValues = remember(row.items) {
+        var totalWt = 0.0
+        var matchedQty = 0
+        var matchedWt = 0.0
+        var unmatchedCount = 0
+        for (it in row.items) {
+            val w = it.grossWeight?.toDoubleOrNull() ?: 0.0
+            totalWt += w
+            if (it.currentScannedStatus == "Matched") {
+                matchedQty++
+                matchedWt += w
+            } else {
+                unmatchedCount++
+            }
+        }
         val qty = row.items.size
-        val matchedItems = row.items.asSequence()
-            .filter { it.currentScannedStatus == "Matched" } // Use currentScannedStatus
-            .toList()
-        val matchedQty = matchedItems.size
-        val grossWeight = row.items.asSequence()
-            .sumOf { it.grossWeight?.toDoubleOrNull() ?: 0.0 }
-            .toBigDecimal()
-        val matchedWeight = matchedItems.asSequence()
-            .sumOf { it.grossWeight?.toDoubleOrNull() ?: 0.0 }
-            .toBigDecimal()
+        val rowStatus = when {
+            unmatchedCount == 0 && qty > 0 -> "Matched"
+            else -> "Unmatched"
+        }
         object {
             val qty = qty
             val matchedQty = matchedQty
-            val grossWeight = grossWeight
-            val matchedWeight = matchedWeight
+            val grossWeight = totalWt.toBigDecimal()
+            val matchedWeight = matchedWt.toBigDecimal()
+            val status = rowStatus
         }
     }
-    val qty = computedValues.qty
-    val matchedQty = computedValues.matchedQty
-    val grossWeight = computedValues.grossWeight
-    val matchedWeight = computedValues.matchedWeight
 
     Row(
         modifier = Modifier
@@ -2388,16 +2408,11 @@ fun TableDataRow(row: TableRow, currentLevel: String, onRowClick: () -> Unit) {
             .clickable { onRowClick() }
     ) {
         TableCell(row.label, colCategoryWidth)
-        TableCell("$qty", colQtyWidth)
-        TableCell(formatTo3Decimals(grossWeight), colWeightWidth)
-        TableCell("$matchedQty", colMatchedQtyWidth)
-        TableCell(formatTo3Decimals(matchedWeight), colMatchedWtWidth)
-        val status = when {
-            row.items.all { it.currentScannedStatus == "Matched" } -> "Matched" // Use currentScannedStatus
-            row.items.all { it.currentScannedStatus == "Unmatched" } -> "Unmatched" // Use currentScannedStatus
-            else -> "Unmatched"
-        }
-        StatusIconCell(status, colStatusWidth)
+        TableCell("${computedValues.qty}", colQtyWidth)
+        TableCell(formatTo3Decimals(computedValues.grossWeight), colWeightWidth)
+        TableCell("${computedValues.matchedQty}", colMatchedQtyWidth)
+        TableCell(formatTo3Decimals(computedValues.matchedWeight), colMatchedWtWidth)
+        StatusIconCell(computedValues.status, colStatusWidth)
     }
 
 }

@@ -28,8 +28,8 @@ object SyncRepositoryModule {
             syncApi = syncApi,
             apiService = normalApi,
             bulkItemDao = bulkItemDao,
-            epcDao = epcDao
-
+            epcDao = epcDao,
+            context = context
         )
     }
 }

@@ -175,6 +175,7 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                 rfidExportViewModel.getAllScantoDesktop(clientCode, deviceId)
             }
         }
+    }
 
         // Trigger only when new tags arrive (size change), not on every recompose
         LaunchedEffect(tags.size) {
@@ -1162,6 +1163,6 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
             }
         )
     }
-}
+
 
 

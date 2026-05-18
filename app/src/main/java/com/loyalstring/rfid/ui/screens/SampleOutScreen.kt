@@ -856,7 +856,7 @@ fun SampleOutScreen(
         // ✅ Sab validation pass → abhi hi number generate karo + API call
         val newLastSampleOutNO = sampleOutViewModel.getNextSampleOutNo(lastNo)
         Log.d("@@","newLastSampleOutNO"+newLastSampleOutNO   )
-
+        val sampleInDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         val request = SampleOutAddRequest(
             ClientCode = clientCode,
             BranchId = branchId,
@@ -872,6 +872,7 @@ fun SampleOutScreen(
             TotalNetWt = productList.sumOf { it.NetWt.toDoubleOrNull() ?: 0.0 }.toString(),
             TotalStoneWeight = productList.sumOf { it.StoneAmt.toDoubleOrNull() ?: 0.0 }.toString(),
             TotalWt = productList.sumOf { it.TotalWt.toDoubleOrNull() ?: 0.0 }.toString(),
+
             IssueItems = productList.map { challan ->
                 SampleOutIssueItem(
                     ItemCode = challan.ItemCode,
@@ -903,14 +904,14 @@ fun SampleOutScreen(
                     ProductName = challan.ProductName ?: "",
                     PurityName = challan.Purity ?: "",
                     DesignName = challan.DesignName ?: "",
-                    Id = challan.LabelledStockId ?: 0,
+                    Id = 0,
                     CustomerId = custId,
                     VendorId = 0,
                     BranchId = branchId,
                     LabelledStockId = challan.LabelledStockId ?: 0,
                     CustomerName = customerName,
-                    SampleInDate = "2025-12-06",
-                    CreatedOn = "2025-12-06",
+                    SampleInDate = sampleInDate,
+                    CreatedOn = sampleInDate,
                     Customer = null
                 )
             }
@@ -1540,7 +1541,7 @@ fun SampleOutScreen(
                                     ProductName = challan.ProductName ?: "",
                                     PurityName = challan.Purity ?: "",
                                     DesignName = challan.DesignName ?: "",
-                                    Id = challan.Id?.takeIf { it != 0 } ?: (challan.LabelledStockId ?: 0),
+                                    Id = challan.Id,
                                     CustomerId = custId,
                                     VendorId = 0,
                                     BranchId = branchId,

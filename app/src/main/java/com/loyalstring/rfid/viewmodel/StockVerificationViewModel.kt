@@ -196,7 +196,8 @@ class StockVerificationViewModel @Inject constructor(
                 val result = repository.getBatchDetails(
                     ScanBatchRequest(
                         ClientCode = clientCode,
-                        ScanBatchId = scanBatchId
+                        ScanBatchId = scanBatchId,
+                        ReturnAllData= true
                     )
                 )
 

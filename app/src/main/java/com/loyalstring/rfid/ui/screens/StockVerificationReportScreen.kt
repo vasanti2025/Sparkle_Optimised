@@ -116,10 +116,11 @@ fun StockVerificationReportScreen(
         remember { UserPreferences.getInstance(context).getEmployee(Employee::class.java) }
 
     val state0 by viewModel.sessionState.collectAsState()
-
-    singleProductViewModel.getAllBranches(ClientCodeRequest(employee?.clientCode.toString()))
-
-
+    LaunchedEffect(employee?.clientCode) {
+        singleProductViewModel.getAllBranches(
+            ClientCodeRequest(employee?.clientCode.toString())
+        )
+    }
 
     LaunchedEffect(selectedReportType, selectedDate) {
         /*  viewModel.fetchStockVerificationReport(

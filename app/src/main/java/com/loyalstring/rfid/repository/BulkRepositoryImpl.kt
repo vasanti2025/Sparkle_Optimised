@@ -1,6 +1,7 @@
 package com.loyalstring.rfid.repository
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
@@ -13,6 +14,7 @@ import com.loyalstring.rfid.data.local.dao.EpcDao
 import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.data.local.entity.EpcDto
 import com.loyalstring.rfid.data.model.ClientCodeRequest
+import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.data.model.order.Diamond
 import com.loyalstring.rfid.data.model.order.Stone
 import com.loyalstring.rfid.data.remote.api.RetrofitInterface
@@ -40,6 +42,8 @@ class BulkRepositoryImpl @Inject constructor(
     override val bulkItemDao: BulkItemDao,
     private val epcDao: EpcDao
 ) : BulkRepository {
+    val employee = UserPreferences.getInstance(context).getEmployee(Employee::class.java)
+
 
     override suspend fun insertBulkItems(items: List<BulkItem>) {
         bulkItemDao.insertBulkItem(items)
@@ -136,6 +140,7 @@ class BulkRepositoryImpl @Inject constructor(
         val jsonObject = JsonObject().apply {
             addProperty("ClientCode", request.clientcode)
             addProperty("ReturnAll",true)
+            addProperty("RoleId", employee?.roleId)
 
             val branchIdsArray = JsonArray()
             savedBranchIds.forEach { id ->
@@ -550,6 +555,7 @@ class BulkRepositoryImpl @Inject constructor(
         Log.d("savedBranchIds", savedBranchIds.toString())
         val requestBody = JsonObject().apply {
             addProperty("ClientCode", request.clientcode)
+            addProperty("RoleId", employee?.roleId)
             addProperty("ReturnAll",true)
             val branchIdsArray = JsonArray()
             savedBranchIds.forEach { id ->

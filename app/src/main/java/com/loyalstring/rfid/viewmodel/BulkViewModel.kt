@@ -342,7 +342,8 @@ class BulkViewModel @Inject constructor(
           val counters=bulkItemDao.getDistinctCounters()
           // val counters = allItems.mapNotNull { it.counterName }
            // val counters = allItems.mapNotNull { it.counterName?.takeIf { it.isNotBlank() } }.distinct()
-            val branches = allItems.mapNotNull { it.branchName?.takeIf { it.isNotBlank() } }.distinct()
+            val branches=bulkItemDao.getDistinctBranch()
+            //    val branches = allItems.mapNotNull { it.branchName?.takeIf { it.isNotBlank() } }.distinct()
           //  val boxes = allItems.mapNotNull { it.boxName?.takeIf { it.isNotBlank() } }.distinct()
             val boxes=bulkItemDao.getDistinctBoxes()
             val exhibitions = allItems

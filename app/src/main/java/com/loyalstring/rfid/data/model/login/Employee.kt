@@ -52,5 +52,6 @@ data class Employee(
     @SerializedName("DefaultCounter") val defaultCounter: String?,
     @SerializedName("DefaultCounterId") val defaultCounterId: Int?,
     @SerializedName("Username") val username: String?,
+    @SerializedName("RoleId")val roleId:Int
 
     )

@@ -92,6 +92,7 @@ import com.loyalstring.rfid.ui.utils.BackgroundGradient
 
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
+import com.loyalstring.rfid.viewmodel.BulkViewModel
 // PERF-FIX: Removed BulkViewModel, OrderViewModel, SingleProductViewModel imports —
 // these ViewModels are now created lazily inside their respective screen composables,
 // not eagerly at the root SetupNavigation level.
@@ -239,7 +240,7 @@ private fun SetupNavigation(
     // Reactive state for employee (same variable name)
     var employee by remember { mutableStateOf<Employee?>(null) }
 
-
+    val bulkViewModel: BulkViewModel = hiltViewModel()
     var showExpiryPopup by rememberSaveable { mutableStateOf(false) }
     var expiryPopupMessage by rememberSaveable { mutableStateOf("") }
     var isPlanExpired by rememberSaveable { mutableStateOf(false) }
@@ -653,12 +654,16 @@ private fun SetupNavigation(
                                         selectedItemIndex = index
                                         when (navigationItem.route) {
                                             "login" -> {
-                                                userPreferences.logout()
-                                                UserPreferences.getInstance(context).clearAll()
-                                                scope.launch { drawerState.close() }
-                                                navController.navigate("login") {
-                                                    popUpTo(0) { inclusive = true }
-                                                    launchSingleTop = true
+                                                bulkViewModel.clearLabelStockOnLogout {
+                                                    userPreferences.logout()
+                                                    UserPreferences.getInstance(context).clearAll()
+
+                                                    scope.launch { drawerState.close() }
+
+                                                    navController.navigate("login") {
+                                                        popUpTo(0) { inclusive = true }
+                                                        launchSingleTop = true
+                                                    }
                                                 }
                                             }
 

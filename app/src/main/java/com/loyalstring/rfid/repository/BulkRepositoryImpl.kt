@@ -147,7 +147,10 @@ class BulkRepositoryImpl @Inject constructor(
                 branchIdsArray.add(id)
             }
 
-            add("branchIds", branchIdsArray)
+           // add("branchIds", branchIdsArray)
+            if (employee?.roleId != 1) {
+                add("branchIds", branchIdsArray)
+            }
         }
 
         val gson = GsonBuilder()
@@ -562,7 +565,11 @@ class BulkRepositoryImpl @Inject constructor(
                 branchIdsArray.add(id)
             }
 
-            add("branchIds", branchIdsArray)
+
+            if (employee?.roleId != 1) {
+                add("branchIds", branchIdsArray)
+            }
+          //  add("branchIds", branchIdsArray)
         }.toString().toRequestBody("application/json".toMediaType())
 
         val response = try {

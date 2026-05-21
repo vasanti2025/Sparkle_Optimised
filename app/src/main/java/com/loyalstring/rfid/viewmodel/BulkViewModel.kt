@@ -2888,6 +2888,36 @@ class BulkViewModel @Inject constructor(
             _filteredUnmatchedIds.value.filterNot { it in matchedKeys }
     }
 
+    fun clearLabelStockOnLogout(onDone: () -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                stopScanning()
+
+                bulkRepository.clearAllItemsSafely()
+                bulkRepository.clearAllRFID()
+
+                usedEpcSet.clear()
+                scannedEpcList.clear()
+                seenTagEpcSet.clear()
+                autoFillFetchedEpcs.clear()
+
+                withContext(Dispatchers.Main) {
+                    _allItems.value = emptyList()
+                    _scannedFilteredItems.value = emptyList()
+                    _matchedItems.clear()
+                    _unmatchedItems.clear()
+                    _filteredItems.clear()
+                    _matchedEpcSet.value = emptySet()
+                    onDone()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    onDone()
+                }
+            }
+        }
+    }
+
 }
 
 

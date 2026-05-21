@@ -300,7 +300,17 @@ fun StockVerificationReportScreen(
     }
     if (showDatePicker) {
 
-        val datePickerState = rememberDatePickerState()
+        val todayMillis = System.currentTimeMillis()
+
+        val datePickerState = rememberDatePickerState(
+            selectableDates = object : androidx.compose.material3.SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                    return utcTimeMillis <= todayMillis
+                }
+            }
+        )
+
+      //  val datePickerState = rememberDatePickerState()
 
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
@@ -574,9 +584,19 @@ fun BatchFilterDialog(
     }
 
     // TO DATE PICKER
+// TO DATE PICKER
     if (showToDatePicker) {
 
-        val datePickerState = rememberDatePickerState()
+        val fromMillis = parseDateToMillis(from)
+        val todayMillis = System.currentTimeMillis()
+
+        val datePickerState = rememberDatePickerState(
+            selectableDates = object : androidx.compose.material3.SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                    return utcTimeMillis >= fromMillis && utcTimeMillis <= todayMillis
+                }
+            }
+        )
 
         DatePickerDialog(
             onDismissRequest = { showToDatePicker = false },
@@ -606,6 +626,15 @@ fun BatchFilterDialog(
         ) {
             DatePicker(state = datePickerState)
         }
+    }
+}
+
+fun parseDateToMillis(date: String): Long {
+    return try {
+        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        sdf.parse(date)?.time ?: 0L
+    } catch (e: Exception) {
+        0L
     }
 }
 

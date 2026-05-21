@@ -240,13 +240,23 @@ fun AddProductScreen(
     fun updateField(label: String, value: String) {
         fieldValues[label] = value
         if (label == "Gross Weight" || label == "Stone Weight" || label == "Diamond Weight") {
-            val gross = fieldValues["" +
-                    "Gross Weight"]?.toDoubleOrNull() ?: 0.0
+            val gross = fieldValues["Gross Weight"]?.toDoubleOrNull() ?: 0.0
+
             val stone = fieldValues["Stone Weight"]?.toDoubleOrNull() ?: 0.0
-            val diamond = fieldValues["Diamond Weight"]?.toDoubleOrNull() ?: 0.0
-            val net = gross - stone - diamond
-            fieldValues["Net Weight"] = if (net > 0) String.format("%.2f", net) else ""
-        }
+
+// Diamond weight entered in CARAT
+            val diamondCarat =
+                fieldValues["Diamond Weight"]?.toDoubleOrNull() ?: 0.0
+
+// Convert carat to gram
+            val diamondGram = diamondCarat * 0.200
+
+// Net Weight Calculation
+            val net = gross - stone - diamondGram
+
+            fieldValues["Net Weight"] =
+                if (net > 0) String.format("%.3f", net) else ""
+              }
     }
 
     val isCategoryDisabled = fieldValues["SKU"].isNullOrEmpty().not()

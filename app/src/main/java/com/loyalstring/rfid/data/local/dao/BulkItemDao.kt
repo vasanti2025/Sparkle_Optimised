@@ -140,7 +140,15 @@ interface BulkItemDao {
 
     /*for single use tag*/
 
-    @Query("SELECT itemCode FROM bulk_items WHERE epc = :epc LIMIT 1")
+ /*   @Query("SELECT itemCode FROM bulk_items WHERE epc = :epc LIMIT 1")
+    suspend fun getItemCodeByEpc(epc: String): String?*/
+
+    @Query("""
+    SELECT BarcodeNumber 
+    FROM rfid_tags 
+    WHERE UPPER(TRIM(TidValue)) = UPPER(TRIM(:epc))
+    LIMIT 1
+""")
     suspend fun getItemCodeByEpc(epc: String): String?
 
     @Update

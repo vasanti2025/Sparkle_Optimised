@@ -63,6 +63,7 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
+import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.File
 import java.io.FileOutputStream
@@ -2507,33 +2508,65 @@ class BulkViewModel @Inject constructor(
 
         val clientCode = employee?.clientCode
 
-        val data = tags.mapIndexed { index, tag ->
+        val data = tags.mapIndexedNotNull { index, tag ->
 
-            val rfid = _rfidMap.value[index]   // optional
-            val epc = tag.epc.trim().uppercase()
-            val ascii = hexToAscii(epc)
+            val epc = tag.epc
+                .trim()
+                .uppercase()
+                .replace(" ", "")
+                .replace("\n", "")
+                .replace("\r", "")
 
-            /*  val finalCode = when {
-                  !rfid.isNullOrBlank() -> rfid
-                  ascii.isNotBlank() -> ascii
-                  else -> epc               // ✅ LAST FALLBACK
-              }*/
+            val rfid = _rfidMap.value[index]
+                .orEmpty()
+                .trim()
 
-            // val finalCode = rfid?.takeIf { it.isNotBlank() }
+            val validRfid = if (
+                rfid.isBlank() ||
+                rfid.equals("scan here", ignoreCase = true)
+            ) {
+                ""
+            } else {
+                rfid
+            }
+
+            val ascii = if (epc.startsWith("E", ignoreCase = true)) {
+                ""
+            } else {
+                hexToAscii(epc).trim()
+            }
+
+            val validAscii = if (
+                ascii.isBlank() ||
+                ascii.equals("scan here", ignoreCase = true)
+            ) {
+                ""
+            } else {
+                ascii
+            }
+
             val finalCode = when {
-                !rfid.isNullOrBlank() -> rfid
-                ascii.isNotBlank() -> ascii
-                else -> epc
+                validRfid.isNotBlank() -> validRfid
+                validAscii.isNotBlank() -> validAscii
+                else -> ""
+            }.trim()
+
+            if (
+                epc.isBlank() ||
+                finalCode.isBlank() ||
+                finalCode.equals("scan here", ignoreCase = true)
+            ) {
+                Log.d("SKIP_SEND", "Skipped INDEX=$index EPC=$epc RFID='$rfid' ASCII='$ascii' FINAL='$finalCode'")
+                return@mapIndexedNotNull null
             }
 
             Log.d(
                 "DEBUG_SEND",
-                "INDEX=$index EPC=$epc RFID=$rfid ASCII='$ascii' FINAL='$finalCode'"
+                "INDEX=$index EPC=$epc RFID='$rfid' ASCII='$ascii' FINAL='$finalCode'"
             )
 
-
             ScannedDataToService(
-                tIDValue = tag.epc,
+                tIDValue = epc,
                 rFIDCode = finalCode,
                 createdOn = formatted,
                 lastUpdated = formatted,
@@ -2550,23 +2583,28 @@ class BulkViewModel @Inject constructor(
         )
 
         if (data.isEmpty()) {
-            ToastUtils.showToast(context, "Nothing to save")
+            ToastUtils.showToast(context, "No valid RFID data found")
             return
         }
 
         viewModelScope.launch {
-            val response = apiService.addAllScannedData(data)
-            if (response.isSuccessful) {
-                ToastUtils.showToast(context, "Items Saved successfully")
-                _reloadTrigger.value = !_reloadTrigger.value
-                Log.d("API_SUCCESS", "Saved ${data.size} items")
-            } else {
-                Log.e("API_ERROR", "Error: ${response.code()}")
+            try {
+                val response = apiService.addAllScannedData(data)
+
+                if (response.isSuccessful) {
+                    ToastUtils.showToast(context, "Items Saved successfully")
+                    _reloadTrigger.value = !_reloadTrigger.value
+                    Log.d("API_SUCCESS", "Saved ${data.size} items")
+                } else {
+                    Log.e("API_ERROR", "Error: ${response.code()}")
+                    ToastUtils.showToast(context, "Failed to scan")
+                }
+            } catch (e: Exception) {
+                Log.e("API_EXCEPTION", "Save failed", e)
                 ToastUtils.showToast(context, "Failed to scan")
             }
         }
     }
-
 
     /*fun loadUnmatchedFast(sourceItems: List<BulkItem>) {
     viewModelScope.launch(Dispatchers.Default) {
@@ -2801,12 +2839,44 @@ class BulkViewModel @Inject constructor(
     private val _itemCodeMap = MutableStateFlow<Map<String, String>>(emptyMap())
     val itemCodeMap: StateFlow<Map<String, String>> = _itemCodeMap
 
-    fun loadItemCodeForEpc(epc: String) {
+/*    fun loadItemCodeForEpc(epc: String) {
         viewModelScope.launch {
             val code = bulkRepository.getItemCodeByEpc(epc)
             if (code.isNotBlank()) {
                 _itemCodeMap.value =
                     _itemCodeMap.value + (epc to code)
+            }
+        }
+    }*/
+
+    fun loadItemCodeForEpc(epc: String) {
+        viewModelScope.launch {
+            val cleanEpc = epc.trim().uppercase()
+            val code = bulkRepository.getItemCodeByEpc(cleanEpc)
+
+            if (code.isNotBlank()) {
+                _itemCodeMap.value = _itemCodeMap.value + (cleanEpc to code)
+            }
+        }
+    }
+
+    private val _rfidCodeByEpcMap = MutableStateFlow<Map<String, String>>(emptyMap())
+    val rfidCodeByEpcMap = _rfidCodeByEpcMap.asStateFlow()
+
+    fun loadRfidTagMap() {
+        viewModelScope.launch(Dispatchers.IO) {
+            bulkRepository.getAllRFIDTags().collect { list ->
+                val map = list.associate { row ->
+                    row.TidValue
+                        .orEmpty()
+                        .trim()
+                        .uppercase()
+                        .replace(" ", "")
+                        .replace("\n", "")
+                        .replace("\r", "") to row.BarcodeNumber.orEmpty()
+                }
+
+                _rfidCodeByEpcMap.value = map
             }
         }
     }
@@ -2921,6 +2991,8 @@ class BulkViewModel @Inject constructor(
             }
         }
     }
+
+
 
 }
 

@@ -319,7 +319,7 @@ class UserPreferences @Inject constructor(
     }
 
     fun isWebReusableTagEnabled(): Boolean {
-        return prefs.getBoolean(KEY_WEB_REUSABLE_TAG, false)
+        return prefs.getBoolean(KEY_WEB_REUSABLE_TAG, true)
     }
 }
 

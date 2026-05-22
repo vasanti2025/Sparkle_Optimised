@@ -87,7 +87,12 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
     val viewModel: BulkViewModel = hiltViewModel()
     val context = LocalContext.current
     val localServer = remember { RfidLocalServer(8080) }
+    val rfidCodeByEpcMap by viewModel.rfidCodeByEpcMap.collectAsState()
 
+    LaunchedEffect(Unit) {
+        viewModel.syncRFIDDataIfNeeded(context)
+        viewModel.loadRfidTagMap()
+    }
     DisposableEffect(Unit) {
         try {
             if (!localServer.isAlive) {
@@ -280,102 +285,8 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
             },
             bottomBar = {
                 ScanBottomBarDesktop(
-                    /*  onSave = {
-                      viewModel.barcodeReader.close()
-                      Log.d("save scanned items", "CLICKED"+tags.size)
 
-
-
-                      // ✅ Better check: tags exist + at least one RFID mapped
-                      if (tags.isNotEmpty()) {
-                          val deviceId = finalDeviceId ?: userPreferences.getDeviceId()
-
-                          if (tags.isNotEmpty() && !deviceId.isNullOrBlank()) {
-                              viewModel.sendScannedData(tags, deviceId, context)
-                              viewModel.resetScanResults()
-                              viewModel.stopBarcodeScanner()
-                              viewModel.resetProductScanResults()
-                          } else {
-                              ToastUtils.showToast(context, "Please scan RFID tag / Device Id not found")
-                          }
-                          //   viewModel.sendScannedData(tags, shortSerial(userPreferences.getDeviceId().toString()), context)
-                          viewModel.resetScanResults()
-                          viewModel.stopBarcodeScanner()
-                          viewModel.resetProductScanResults()
-                      } else {
-                          ToastUtils.showToast(context, "Please scan RFID tag / RFID not found in DB")
-                      }
-                  },*/
-                    /* onSave = {
-                     viewModel.barcodeReader.close()
-                     Log.d("save scanned items", "CLICKED" + tags.size)
-
-                     val deviceId = finalDeviceId ?: userPreferences.getDeviceId()
-
-                   *//*  if (tags.isNotEmpty() && !deviceId.isNullOrBlank()) {
-                        viewModel.sendScannedData(tags, deviceId, context)
-                        viewModel.resetScanResults()
-                        viewModel.stopBarcodeScanner()
-                        viewModel.resetProductScanResults()
-                    } else {
-                        ToastUtils.showToast(context, "Please scan RFID tag / Device Id not found")
-                    }*//*
-
-
-                    //local
-                    if (tags.isNotEmpty() && !deviceId.isNullOrBlank() && employee!!.clientCode!!.isNotBlank()) {
-
-                        val itemsArray = JSONArray()
-
-                        tags.forEachIndexed { index, tag ->
-                            val itemObject = JSONObject().apply {
-                                put("EPC", tag.epc.orEmpty())
-                                put("RFIDCode", rfidMap[index].orEmpty())
-                            }
-
-                            itemsArray.put(itemObject)
-                        }
-
-                        val requestBody = JSONObject().apply {
-                            put("ClientCode", employee!!.clientCode)
-                            put("DeviceId", deviceId)
-                            put("Items", itemsArray)
-                        }
-
-                        localServer.latestJson = requestBody.toString()
-
-                        val androidIp = getAndroidDeviceIp()
-
-                        if (androidIp.isBlank()) {
-                            ToastUtils.showToast(
-                                context,
-                                "Device IP not found. Connect RFID and desktop to same hotspot."
-                            )
-                        } else {
-                            val desktopUrl = "http://$androidIp:8080/rfid-data"
-
-                            Log.d("LOCAL_SERVER", "Open this URL on desktop: $desktopUrl")
-                            Log.d("LOCAL_SERVER", "Data = $requestBody")
-
-                            ToastUtils.showToast(
-                                context,
-                                "Open on desktop: $desktopUrl"
-                            )
-                        }
-
-                      *//*  Log.d("LOCAL_SERVER", "Open this URL on desktop: $desktopUrl")
-                        Log.d("LOCAL_SERVER", "Data = $requestBody")
-
-                        ToastUtils.showToast(
-                            context,
-                            "Open on desktop: $desktopUrl"
-                        )*//*
-
-                    } else {
-                        ToastUtils.showToast(context, "Please scan RFID tag / Device Id not found")
-                    }
-                },*/
-                    onSave = {
+                  /*  onSave = {
                         viewModel.barcodeReader.close()
                         Log.d("save scanned items", "CLICKED" + tags.size)
 
@@ -399,12 +310,59 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                             val itemsArray = JSONArray()
 
                             tags.forEachIndexed { index, tag ->
-                                val itemObject = JSONObject().apply {
-                                    put("EPC", tag.epc.orEmpty())
-                                    put("RFIDCode", rfidMap[index].orEmpty())
+
+                                val epcValue = tag.epc
+                                    .trim()
+                                    .uppercase()
+                                    .replace(" ", "")
+                                    .replace("\n", "")
+                                    .replace("\r", "")
+
+                                val mappedRfidCode =
+                                    if (epcValue.startsWith("E", ignoreCase = true)) {
+                                        rfidCodeByEpcMap[epcValue].orEmpty()
+                                    } else {
+                                        hexToAscii(epcValue)
+                                    }
+
+                                val finalRfidCode = rfidMap[index].orEmpty().ifBlank {
+                                    mappedRfidCode
                                 }
 
-                                itemsArray.put(itemObject)
+// ✅ Skip scan here / blank rows
+                                val cleanRfidCode = finalRfidCode.trim()
+
+                                if (
+                                    epcValue.isNotBlank() &&
+                                    cleanRfidCode.isNotBlank() &&
+                                    !cleanRfidCode.equals("scan here", ignoreCase = true)
+                                ) {
+                                    val itemObject = JSONObject().apply {
+                                        put("EPC", epcValue)
+                                        put("RFIDCode", cleanRfidCode)
+                                    }
+
+                                    itemsArray.put(itemObject)
+                                }
+
+                            *//*    val itemObject = JSONObject().apply {
+                                    put("EPC", tag.epc.orEmpty())
+                                    val epcValue = tag.epc
+                                        .trim()
+                                        .uppercase()
+                                        .replace(" ", "")
+                                        .replace("\n", "")
+                                        .replace("\r", "")
+
+                                    val finalRfidCode = rfidMap[index].orEmpty().ifBlank {
+                                        rfidCodeByEpcMap[epcValue].orEmpty()
+                                    }
+
+                                    put("RFIDCode", finalRfidCode)
+                                   // put("RFIDCode", rfidMap[index].orEmpty())
+                                }
+
+                                itemsArray.put(itemObject)*//*
                             }
 
                             val requestBody = JSONObject().apply {
@@ -413,6 +371,106 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                                 put("Items", itemsArray)
                             }
 
+                            localServer.latestJson = requestBody.toString()
+
+                            val androidIp = getAndroidDeviceIp()
+
+                            if (androidIp.isBlank()) {
+                                ToastUtils.showToast(
+                                    context,
+                                    "Device IP not found. Connect RFID and desktop to same WiFi/hotspot."
+                                )
+                                return@ScanBottomBarDesktop
+                            }
+
+                            val desktopUrl = "http://$androidIp:8080/rfid-data"
+
+                            Log.d("LOCAL_SERVER", "Open this URL on desktop: $desktopUrl")
+                            Log.d("LOCAL_SERVER", "Data = $requestBody")
+
+                            ToastUtils.showToast(
+                                context,
+                                "Local Mode: Open on desktop: $desktopUrl"
+                            )
+
+                        } else {
+                            // ✅ ONLINE / INTERNET API MODE
+                            viewModel.sendScannedData(tags, deviceId, context)
+
+                            ToastUtils.showToast(
+                                context,
+                                "Internet Mode: Data sent to server"
+                            )
+
+                            viewModel.resetScanResults()
+                            viewModel.stopBarcodeScanner()
+                            viewModel.resetProductScanResults()
+                        }
+                    },*/
+                    onSave = {
+                        viewModel.barcodeReader.close()
+                        Log.d("save scanned items", "CLICKED ${tags.size}")
+
+                        val deviceId = shortSerial(userPreferences.getDeviceId()?.toString())
+                        val clientCode = employee?.clientCode.orEmpty()
+
+                        if (tags.isEmpty() || deviceId.isBlank() || clientCode.isBlank()) {
+                            ToastUtils.showToast(
+                                context,
+                                "Please scan RFID tag / Device Id not found"
+                            )
+                            return@ScanBottomBarDesktop
+                        }
+
+                        val itemsArray = JSONArray()
+
+                        tags.forEachIndexed { index, tag ->
+
+                            val epcValue = tag.epc
+                                .trim()
+                                .uppercase()
+                                .replace(" ", "")
+                                .replace("\n", "")
+                                .replace("\r", "")
+
+                            val mappedRfidCode =
+                                if (epcValue.startsWith("E", ignoreCase = true)) {
+                                    rfidCodeByEpcMap[epcValue].orEmpty()
+                                } else {
+                                    hexToAscii(epcValue)
+                                }
+
+                            val cleanRfidCode = rfidMap[index]
+                                .orEmpty()
+                                .ifBlank { mappedRfidCode }
+                                .trim()
+
+                            if (
+                                epcValue.isNotBlank() &&
+                                cleanRfidCode.isNotBlank() &&
+                                !cleanRfidCode.equals("scan here", ignoreCase = true)
+                            ) {
+                                val itemObject = JSONObject().apply {
+                                    put("EPC", epcValue)
+                                    put("RFIDCode", cleanRfidCode)
+                                }
+
+                                itemsArray.put(itemObject)
+                            }
+                        }
+
+                        if (itemsArray.length() == 0) {
+                            ToastUtils.showToast(context, "No valid EPC/RFID data found")
+                            return@ScanBottomBarDesktop
+                        }
+
+                        val requestBody = JSONObject().apply {
+                            put("ClientCode", clientCode)
+                            put("DeviceId", deviceId)
+                            put("Items", itemsArray)
+                        }
+
+                        if (isLocalWifiMode) {
                             localServer.latestJson = requestBody.toString()
 
                             val androidIp = getAndroidDeviceIp()
@@ -554,10 +612,37 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                                 )
 
                                 // ✅ AUTO-FILLED FROM DB (via viewModel.autoFillRfidFromDb)
-                                val rfid = rfidMap[index]
+                                val epcValue = item.epc
+                                    .trim()
+                                    .uppercase()
+                                    .replace(" ", "")
+                                    .replace("\n", "")
+                                    .replace("\r", "")
+
+                                val manualRfidCode = rfidMap[index].orEmpty()
+
+                               // val mappedRfidCode = rfidCodeByEpcMap[epcValue].orEmpty()
+                                val mappedRfidCode =
+                                    if (epcValue.startsWith("E", ignoreCase = true)) {
+                                        rfidCodeByEpcMap[epcValue].orEmpty()
+                                    } else {
+                                        hexToAscii(epcValue)
+                                    }
+                                val finalRfidCode = manualRfidCode.ifBlank {
+                                    mappedRfidCode
+                                }
+
+                                val displayText = finalRfidCode.ifBlank { "scan here" }
+                                val isScanned = finalRfidCode.isNotBlank()
+                              /* for testinmg  val rfid = rfidMap[index]
                                 // val itemCode = hexToAscii(item.epc) ?: ""
 
-                                val epcValue = item.epc.trim()
+                                val epcValue = item.epc
+                                    .trim()
+                                    .uppercase()
+                                    .replace(" ", "")
+                                    .replace("\n", "")
+                                    .replace("\r", "")
 
                                 val itemCode = if (epcValue.startsWith("E", ignoreCase = true)) {
                                     itemCodeMap[epcValue.uppercase()].orEmpty()
@@ -570,7 +655,7 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                                     if (!rfid.isNullOrBlank()) rfid
                                     else itemCode.toString().ifBlank { "scan here" }
                                 val isScanned = !rfid.isNullOrBlank() || !itemCode.isNullOrBlank()
-                                // val displayText = if (isScanned) rfid!! else itemCode.ifBlank { "scan here" }
+                             */   // val displayText = if (isScanned) rfid!! else itemCode.ifBlank { "scan here" }
                                 val textColor = if (!isScanned) Color.Blue else Color.DarkGray
                                 val style =
                                     if (!isScanned) TextDecoration.Underline else TextDecoration.None
@@ -661,45 +746,6 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                             )
                         }
 
-                        /* Column(
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
-                    ) {
-                        Text(
-                            text = "Export Excel",
-                            fontFamily = poppins,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    showExportPopup = false
-
-                                    if (rfidExportList.isEmpty()) {
-                                        ToastUtils.showToast(context, "No data found for export")
-                                    } else {
-                                        val file = exportRfidExcel(context, rfidExportList)
-                                        ToastUtils.showToast(context, "Excel downloaded: ${file.name}")
-                                    }
-                                }
-                                .padding(vertical = 12.dp)
-                        )
-
-                        Text(
-                            text = "Email",
-                            fontFamily = poppins,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    showExportPopup = false
-                                    if (rfidExportList.isEmpty()) {
-                                        ToastUtils.showToast(context, "No data found for email")
-                                    } else {
-                                        val file = exportRfidExcelForEmail(context, rfidExportList)
-                                        //shareExcelByEmail(context, file)
-                                        shareExcelByEmail(context, file)
-                                    }
-                                }
-                                .padding(vertical = 12.dp)
-                        )
-                    }*/
                         Column(
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -776,33 +822,7 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                                     }
                                 }
                             )
-                            /*      ExportOptionRow(
-                            title = "Export Excel",
-                            onClick = {
-                                showExportPopup = false
 
-                                if (rfidExportList.isEmpty()) {
-                                    ToastUtils.showToast(context, "No data found for export")
-                                } else {
-                                    val file = exportRfidExcel(context, rfidExportList)
-                                    ToastUtils.showToast(context, "Excel downloaded: ${file.name}")
-                                }
-                            }
-                        )
-
-                        ExportOptionRow(
-                            title = "Email",
-                            onClick = {
-                                showExportPopup = false
-
-                                if (rfidExportList.isEmpty()) {
-                                    ToastUtils.showToast(context, "No data found for email")
-                                } else {
-                                    val file = exportRfidExcelForEmail(context, rfidExportList)
-                                    shareExcelByEmail(context, file)
-                                }
-                            }
-                        )*/
                         }
                     }
                 }

@@ -185,6 +185,10 @@ fun SettingsScreen(
         mutableStateOf(userPreferences.isLocalWifiModeEnabled())
     }
 
+    var webReusableTagEnabled by remember {
+        mutableStateOf(userPreferences.isWebReusableTagEnabled())
+    }
+
     var androidDeviceIp by remember {
         mutableStateOf(getAndroidDeviceIp())
     }
@@ -632,6 +636,29 @@ fun SettingsScreen(
                 }
             }
         )
+    ,
+    SettingsMenuItem(
+        key = "web_reusable_tag",
+        title = "Web Reusable Tags",
+        icon = Icons.Default.Settings,
+        type = SettingType.Action,
+        subtitle = if (webReusableTagEnabled)
+            "Single + WebReusable enabled"
+        else
+            "Only WebReusable enabled", hasToggle = true,
+        isToggled = webReusableTagEnabled,
+        onToggleChange = { newValue ->
+            webReusableTagEnabled = newValue
+            userPreferences.setWebReusableTagEnabled(newValue)
+
+            ToastUtils.showToast(
+                context,
+                if (newValue)
+                    "Single + WebReusable enabled"
+                else
+                    "Only WebReusable enabled"    )
+        }
+    )
     )
 
     Scaffold(

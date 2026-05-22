@@ -2217,13 +2217,17 @@ class BulkViewModel @Inject constructor(
                  }
              }*/
             tagType == "webreusable" -> {
-
+                val allowSingleAndWebReusable = userPreferences.isWebReusableTagEnabled()
                 val hasItemCode = !item.itemCode.isNullOrBlank()
                 val hasRfid = !item.rfid.isNullOrBlank()
                 val hasEpcOrTid = !item.epc.isNullOrBlank() || !item.tid.isNullOrBlank()
 
                 // ❌ Skip only if NOTHING usable
-                if (!hasItemCode || (!hasRfid && !hasEpcOrTid)) {
+                if (
+                    !hasItemCode ||
+                    (!allowSingleAndWebReusable && !hasRfid) ||
+                    (allowSingleAndWebReusable && !hasRfid && !hasEpcOrTid)
+                ) {
                     if (skippedItems.size < 10_000) {
                         skippedItems.add(
                             SyncSkippedItem(

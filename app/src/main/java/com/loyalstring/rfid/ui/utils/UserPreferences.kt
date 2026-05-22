@@ -44,6 +44,7 @@ class UserPreferences @Inject constructor(
         private const val KEY_APP_LANGUAGE = "app_language"
 
         private  const val KEY_LOCAL_WIFI_MODE = "local_wifi_mode"
+        private const val KEY_WEB_REUSABLE_TAG = "web_reusable_tag"
 
         private val gson = Gson()
 
@@ -311,6 +312,14 @@ class UserPreferences @Inject constructor(
 
     fun isLocalWifiModeEnabled(): Boolean {
         return prefs.getBoolean(KEY_LOCAL_WIFI_MODE, false)
+    }
+
+    fun setWebReusableTagEnabled(value: Boolean) {
+        prefs.edit().putBoolean(KEY_WEB_REUSABLE_TAG, value).apply()
+    }
+
+    fun isWebReusableTagEnabled(): Boolean {
+        return prefs.getBoolean(KEY_WEB_REUSABLE_TAG, false)
     }
 }
 

@@ -579,9 +579,9 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
                                         finalUrl = "http://$finalUrl"
                                     }
 
-                                    if (!finalUrl.endsWith("/")) {
+                                   /* if (!finalUrl.endsWith("/")) {
                                         finalUrl += "/"
-                                    }
+                                    }*/
                                 }
 
                                 userPrefs.saveCustomApi(finalUrl)

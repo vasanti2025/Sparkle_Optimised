@@ -639,11 +639,11 @@ fun SettingsScreen(
     ,
     SettingsMenuItem(
         key = "web_reusable_tag",
-        title = "Web Reusable Tags",
+        title = "Reusable Tags",
         icon = Icons.Default.Settings,
         type = SettingType.Action,
         subtitle = if (webReusableTagEnabled)
-            "Single + WebReusable enabled"
+            "Single + Reusable enabled"
         else
             "Only WebReusable enabled", hasToggle = true,
         isToggled = webReusableTagEnabled,
@@ -654,9 +654,9 @@ fun SettingsScreen(
             ToastUtils.showToast(
                 context,
                 if (newValue)
-                    "Single + WebReusable enabled"
+                    "Single + Reusable enabled"
                 else
-                    "Only WebReusable enabled"    )
+                    "Only Reusable enabled"    )
         }
     )
     )

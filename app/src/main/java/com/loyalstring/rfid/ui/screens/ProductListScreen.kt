@@ -131,6 +131,8 @@ fun ProductListScreen(
     val currentLang = currentLocales[0]?.language ?: savedLang
     val localizedContext = LocaleHelper.applyLocale(context, currentLang)
 
+    var deletingItemId by remember { mutableStateOf<Int?>(null) }
+
     val isLoading by viewModel.isLoading.collectAsState()
     LaunchedEffect(Unit) {
         ensureProductImagesFolder(context)
@@ -162,7 +164,13 @@ fun ProductListScreen(
                 // singleproductViewModel.deleteItem(id) // ✅ local delete with cached id
                 Toast.makeText(context,
                     localizedContext.getString(R.string.item_deleted_successfully), Toast.LENGTH_SHORT).show()
-                //  viewModel.refrshProductList()
+
+
+                deletingItemId?.let { id ->
+                    viewModel.removeItemLocally(id)
+                }
+               // not necessary lo call this one alrteday deleted from the locally
+               // viewModel.refrshProductList()
 
 
             }
@@ -636,7 +644,7 @@ fun ProductListScreen(
                         val id = selectedItem?.bulkItemId ?: 0
                         val clientCode = employee?.clientCode
                         if (id > 0) {
-                            //deletingItemId = id // ✅ keep id safe
+                            deletingItemId = id // ✅ keep id safe
                             singleproductViewModel.deleetProduct(
                                 listOf(
                                     ProductDeleteModelReq(

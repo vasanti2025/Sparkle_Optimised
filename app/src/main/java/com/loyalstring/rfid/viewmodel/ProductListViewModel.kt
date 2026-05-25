@@ -41,6 +41,12 @@ class ProductListViewModel @Inject constructor(
        refrshProductList()
     }
 
+    fun removeItemLocally(id: Int?) {
+        _productList.value = _productList.value.filter {
+            it.bulkItemId != id
+        }
+    }
+
     fun refrshProductList() {
         viewModelScope.launch {
 

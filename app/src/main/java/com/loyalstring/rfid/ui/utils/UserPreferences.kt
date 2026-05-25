@@ -117,7 +117,7 @@ class UserPreferences @Inject constructor(
                 putInt(KEY_BRANCH_ID,branchId)*/
 
             }
-            apply()
+           .commit()
         }
     }
 
@@ -154,7 +154,7 @@ class UserPreferences @Inject constructor(
             .remove(KEY_REMEMBER_ME)
             .remove(KEY_RFIDTYPE)
             .remove(KEY_CUSTOM_API_URL)
-            .apply()
+            .commit()
     }
 
     // ---------------- CLIENT ----------------
@@ -202,7 +202,7 @@ class UserPreferences @Inject constructor(
             .remove(KEY_USER_ID)
             .remove(KEY_BRANCH_ID)
             .remove(KEY_ORG)
-            .apply()
+            .commit()
     }
 
     // ---------------- INT HELPERS (for counters) ----------------
@@ -221,7 +221,7 @@ class UserPreferences @Inject constructor(
     }
 
     fun saveCustomApi(url: String) {
-        prefs.edit().putString(KEY_CUSTOM_API_URL, url).apply()
+        prefs.edit().putString(KEY_CUSTOM_API_URL, url).commit()
     }
 
     fun getCustomApi(): String? = prefs.getString(KEY_CUSTOM_API_URL, null)
@@ -244,7 +244,7 @@ class UserPreferences @Inject constructor(
     }
 
     fun setAutoSyncEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_LOCATION_SYNC, enabled).apply()
+        prefs.edit().putBoolean(KEY_LOCATION_SYNC, enabled).commit()
     }
     fun contains(key: String): Boolean {
         return prefs.contains(key)
@@ -307,7 +307,7 @@ class UserPreferences @Inject constructor(
     fun setLocalWifiMode(enabled: Boolean) {
         prefs.edit()
             .putBoolean(KEY_LOCAL_WIFI_MODE, enabled)
-            .apply()
+            .commit()
     }
 
     fun isLocalWifiModeEnabled(): Boolean {
@@ -315,7 +315,7 @@ class UserPreferences @Inject constructor(
     }
 
     fun setWebReusableTagEnabled(value: Boolean) {
-        prefs.edit().putBoolean(KEY_WEB_REUSABLE_TAG, value).apply()
+        prefs.edit().putBoolean(KEY_WEB_REUSABLE_TAG, value).commit()
     }
 
     fun isWebReusableTagEnabled(): Boolean {

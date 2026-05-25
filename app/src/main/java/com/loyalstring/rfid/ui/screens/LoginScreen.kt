@@ -1,4 +1,5 @@
 package com.loyalstring.rfid.ui.screens
+import android.util.Log
 
 import androidx.compose.material3.Surface
 import androidx.compose.ui.window.Dialog
@@ -127,6 +128,7 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
                     (permissionResponse as Resource.Error).message,
                     Toast.LENGTH_SHORT
                 ).show()
+                Log.d("Error2","error"+(permissionResponse as Resource.Error).message)
             }
             else -> {}
         }
@@ -135,6 +137,8 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
     LaunchedEffect(errorMessage) {
         errorMessage?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+
+            Log.d("Error1","error"+it)
         }
     }
 
@@ -579,12 +583,13 @@ fun LoginScreen(navController: NavController, viewModel: LoginViewModel = hiltVi
                                         finalUrl = "http://$finalUrl"
                                     }
 
-                                   /* if (!finalUrl.endsWith("/")) {
+                                   if (!finalUrl.endsWith("/")) {
                                         finalUrl += "/"
-                                    }*/
+                                    }
                                 }
 
                                 userPrefs.saveCustomApi(finalUrl)
+                                Log.d("API_SAVE", "Saved finalUrl = ${userPrefs.getCustomApi()}")
 
                                 Toast.makeText(
                                     context,

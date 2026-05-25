@@ -1,6 +1,7 @@
 package com.loyalstring.rfid.viewmodel
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -44,9 +45,11 @@ class LoginViewModel @Inject constructor(
                     setRememberMe(rememberMe)
                 } else {
                     _loginResponse.value = Resource.Error("Invalid login credentials.")
+
                 }
             } catch (e: Exception) {
                 _loginResponse.value = Resource.Error("Exception: ${e.message}")
+                Log.d("LOGIN_ERROR", "message: ${e.message}")
             }
         }
     }

@@ -198,7 +198,20 @@ fun DeliveryChalanScreen(
                         // copy other common fields if needed
                         // newItem.BranchId = selected.BranchId
 
-                        productList.add(newItem)
+                        val alreadyExists = productList.any {
+                            (!newItem.ItemCode.isNullOrBlank() &&
+                                    it.ItemCode.equals(newItem.ItemCode, ignoreCase = true)) ||
+                                    (!newItem.RFIDCode.isNullOrBlank() &&
+                                            it.RFIDCode.equals(newItem.RFIDCode, ignoreCase = true)) ||
+                                    (!newItem.tid.isNullOrBlank() &&
+                                            it.tid.equals(newItem.tid, ignoreCase = true))
+                        }
+                        if (!alreadyExists) {
+                            productList.add(newItem)
+                        } else {
+                            Toast.makeText(context, "Item already added", Toast.LENGTH_SHORT).show()
+                        }
+
                     }
 
                 }
@@ -1601,9 +1614,27 @@ fun DeliveryChalanScreen(
 
         pendingMatchedItem = matchedItem
     }
-    LaunchedEffect(pendingMatchedItem, touchList) {
+    LaunchedEffect(pendingMatchedItem) {
 
         val item = pendingMatchedItem ?: return@LaunchedEffect
+
+        // clear first, so touchList/recomposition se dobara add na ho
+        pendingMatchedItem = null
+
+        val alreadyExists = productList.any {
+            (!item.itemCode.isNullOrBlank() &&
+                    it.ItemCode.equals(item.itemCode, ignoreCase = true)) ||
+                    (!item.rfid.isNullOrBlank() &&
+                            it.RFIDCode.equals(item.rfid, ignoreCase = true)) ||
+                    (!item.tid.isNullOrBlank() &&
+                            it.tid.equals(item.tid, ignoreCase = true))
+        }
+
+        if (alreadyExists) {
+            Toast.makeText(context, "Item already added", Toast.LENGTH_SHORT).show()
+            itemCode = TextFieldValue("")
+            return@LaunchedEffect
+        }
 
         val touchMatch = touchList.firstOrNull {
             it.CustomerId == customerId &&
@@ -1619,8 +1650,7 @@ fun DeliveryChalanScreen(
         )
 
         productList.add(challanItem)
-
-        pendingMatchedItem = null
+        itemCode = TextFieldValue("")
     }
 
     // ✅ This is your barcode scanner logic

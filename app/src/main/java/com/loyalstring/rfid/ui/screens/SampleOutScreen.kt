@@ -586,7 +586,18 @@ fun SampleOutScreen(
             fixWastage = makingFixedWastage
         )
 
-        productList.add(productDetail)
+        //productList.add(productDetail)
+        val alreadyExists = productList.any {
+            it.ItemCode.equals(productDetail.ItemCode, ignoreCase = true) ||
+                    it.RFIDCode.equals(productDetail.RFIDCode, ignoreCase = true) ||
+                    it.tid.equals(productDetail.tid, ignoreCase = true)
+        }
+
+        if (!alreadyExists) {
+            productList.add(productDetail)
+        } else {
+            Toast.makeText(context, "Item already added", Toast.LENGTH_SHORT).show()
+        }
         Log.d("ManualEntry", "✅ Added ${matchedItem.itemCode}")
 
         pendingMatchedItem = null

@@ -843,7 +843,18 @@ fun OrderScreen(
             CategoryWt = matchedItem.CategoryWt?.toString()?.takeIf { it != "null" } ?: "",
 
             )
-        productList.add(challanItem)
+
+        val alreadyExists = productList.any {
+            matchedItem.itemCode.equals(challanItem.itemCode, ignoreCase = true) ||
+                    matchedItem.rfid.equals(challanItem.rfidCode, ignoreCase = true) ||
+                    matchedItem.tid.equals(challanItem.tid, ignoreCase = true)
+        }
+
+        if (!alreadyExists) {
+            productList.add(challanItem)
+        } else {
+            Toast.makeText(context, "Item already added", Toast.LENGTH_SHORT).show()
+        }
 
         pendingMatchedItem = null
     }

@@ -136,8 +136,22 @@ class ImportExcelViewModel @Inject constructor(
                     for (i in 1..sheet.lastRowNum) {
                         val row = sheet.getRow(i) ?: continue
 
-                        val rfid =
-                            getStringFromRow(row, rawHeaderIndexMap, normalizedFieldMapping["rfid"])
+                        val itemCode = getStringFromRow(
+                            row,
+                            rawHeaderIndexMap,
+                            normalizedFieldMapping["itemcode"]
+                        )
+
+                        var rfid = getStringFromRow(
+                            row,
+                            rawHeaderIndexMap,
+                            normalizedFieldMapping["rfid"]
+                        )
+
+
+
+                       /* val rfid =
+                            getStringFromRow(row, rawHeaderIndexMap, normalizedFieldMapping["rfid"])*/
                         var epcVal = getStringFromRow(
                             row,
                             rawHeaderIndexMap,
@@ -148,8 +162,12 @@ class ImportExcelViewModel @Inject constructor(
                         if (epcVal.isBlank()) {
                             epcVal = syncAndMapRow(rfid)
                         }
-                        if (epcVal.isBlank()) {
+                       /* if (epcVal.isBlank()) {
                             epcVal = "TEMP-${System.currentTimeMillis()}-${i}"
+                        }*/
+
+                        if (rfid.isBlank()) {
+                            epcVal = stringToHex(itemCode)
                         }
 
                         Log.d("@@ epcVal","epcVal"+epcVal)
@@ -181,6 +199,19 @@ class ImportExcelViewModel @Inject constructor(
                 _isImportDone.value = true
             }
         }
+    }
+
+    private fun stringToHex(value: String): String {
+        val cleanValue = value.trim()
+
+        val hex = cleanValue
+            .toByteArray(Charsets.UTF_8)
+            .joinToString("") { "%02X".format(it) }
+
+        return hex.padStart(
+            ((hex.length + 3) / 4) * 4,
+            '0'
+        )
     }
 
     // ✅ Google Sheet Import

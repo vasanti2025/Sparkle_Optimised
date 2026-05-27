@@ -1,6 +1,7 @@
 package com.loyalstring.rfid.ui.screens
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatDelegate
@@ -936,53 +937,57 @@ fun QuotationScreen(
     LaunchedEffect(allItems, dailyRates) {
         viewModel.barcodeReader.openIfNeeded()
 
+        fun safeDouble(v: String?) = v?.toDoubleOrNull() ?: 0.0
+
+        fun sameCode(a: String?, b: String?): Boolean {
+            val x = normalize(a)
+            val y = normalize(b)
+            return x.isNotBlank() && y.isNotBlank() && x == y
+        }
+
+        fun showToast(message: String) {
+            (context as? Activity)?.runOnUiThread {
+                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            }
+        }
+
         viewModel.barcodeReader.setOnBarcodeScanned { scannedRaw ->
             val scanned = normalize(scannedRaw)
             val currentItems = allItems
             itemCode = TextFieldValue(scanned)
 
-            Log.d("RFID Scan", "Scanned raw=[$scannedRaw], normalized=[$scanned], items=${currentItems.size}")
-
-            // 🧪 Debug: ek baar dekh le values kis field me aa rahe
-            Log.d(
-                "RFID Scan",
-                "Candidates: " + currentItems.joinToString(" | ") { item ->
-                    "itemCode='${normalize(item.itemCode)}', " +
-                            "rfid='${normalize(item.rfid)}', " +
-                            "productCode='${normalize(item.productCode)}', " +
-                            "tid='${normalize(item.tid)}'"
-                }
-            )
-
-            // ✅ Match multiple fields: RFID + ItemCode + ProductCode + TID
             val matchedItem = currentItems.firstOrNull { item ->
-               // val codeRfid     = normalize(item.rfid)
-                val codeItemCode = normalize(item.itemCode)
-                val codeProduct  = normalize(item.productCode)
-                val codeTid      = normalize(item.tid)
-
-                val candidates = listOf( codeItemCode, codeProduct, codeTid)
+                val candidates = listOf(
+                    normalize(item.itemCode),
+                    normalize(item.rfid),
+                    normalize(item.productCode),
+                    normalize(item.tid)
+                )
 
                 candidates.any { code ->
-                    code == scanned ||           // exact match
-                            code.contains(scanned) ||    // SJ4281 inside SJ4281-1
-                            scanned.contains(code)       // barcode = 000SJ4281, db = SJ4281
+                    code.isNotBlank() &&
+                            (code == scanned || code.contains(scanned) || scanned.contains(code))
                 }
             }
 
             if (matchedItem == null) {
-                Log.d("RFID Scan", "❌ No match found for [$scannedRaw] (normalized=[$scanned])")
+                Log.d("RFID Scan", "❌ No match found: $scannedRaw")
+                showToast("Item not found")
                 return@setOnBarcodeScanned
             }
 
-            // 2️⃣ Duplicate skip
-            if (productList.any { it.tid.equals(matchedItem.tid, ignoreCase = true) }) {
-                Log.d("RFID Scan", "⚠️ Already exists: ${matchedItem.tid}")
-                return@setOnBarcodeScanned
+            val alreadyExists = productList.any { existing ->
+                sameCode(existing.tid, matchedItem.tid) ||
+                        sameCode(existing.RFIDCode, matchedItem.rfid) ||
+                        sameCode(existing.ItemCode, matchedItem.itemCode) ||
+                        sameCode(existing.ProductCode, matchedItem.productCode)
             }
 
-            // --- Calculation helper ---
-            fun safeDouble(v: String?) = v?.toDoubleOrNull() ?: 0.0
+            if (alreadyExists) {
+                Log.d("RFID Scan", "⚠️ Already exists: ${matchedItem.itemCode}")
+                showToast("Item already exists: ${matchedItem.itemCode}")
+                return@setOnBarcodeScanned
+            }
 
             val makingPercent = matchedItem.makingPercent ?: "0.0"
             val makingFixedWastage = matchedItem.fixWastage ?: "0.0"
@@ -994,8 +999,7 @@ fun QuotationScreen(
             val rate = if (!dailyRates.isNullOrEmpty()) {
                 dailyRates
                     .firstOrNull { it.PurityName.equals(matchedItem.purity, ignoreCase = true) }
-                    ?.Rate?.toDoubleOrNull()
-                    ?: 0.0
+                    ?.Rate?.toDoubleOrNull() ?: 0.0
             } else 0.0
 
             val makingPerGramFinal = safeDouble(makingPerGram)
@@ -1016,13 +1020,12 @@ fun QuotationScreen(
             val baseUrl = "https://rrgold.loyalstring.co.in/"
             val imageString = matchedItem.imageUrl.orEmpty()
             val lastImagePath = imageString.split(",").lastOrNull()?.trim()
-            val finalImageUrl = if (!lastImagePath.isNullOrBlank()) "$baseUrl$lastImagePath" else ""
+            val finalImageUrl =
+                if (!lastImagePath.isNullOrBlank()) "$baseUrl$lastImagePath" else ""
 
             val newProduct = QuotationItem(
-               // Id = 0,
                 MRP = matchedItem.mrp?.toString() ?: "0.0",
                 CategoryName = matchedItem.category.orEmpty(),
-               // ChallanStatus = "Pending",
                 ProductName = matchedItem.productName.orEmpty(),
                 Quantity = (matchedItem.totalQty ?: matchedItem.pcs ?: 1).toString(),
                 HSNCode = "",
@@ -1031,7 +1034,6 @@ fun QuotationScreen(
                 NetWt = matchedItem.netWeight ?: "0.0",
                 ProductId = matchedItem.productId ?: 0,
                 CustomerId = 0,
-
                 MetalRate = rate.toString(),
                 MakingCharg = makingAmt.toString(),
                 MetalAmount = metalAmt.toString(),
@@ -1039,10 +1041,7 @@ fun QuotationScreen(
                 TotalItemAmount = itemAmt.toString(),
                 TotalAmount = itemAmt.toString(),
                 Price = itemAmt.toString(),
-
-                HUIDCode = "",
                 ProductCode = matchedItem.productCode.orEmpty(),
-                ProductNo = "",
                 Size = "1",
                 StoneAmount = matchedItem.stoneAmount ?: "0.0",
                 TotalWt = matchedItem.totalGwt?.toString() ?: "0.0",
@@ -1050,7 +1049,6 @@ fun QuotationScreen(
                 OldGoldPurchase = false,
                 RatePerGram = makingPerGramFinal.toString(),
                 Amount = itemAmt.toString(),
-               // ChallanType = "Delivery",
                 FinePercentage = "0.0",
                 PurchaseInvoiceNo = "",
                 HallmarkAmount = "0.0",
@@ -1076,22 +1074,10 @@ fun QuotationScreen(
                 FineWastageWt = matchedItem.fixWastage ?: "0.0",
                 ItemGSTAmount = "0.0",
                 ClientCode = employee?.clientCode ?: "",
-                DiamondSize = "",
                 DiamondWeight = matchedItem.diamondWeight ?: "0.0",
-                DiamondPurchaseRate = "0.0",
-                DiamondSellRate = "0.0",
-                DiamondClarity = "",
-                DiamondColour = "",
-                DiamondShape = "",
-                DiamondCut = "",
-               // DiamondName = "",
-                DiamondSettingType = "",
-                DiamondCertificate = "",
                 DiamondPieces = "0",
                 DiamondPurchaseAmount = "0.0",
                 DiamondSellAmount = "0.0",
-                DiamondDescription = "",
-                MetalName = "",
                 NetAmount = itemAmt.toString(),
                 GSTAmount = "0.0",
                 Purity = matchedItem.purity ?: "",
@@ -1101,15 +1087,7 @@ fun QuotationScreen(
                 CounterId = matchedItem.counterId ?: 0,
                 EmployeeId = employee?.employeeId ?: 0,
                 LabelledStockId = 0,
-                FineSilver = "0.0",
-                FineGold = "0.0",
-                DebitSilver = "0.0",
-                DebitGold = "0.0",
-                BalanceSilver = "0.0",
-                BalanceGold = "0.0",
-                ConvertAmt = "0.0",
                 Pieces = matchedItem.pcs?.toString() ?: "1",
-                StoneLessPercent = "0.0",
                 DesignId = matchedItem.designId ?: 0,
                 PacketId = matchedItem.packetId ?: 0,
                 RFIDCode = matchedItem.rfid.orEmpty(),
@@ -1128,7 +1106,7 @@ fun QuotationScreen(
             )
 
             productList.add(newProduct)
-            Log.d("RFID Scan", "✅ Added from barcode: ${newProduct.ItemCode} (${newProduct.RFIDCode})")
+           // showToast("Item added: ${newProduct.ItemCode}")
         }
     }
 

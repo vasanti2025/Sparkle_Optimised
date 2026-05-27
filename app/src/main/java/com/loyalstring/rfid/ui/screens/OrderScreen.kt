@@ -1028,8 +1028,10 @@ fun OrderScreen(
 
 
     /*scan bar code */
+    /* scan bar code */
     LaunchedEffect(allItems, dailyRates) {
         viewModel.barcodeReader.openIfNeeded()
+
         fun normalize(value: String?): String =
             value
                 ?.trim()
@@ -1038,53 +1040,74 @@ fun OrderScreen(
                 ?.replace("\n", "")
                 ?.replace("\r", "")
                 ?: ""
+
+        fun sameCode(a: String?, b: String?): Boolean {
+            val x = normalize(a)
+            val y = normalize(b)
+            return x.isNotBlank() && y.isNotBlank() && x == y
+        }
+
+        fun safeDouble(v: String?) = v?.toDoubleOrNull() ?: 0.0
+
         viewModel.barcodeReader.setOnBarcodeScanned { scannedRaw ->
             val scanned = normalize(scannedRaw)
             val currentItems = allItems
+
             itemCode = TextFieldValue(scanned)
 
-            Log.d("RFID Scan", "Scanned raw=[$scannedRaw], normalized=[$scanned], items=${currentItems.size}")
-
-            // 🧪 Debug: ek baar dekh le values kis field me aa rahe
             Log.d(
                 "RFID Scan",
-                "Candidates: " + currentItems.joinToString(" | ") { item ->
-                    "itemCode='${normalize(item.itemCode)}', " +
-                            "rfid='${normalize(item.rfid)}', " +
-                            "productCode='${normalize(item.productCode)}', " +
-                            "tid='${normalize(item.tid)}'"
-                }
+                "Scanned raw=[$scannedRaw], normalized=[$scanned], items=${currentItems.size}"
             )
 
-            // ✅ Match multiple fields: RFID + ItemCode + ProductCode + TID
             val matchedItem = currentItems.firstOrNull { item ->
-                // val codeRfid     = normalize(item.rfid)
                 val codeItemCode = normalize(item.itemCode)
-                val codeProduct  = normalize(item.productCode)
-                val codeTid      = normalize(item.tid)
+                val codeRfid = normalize(item.rfid)
+                val codeProduct = normalize(item.productCode)
+                val codeTid = normalize(item.tid)
 
-                val candidates = listOf( codeItemCode, codeProduct, codeTid)
+                val candidates = listOf(
+                    codeItemCode,
+                    codeRfid,
+                    codeProduct,
+                    codeTid
+                )
 
                 candidates.any { code ->
-                    code == scanned ||           // exact match
-                            code.contains(scanned) ||    // SJ4281 inside SJ4281-1
-                            scanned.contains(code)       // barcode = 000SJ4281, db = SJ4281
+                    code.isNotBlank() &&
+                            (
+                                    code == scanned ||
+                                            code.contains(scanned) ||
+                                            scanned.contains(code)
+                                    )
                 }
             }
 
             if (matchedItem == null) {
-                Log.d("RFID Scan", "❌ No match found for [$scannedRaw] (normalized=[$scanned])")
+                Log.d(
+                    "RFID Scan",
+                    "❌ No match found for [$scannedRaw] normalized=[$scanned]"
+                )
                 return@setOnBarcodeScanned
             }
 
-            // 2️⃣ Duplicate skip
-            if (productList.any { it.tid.equals(matchedItem.tid, ignoreCase = true) }) {
-                Log.d("RFID Scan", "⚠️ Already exists: ${matchedItem.tid}")
-                return@setOnBarcodeScanned
+            val alreadyExists = productList.any { existing ->
+                sameCode(existing.tid, matchedItem.tid) ||
+                        sameCode(existing.epc, matchedItem.tid) ||
+                        sameCode(existing.rfidCode, matchedItem.rfid) ||
+                        sameCode(existing.itemCode, matchedItem.itemCode) ||
+                        sameCode(existing.productCode, matchedItem.productCode)
             }
 
-            // --- Calculation helper ---
-            fun safeDouble(v: String?) = v?.toDoubleOrNull() ?: 0.0
+            if (alreadyExists) {
+                Log.d("RFID Scan", "⚠️ Item already exists: ${matchedItem.itemCode}")
+                Toast.makeText(
+                    context,
+                    "Item already exists: ${matchedItem.itemCode}",
+                    Toast.LENGTH_SHORT
+                ).show()
+                return@setOnBarcodeScanned
+            }
 
             val makingPercent = matchedItem.makingPercent ?: "0.0"
             val makingFixedWastage = matchedItem.fixWastage ?: "0.0"
@@ -1095,10 +1118,15 @@ fun OrderScreen(
 
             val rate = if (!dailyRates.isNullOrEmpty()) {
                 dailyRates
-                    .firstOrNull { it.PurityName.equals(matchedItem.purity, ignoreCase = true) }
-                    ?.Rate?.toDoubleOrNull()
+                    .firstOrNull {
+                        it.PurityName.equals(matchedItem.purity, ignoreCase = true)
+                    }
+                    ?.Rate
+                    ?.toDoubleOrNull()
                     ?: 0.0
-            } else 0.0
+            } else {
+                0.0
+            }
 
             val makingPerGramFinal = safeDouble(makingPerGram)
             val fixMakingFinal = safeDouble(makingFixedAmt)
@@ -1108,6 +1136,7 @@ fun OrderScreen(
             val diamondAmt = safeDouble(matchedItem.diamondAmount)
 
             val metalAmt = netWt * rate
+
             val makingAmt =
                 (makingPerGramFinal + fixMakingFinal) +
                         ((makingPercentFinal / 100.0) * netWt) +
@@ -1118,12 +1147,12 @@ fun OrderScreen(
             val baseUrl = "https://rrgold.loyalstring.co.in/"
             val imageString = matchedItem.imageUrl.orEmpty()
             val lastImagePath = imageString.split(",").lastOrNull()?.trim()
-            val finalImageUrl = if (!lastImagePath.isNullOrBlank()) "$baseUrl$lastImagePath" else ""
+            val finalImageUrl =
+                if (!lastImagePath.isNullOrBlank()) "$baseUrl$lastImagePath" else ""
 
             selectedItem = matchedItem.toItemCodeResponse()
+
             val newProduct = OrderItem(
-
-
                 branchId = (matchedItem.branchId ?: 0).toString(),
                 branchName = "",
 
@@ -1137,7 +1166,7 @@ fun OrderScreen(
                 screwType = "",
                 polishType = "",
 
-                finePer = matchedItem.makingPerGram.toString(),                // example: "91.6"
+                finePer = matchedItem.makingPerGram?.toString() ?: "0.0",
                 wastage = matchedItem.makingPercent?.toString() ?: "0.0",
 
                 orderDate = pickOrderDate(lastOrderDetails),
@@ -1145,25 +1174,27 @@ fun OrderScreen(
 
                 productName = matchedItem.productName.orEmpty(),
                 itemCode = matchedItem.itemCode.orEmpty(),
-                rfidCode = matchedItem.rfid.toString(),                               // ✅ unique key
+                rfidCode = matchedItem.rfid.orEmpty(),
 
                 grWt = matchedItem.grossWeight ?: "0.0",
                 nWt = matchedItem.netWeight ?: "0.0",
                 stoneAmt = matchedItem.stoneAmount ?: "0.0",
-                finePlusWt = "",                  // if you have fineWt, else "0.0"
-                itemAmt = itemAmt.toString(),                    // your calculated amount
+                finePlusWt = "",
+                itemAmt = itemAmt.toString(),
 
                 packingWt = "0.0",
-                totalWt = matchedItem.totalGwt?.toString() ?: (matchedItem.grossWeight ?: "0.0"),
+                totalWt = matchedItem.totalGwt?.toString()
+                    ?: matchedItem.grossWeight
+                    ?: "0.0",
                 stoneWt = matchedItem.totalStoneWt?.toString() ?: "0.0",
                 dimondWt = matchedItem.diamondWeight ?: "0.0",
 
                 sku = matchedItem.sku.orEmpty(),
                 qty = qtyOrOne("0"),
 
-                hallmarkAmt ="0.0"?.toString() ?: "0.0",
+                hallmarkAmt = "0.0",
                 mrp = matchedItem.mrp?.toString() ?: "0.0",
-                image = finalImageUrl,                           // your final image url
+                image = finalImageUrl,
                 netAmt = itemAmt.toString(),
                 diamondAmt = matchedItem.diamondAmount ?: "0.0",
 
@@ -1171,15 +1202,15 @@ fun OrderScreen(
                 categoryName = matchedItem.category.orEmpty(),
                 productId = matchedItem.productId ?: 0,
                 productCode = matchedItem.productCode.orEmpty(),
-                skuId = matchedItem.SKUId?:0,                                       // if you don’t have SKUId yet
+                skuId = matchedItem.SKUId ?: 0,
                 designid = matchedItem.designId ?: 0,
                 designName = matchedItem.design.orEmpty(),
-                purityid = 0,                                    // if you don’t have purityId
+                purityid = 0,
                 counterId = matchedItem.counterId ?: 0,
                 counterName = "",
                 companyId = 0,
 
-                epc = matchedItem.tid.orEmpty(),                  // EPC usually TID in your case
+                epc = matchedItem.tid.orEmpty(),
                 tid = matchedItem.tid.orEmpty(),
 
                 todaysRate = rate.toString(),
@@ -1187,16 +1218,17 @@ fun OrderScreen(
                 makingFixedAmt = fixMakingFinal.toString(),
                 makingFixedWastage = fixWastageFinal.toString(),
                 makingPerGram = makingPerGramFinal.toString(),
-                CategoryWt = matchedItem.CategoryWt?.toString()?.takeIf { it != "null" } ?: "",
-
-
+                CategoryWt = matchedItem.CategoryWt?.toString()?.takeIf { it != "null" } ?: ""
             )
 
             productList.add(newProduct)
-            Log.d("RFID Scan", "✅ Added from barcode: ${newProduct.itemCode} (${newProduct.rfidCode})")
+
+            Log.d(
+                "RFID Scan",
+                "✅ Added from barcode: ${newProduct.itemCode} (${newProduct.rfidCode})"
+            )
         }
     }
-
     // 🔹 When last item number updates → Add the item
     val lastOredrNo by orderViewModel.lastOrderNoresponse.collectAsState()
     //val nextNo by orderViewModel.nextOrderNo.collectAsState()

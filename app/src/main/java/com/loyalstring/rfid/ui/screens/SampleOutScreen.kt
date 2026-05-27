@@ -4,6 +4,7 @@ import java.util.Date
 
 import java.util.TimeZone
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatDelegate
@@ -1226,56 +1227,62 @@ fun SampleOutScreen(
             ?: ""
 
     /*scan bar code */
+
+
     LaunchedEffect(allItems, dailyRates) {
         viewModel.barcodeReader.openIfNeeded()
+
+        fun safeDouble(v: String?) = v?.toDoubleOrNull() ?: 0.0
+
+        fun sameCode(a: String?, b: String?): Boolean {
+            val x = normalize(a)
+            val y = normalize(b)
+            return x.isNotBlank() && y.isNotBlank() && x == y
+        }
+
+        fun showToast(message: String) {
+            (context as? Activity)?.runOnUiThread {
+                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            }
+        }
 
         viewModel.barcodeReader.setOnBarcodeScanned { scannedRaw ->
             val scanned = normalize(scannedRaw)
             val currentItems = allItems
             itemCode = TextFieldValue(scanned)
 
-            Log.d("RFID Scan", "Scanned raw=[$scannedRaw], normalized=[$scanned], items=${currentItems.size}")
-
-            // 🧪 Debug: ek baar dekh le values kis field me aa rahe
-            Log.d(
-                "RFID Scan",
-                "Candidates: " + currentItems.joinToString(" | ") { item ->
-                    "itemCode='${normalize(item.itemCode)}', " +
-                            "rfid='${normalize(item.rfid)}', " +
-                            "productCode='${normalize(item.productCode)}', " +
-                            "tid='${normalize(item.tid)}'"
-                }
-            )
-
-            // ✅ Match multiple fields: RFID + ItemCode + ProductCode + TID
             val matchedItem = currentItems.firstOrNull { item ->
-                val codeRfid     = normalize(item.rfid)
-                val codeItemCode = normalize(item.itemCode)
-                val codeProduct  = normalize(item.productCode)
-                val codeTid      = normalize(item.tid)
-
-                val candidates = listOf(codeRfid, codeItemCode, codeProduct, codeTid)
+                val candidates = listOf(
+                    normalize(item.rfid),
+                    normalize(item.itemCode),
+                    normalize(item.productCode),
+                    normalize(item.tid)
+                )
 
                 candidates.any { code ->
-                    code == scanned ||           // exact match
-                            code.contains(scanned) ||    // SJ4281 inside SJ4281-1
-                            scanned.contains(code)       // barcode = 000SJ4281, db = SJ4281
+                    code.isNotBlank() &&
+                            (code == scanned || code.contains(scanned) || scanned.contains(code))
                 }
             }
 
             if (matchedItem == null) {
-                Log.d("RFID Scan", "❌ No match found for [$scannedRaw] (normalized=[$scanned])")
+                showToast("Item not found")
+                Log.d("RFID Scan", "❌ No match found: $scannedRaw")
                 return@setOnBarcodeScanned
             }
 
-            // 2️⃣ Duplicate skip
-            if (productList.any { it.RFIDCode.equals(matchedItem.rfid, ignoreCase = true) }) {
+            val alreadyExists = productList.any { existing ->
+                sameCode(existing.RFIDCode, matchedItem.rfid) ||
+                        sameCode(existing.ItemCode, matchedItem.itemCode) ||
+                        sameCode(existing.ProductCode, matchedItem.productCode) ||
+                        sameCode(existing.tid, matchedItem.tid)
+            }
+
+            if (alreadyExists) {
+                showToast("Item already exists: ${matchedItem.itemCode}")
                 Log.d("RFID Scan", "⚠️ Already exists: ${matchedItem.itemCode}")
                 return@setOnBarcodeScanned
             }
-
-            // --- Calculation helper ---
-            fun safeDouble(v: String?) = v?.toDoubleOrNull() ?: 0.0
 
             val makingPercent = matchedItem.makingPercent ?: "0.0"
             val makingFixedWastage = matchedItem.fixWastage ?: "0.0"
@@ -1287,8 +1294,7 @@ fun SampleOutScreen(
             val rate = if (!dailyRates.isNullOrEmpty()) {
                 dailyRates
                     .firstOrNull { it.PurityName.equals(matchedItem.purity, ignoreCase = true) }
-                    ?.Rate?.toDoubleOrNull()
-                    ?: 0.0
+                    ?.Rate?.toDoubleOrNull() ?: 0.0
             } else 0.0
 
             val makingPerGramFinal = safeDouble(makingPerGram)
@@ -1309,7 +1315,8 @@ fun SampleOutScreen(
             val baseUrl = "https://rrgold.loyalstring.co.in/"
             val imageString = matchedItem.imageUrl.orEmpty()
             val lastImagePath = imageString.split(",").lastOrNull()?.trim()
-            val finalImageUrl = if (!lastImagePath.isNullOrBlank()) "$baseUrl$lastImagePath" else ""
+            val finalImageUrl =
+                if (!lastImagePath.isNullOrBlank()) "$baseUrl$lastImagePath" else ""
 
             val newProduct = SampleOutDetails(
                 Id = 0,
@@ -1324,7 +1331,6 @@ fun SampleOutScreen(
                 NetWt = matchedItem.netWeight ?: "0.0",
                 ProductId = matchedItem.productId ?: 0,
                 CustomerId = 0,
-
                 MetalRate = rate.toString(),
                 MakingCharg = makingAmt.toString(),
                 MetalAmount = metalAmt.toString(),
@@ -1332,7 +1338,6 @@ fun SampleOutScreen(
                 TotalItemAmount = itemAmt.toString(),
                 TotalAmount = itemAmt.toString(),
                 Price = itemAmt.toString(),
-
                 HUIDCode = "",
                 ProductCode = matchedItem.productCode.orEmpty(),
                 ProductNo = "",
@@ -1421,7 +1426,8 @@ fun SampleOutScreen(
             )
 
             productList.add(newProduct)
-            Log.d("RFID Scan", "✅ Added from barcode: ${newProduct.ItemCode} (${newProduct.RFIDCode})")
+           // showToast("Item added: ${newProduct.ItemCode}")
+           // Log.d("RFID Scan", "✅ Added from barcode: ${newProduct.ItemCode}")
         }
     }
     val activity = LocalContext.current as? MainActivity

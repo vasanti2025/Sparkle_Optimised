@@ -632,7 +632,90 @@ fun DeliveryChalanScreen(
             }
         }
     }*/
+    LaunchedEffect(allItems, dailyRates, touchList) {
+        viewModel.barcodeReader.openIfNeeded()
 
+        fun normalize(value: String?): String {
+            return value
+                ?.trim()
+                ?.uppercase()
+                ?.replace(" ", "")
+                ?.replace("\n", "")
+                ?.replace("\r", "")
+                ?: ""
+        }
+
+        fun sameCode(a: String?, b: String?): Boolean {
+            val x = normalize(a)
+            val y = normalize(b)
+            return x.isNotBlank() && y.isNotBlank() && x == y
+        }
+
+        fun showToast(msg: String) {
+            (context as? Activity)?.runOnUiThread {
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        viewModel.barcodeReader.setOnBarcodeScanned { scannedRaw ->
+            val scanned = normalize(scannedRaw)
+
+            itemCode = TextFieldValue(scanned)
+
+            val matchedItem = allItems.firstOrNull { item ->
+                val candidates = listOf(
+                    normalize(item.itemCode),
+                    normalize(item.rfid),
+                    normalize(item.productCode),
+                    normalize(item.tid),
+                    normalize(item.epc)
+                )
+
+                candidates.any { code ->
+                    code.isNotBlank() &&
+                            (code == scanned || code.contains(scanned) || scanned.contains(code))
+                }
+            }
+
+            if (matchedItem == null) {
+                showToast("Item not found")
+                Log.d("BarcodeScan", "❌ No item found for $scannedRaw")
+                return@setOnBarcodeScanned
+            }
+
+
+
+            val alreadyExists = productList.any {
+                sameCode(it.ItemCode, matchedItem.itemCode) ||
+                        sameCode(it.RFIDCode, matchedItem.rfid) ||
+                        sameCode(it.tid, matchedItem.tid)
+            }
+
+            if (alreadyExists) {
+                showToast("Item already added: ${matchedItem.itemCode}")
+                itemCode = TextFieldValue("")
+                return@setOnBarcodeScanned
+            }
+
+            val touchMatch = touchList.firstOrNull {
+                it.CustomerId == customerId &&
+                        it.StockKeepingUnit.equals(matchedItem.sku, ignoreCase = true)
+            }
+
+            val challanItem = buildChallanDetails(
+                matchedItem = matchedItem,
+                touchMatch = touchMatch,
+                dailyRates = dailyRates,
+                employee = employee,
+                context = context
+            )
+
+            productList.add(challanItem)
+            showToast("Item added: ${challanItem.ItemCode}")
+
+            itemCode = TextFieldValue("")
+        }
+    }
 
 
     LaunchedEffect(tags, allItems, touchList, dailyRates) {

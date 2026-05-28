@@ -2331,6 +2331,7 @@ MakingPerGram=${touchMatch.MakingPerGram}
 
                         // 🔹 Step 1: Fetch last challan no
                         isSaving = true
+                        deliveryChallanViewModel.clearlastDeliveryChallanNo()
                         deliveryChallanViewModel.fetchLastChallanNo(clientCode, branchId)
                     }
                 },

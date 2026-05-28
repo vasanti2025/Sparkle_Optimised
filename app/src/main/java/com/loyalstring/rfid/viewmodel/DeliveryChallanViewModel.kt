@@ -77,6 +77,10 @@ class DeliveryChallanViewModel @Inject constructor(
         }
     }
 
+    fun clearlastDeliveryChallanNo() {
+        _lastChallanNo.value = null
+    }
+
     /** ✅ Fetch last challan number */
     fun fetchLastChallanNo(clientCode: String, branchId: Any) {
         viewModelScope.launch {

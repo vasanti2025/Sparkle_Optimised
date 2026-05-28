@@ -329,7 +329,7 @@ fun SettingsScreen(
 
                 WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                     SyncDataWorker.LOCATION_SYNC_DATA_WORKER,
-                    ExistingPeriodicWorkPolicy.KEEP,
+                    ExistingPeriodicWorkPolicy.UPDATE,
                     periodicRequest
                 )
             }
@@ -1304,86 +1304,100 @@ fun getCurrentLocation(context: Context,context: Context, onLocationFetched: (St
 }
 */
 
+
 @SuppressLint("MissingPermission")
 fun getCurrentLocation(
     localizedContext: Context,
     context: Context,
     onLocationFetched: (String, String, String) -> Unit
 ) {
-    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-
-    // Check if context is an Activity
-    if (context is Activity) {
-        // Handle permission request only if the context is an Activity
-        if (ActivityCompat.checkSelfPermission(
-                context,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED &&
-            ActivityCompat.checkSelfPermission(
-                context,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(
-                context,
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                ),
-                100
-            )
-            return
-        }
-    } else {
-        // If context is not an Activity, handle appropriately or show a warning
-        Log.e("LOCATION_ERROR", "Context is not an Activity. Cannot request permissions.")
+    if (context !is Activity) {
+        Log.e("LOCATION_DEBUG", "Context is not Activity")
         return
     }
 
-    val cancellationTokenSource = CancellationTokenSource()
+    val finePermission = ActivityCompat.checkSelfPermission(
+        context,
+        Manifest.permission.ACCESS_FINE_LOCATION
+    )
 
-    fusedLocationClient.getCurrentLocation(
-        Priority.PRIORITY_HIGH_ACCURACY,
-        cancellationTokenSource.token
-    ).addOnSuccessListener { location ->
+    val coarsePermission = ActivityCompat.checkSelfPermission(
+        context,
+        Manifest.permission.ACCESS_COARSE_LOCATION
+    )
 
-        if (location != null) {
+    if (finePermission != PackageManager.PERMISSION_GRANTED &&
+        coarsePermission != PackageManager.PERMISSION_GRANTED
+    ) {
+        ActivityCompat.requestPermissions(
+            context,
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ),
+            100
+        )
+        return
+    }
 
-            val latitude = location.latitude.toString()
-            val longitude = location.longitude.toString()
+    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
 
-            val geocoder = Geocoder(context, Locale.getDefault())
-
-            CoroutineScope(Dispatchers.IO).launch {
-
-                try {
-
-                    val addressList =
-                        geocoder.getFromLocation(location.latitude, location.longitude, 1)
-                    val addressInfo = addressList?.firstOrNull()
-                    val address = addressInfo?.getAddressLine(0) ?: "Unknown location"
-
-                    withContext(Dispatchers.Main) {
-                        onLocationFetched(latitude, longitude, address)
-                    }
-
-                } catch (e: Exception) {
-                    Log.e("LOCATION", "Geocoder error: ${e.message}")
-                    withContext(Dispatchers.Main) {
-                        onLocationFetched(latitude, longitude, "Address unavailable")
+    fusedLocationClient.lastLocation
+        .addOnSuccessListener { lastLocation ->
+            if (lastLocation != null) {
+                getAddressFromLatLong(
+                    context,
+                    lastLocation.latitude,
+                    lastLocation.longitude,
+                    onLocationFetched
+                )
+            } else {
+                fusedLocationClient.getCurrentLocation(
+                    Priority.PRIORITY_HIGH_ACCURACY,
+                    CancellationTokenSource().token
+                ).addOnSuccessListener { currentLocation ->
+                    if (currentLocation != null) {
+                        getAddressFromLatLong(
+                            context,
+                            currentLocation.latitude,
+                            currentLocation.longitude,
+                            onLocationFetched
+                        )
+                    } else {
+                        Log.e("LOCATION_DEBUG", "Location null")
+                        Toast.makeText(
+                            context,
+                            "Location not found. Please turn on GPS and try again.",
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
                 }
             }
+        }
+}
 
-        } else {
-            Toast.makeText(
-                context,
-                localizedContext.getString(R.string.failed_to_get_location), Toast.LENGTH_SHORT
-            ).show()
+fun getAddressFromLatLong(
+    context: Context,
+    latitude: Double,
+    longitude: Double,
+    onLocationFetched: (String, String, String) -> Unit
+) {
+    CoroutineScope(Dispatchers.IO).launch {
+        val address = try {
+            val geocoder = Geocoder(context, Locale.getDefault())
+            geocoder.getFromLocation(latitude, longitude, 1)
+                ?.firstOrNull()
+                ?.getAddressLine(0)
+                ?: "Address unavailable"
+        } catch (e: Exception) {
+            "Address unavailable"
+        }
+
+        withContext(Dispatchers.Main) {
+            onLocationFetched(latitude.toString(), longitude.toString(), address)
         }
     }
 }
-
 
 @Composable
 fun BackupDialogExample(

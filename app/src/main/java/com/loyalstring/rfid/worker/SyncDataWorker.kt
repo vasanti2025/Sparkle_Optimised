@@ -43,7 +43,7 @@ class SyncDataWorker @AssistedInject constructor(
                     try {
                         Log.d("@@","Location called")
                         // 1️⃣ Add location sync call
-                        val addLocationResponse = settingRepository.addLocation(
+                  /*      val addLocationResponse = settingRepository.addLocation(
                             LocationSyncRequest(
                                 userPreferences.getEmployee(Employee::class.java)?.clientCode.toString(),
                                 userPreferences.getEmployee(Employee::class.java)?.id!!,
@@ -52,7 +52,22 @@ class SyncDataWorker @AssistedInject constructor(
                                 inputData.getString("longitude").toString(),
                                 inputData.getString("address").toString()
                             )
+                        )*/
+
+                        val locationRequest = LocationSyncRequest(
+                            userPreferences.getEmployee(Employee::class.java)?.clientCode.toString(),
+                            userPreferences.getEmployee(Employee::class.java)?.id!!,
+                            userPreferences.getEmployee(Employee::class.java)?.defaultBranchId!!,
+                            inputData.getString("latitude").toString(),
+                            inputData.getString("longitude").toString(),
+                            inputData.getString("address").toString()
                         )
+
+                        Log.d("LocationWorker", "addLocation request = $locationRequest")
+
+                        val addLocationResponse = settingRepository.addLocation(locationRequest)
+
+                        Log.d("LocationWorker", "addLocation statusCode = ${addLocationResponse.code()}")
 
                         if (addLocationResponse.isSuccessful) {
                             Log.d("@@","Location success")

@@ -1411,6 +1411,7 @@ fun QuotationScreen(
 
                         val clientCode = employee?.clientCode ?: return@ScanBottomBar
                         // 🔹 Step 1: Fetch last challan no
+                        quotationViewModel.clearLastQuotationNo()
                         quotationViewModel.loadLastQuotationNo(clientCode)
                    }},
                 onList = { navController.navigate(Screens.QuotationListScreen.route) },

@@ -98,6 +98,10 @@ class QuotationViewModel  @Inject constructor(
         }
     }
 
+    fun clearLastQuotationNo() {
+        _lastQuotationNo.value = null
+    }
+
     fun loadLastQuotationNo(clientCode: String) {
         viewModelScope.launch {
             _loading.value = true

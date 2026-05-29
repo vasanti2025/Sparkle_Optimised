@@ -189,4 +189,10 @@ class ProductListViewModel @Inject constructor(
             }
         }
     }
+
+    fun updateLocalStockStatus(tid: String, status: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.bulkItemDao.updateStatusByTid(tid, status)
+        }
+    }
 }

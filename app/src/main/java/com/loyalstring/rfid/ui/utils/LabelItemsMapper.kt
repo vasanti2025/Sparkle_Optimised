@@ -66,7 +66,8 @@ rfid=this.rfidCode?:"",
             totalWt = this.totalWeight?.toDoubleOrNull() ?: 0.0,
             CategoryWt = this.WeightCategory?:"",
             SKUId = this.skuId,
-            purityId = this.purityId
+            purityId = this.purityId,
+            Status = this.status
 
 
     ).apply {

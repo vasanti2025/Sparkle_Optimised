@@ -70,7 +70,9 @@ fun SampleInListTableComponent(
     onSelectedReturnItemCodesChange: (Set<String>) -> Unit,
 
     onItemUpdated: (Int, SampleOutListResponse) -> Unit = { _, _ -> },
-    onDeleteItem: (Int) -> Unit = {}
+    onDeleteItem: (Int) -> Unit = {},
+    onManualMatchClick: (IssueItemDto) -> Unit = {},
+    onManualRemoveClick: (IssueItemDto) -> Unit = {}
 ) {
     val horizontalScroll = rememberScrollState()
 
@@ -239,12 +241,19 @@ fun SampleInListTableComponent(
                         )
                         .padding(vertical = 3.dp)
                         .clickable(enabled = !isReturnMode) {
+                            if (isMatched) {
+                                onManualRemoveClick(row.issue)
+                            } else {
+                                onManualMatchClick(row.issue)
+                            }
+                        }
+                       /* .clickable(enabled = !isReturnMode) {
                             // ✅ keep your edit-click only in normal mode
                             selectedItem = row.parent
                             selectedIndex = row.parentIndex
                             showDialog = true
                             Log.d("SampleIn", "Row clicked code=${row.issue.ProductName}")
-                        },
+                        }*/,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // ✅ Product Name (parent) - change this to your real field if needed

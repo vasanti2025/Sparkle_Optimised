@@ -1,5 +1,22 @@
 package com.loyalstring.rfid.ui.screens
 
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
+
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.window.Dialog
+import androidx.compose.material3.Surface
+import androidx.compose.ui.res.painterResource
+
+import com.loyalstring.rfid.ui.utils.poppins
+import androidx.compose.material3.Text
+import androidx.compose.ui.window.Dialog
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+
 import android.annotation.SuppressLint
 import android.util.Log
 import android.widget.Toast
@@ -61,6 +78,7 @@ import com.loyalstring.rfid.data.model.sampleOut.SampleOutUpdateRequest
 import com.loyalstring.rfid.data.remote.resource.Resource
 import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.navigation.Screens
+import com.loyalstring.rfid.ui.utils.GradientButtonIcon
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.viewmodel.BulkViewModel
 import com.loyalstring.rfid.viewmodel.DeliveryChallanViewModel
@@ -130,6 +148,15 @@ fun SampleInScreen(
     var gstAmount by remember { mutableStateOf(0.0) }
     var totalWithGst by remember { mutableStateOf(0.0) }
     var scannedCodes by remember { mutableStateOf(setOf<String>()) }
+    var manualMatchItem by remember { mutableStateOf<IssueItemDto?>(null) }
+    var manualRemoveItem by remember { mutableStateOf<IssueItemDto?>(null) }
+
+    fun normCode(v: String?) =
+        v?.trim()
+            ?.uppercase()
+            ?.replace(" ", "")
+            ?.replace("-", "")
+            ?: ""
 
     var isReturnMode by remember { mutableStateOf(false) }
     var selectedReturnCodes by remember { mutableStateOf(setOf<String>()) }
@@ -1355,7 +1382,14 @@ fun SampleInScreen(
                 onReturnModeChange = { isReturnMode = it },  // ✅
 
                 selectedReturnItemCodes = selectedReturnCodes,
-                onSelectedReturnItemCodesChange = { selectedReturnCodes = it } // ✅
+                onSelectedReturnItemCodesChange = { selectedReturnCodes = it }, // ✅
+                        // ✅ new
+                        onManualMatchClick = { issue ->
+                    manualMatchItem = issue
+                },
+                onManualRemoveClick = { issue ->
+                    manualRemoveItem = issue
+                }
             )
 
 
@@ -1363,6 +1397,233 @@ fun SampleInScreen(
         }
     }
 
+    val gradient = Brush.horizontalGradient(
+        listOf(
+            Color(0xFF5231A7),
+            Color(0xFFD32940)
+        )
+    )
+
+    if (manualMatchItem != null) {
+        Dialog(
+            onDismissRequest = {
+                manualMatchItem = null
+            }
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color.White,
+                tonalElevation = 4.dp,
+                modifier = Modifier.fillMaxWidth(0.92f)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.White, RoundedCornerShape(12.dp))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(gradient)
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.check_circle),
+                                contentDescription = "Confirm Match",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            Text(
+                                text = "Confirm Match",
+                                fontSize = 18.sp,
+                                color = Color.White,
+                                fontFamily = poppins
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = "Are you sure you want to add this item in matched list?",
+                        fontSize = 14.sp,
+                        color = Color.DarkGray,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        GradientButtonIcon(
+                            text = "No",
+                            onClick = {
+                                manualMatchItem = null
+                            },
+                            icon = painterResource(id = R.drawable.ic_cancel),
+                            iconDescription = "No",
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp)
+                                .padding(end = 6.dp)
+                        )
+
+                        GradientButtonIcon(
+                            text = "Yes",
+                            onClick = {
+                                val issue = manualMatchItem
+
+                                val codesToAdd = listOf(
+                                    normCode(issue?.ItemCode),
+                                    normCode(issue?.RFIDCode),
+                                    normCode(issue?.TIDNumber)
+                                ).filter { it.isNotBlank() }
+
+                                scannedCodes = scannedCodes + codesToAdd
+                                manualMatchItem = null
+
+                                Toast.makeText(
+                                    context,
+                                    "Item added in matched list",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            icon = painterResource(id = R.drawable.check_circle),
+                            iconDescription = "Yes",
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp)
+                                .padding(start = 6.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (manualRemoveItem != null) {
+        Dialog(
+            onDismissRequest = {
+                manualRemoveItem = null
+            }
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color.White,
+                tonalElevation = 4.dp,
+                modifier = Modifier.fillMaxWidth(0.92f)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.White, RoundedCornerShape(12.dp))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(gradient)
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_cancel),
+                                contentDescription = "Remove Match",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            Text(
+                                text = "Remove Match",
+                                fontSize = 18.sp,
+                                color = Color.White,
+                                fontFamily = poppins
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = "Are you sure you want to remove this item from matched list?",
+                        fontSize = 14.sp,
+                        color = Color.DarkGray,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        GradientButtonIcon(
+                            text = "No",
+                            onClick = {
+                                manualRemoveItem = null
+                            },
+                            icon = painterResource(id = R.drawable.ic_cancel),
+                            iconDescription = "No",
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp)
+                                .padding(end = 6.dp)
+                        )
+
+                        GradientButtonIcon(
+                            text = "Yes",
+                            onClick = {
+                                val issue = manualRemoveItem
+
+                                val codesToRemove = listOf(
+                                    normCode(issue?.ItemCode),
+                                    normCode(issue?.RFIDCode),
+                                    normCode(issue?.TIDNumber)
+                                ).filter { it.isNotBlank() }.toSet()
+
+                                scannedCodes = scannedCodes.filterNot {
+                                    normCode(it) in codesToRemove
+                                }.toSet()
+
+                                manualRemoveItem = null
+
+                                Toast.makeText(
+                                    context,
+                                    "Item removed from matched list",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            icon = painterResource(id = R.drawable.check_circle),
+                            iconDescription = "Yes",
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp)
+                                .padding(start = 6.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
     if (ShowSampleInDailog) {
         SampleInDetailsDailog (
             onDismiss = { ShowSampleInDailog = false },

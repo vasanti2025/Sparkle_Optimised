@@ -1527,6 +1527,13 @@ fun DeliveryChalanScreen(
                 Toast.LENGTH_SHORT
             ).show()
 
+            productListViewModel.refrshProductList()
+            productList.forEach { item ->
+                productListViewModel.updateLocalStockStatus(
+                    tid = item.tid ?: "",
+                    status = "Sold"
+                )
+            }
             viewModel.resetProductScanResults()
 
 

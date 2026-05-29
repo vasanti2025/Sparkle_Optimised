@@ -75,7 +75,8 @@ data class BulkItem(
     val totalWt: Double?,
     val   CategoryWt :String?,
     val SKUId:Int?,
-    val purityId:Int?
+    val purityId:Int?,
+    val Status:String?
 
 
     ) : Parcelable {

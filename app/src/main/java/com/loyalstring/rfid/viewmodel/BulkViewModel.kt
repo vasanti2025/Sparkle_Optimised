@@ -1403,7 +1403,8 @@ class BulkViewModel @Inject constructor(
                     CategoryWt = "",
                     SKUId = 0,
                     bulkItemId = 0,
-                    purityId = 0
+                    purityId = 0,
+                    Status = ""
 
                 ).apply {
                     uhfTagInfo = tag

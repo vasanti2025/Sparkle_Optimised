@@ -190,9 +190,19 @@ class ProductListViewModel @Inject constructor(
         }
     }
 
-    fun updateLocalStockStatus(tid: String, status: String) {
+    fun updateLocalStockStatusByLabelledStockId(labelledStockId:Int, status: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            repository.bulkItemDao.updateStatusByTid(tid, status)
+
+            val rows = repository.bulkItemDao.updateStatusByBulkItemid(
+                labelledStockId,
+                status
+            )
+
+            Log.d(
+                "LOCAL_UPDATE",
+                "Updated -> Id=$labelledStockId , Status=$status , Rows=$rows"
+            )
+            //repository.bulkItemDao.updateStatusByBulkItemid(id, status)
         }
     }
 }

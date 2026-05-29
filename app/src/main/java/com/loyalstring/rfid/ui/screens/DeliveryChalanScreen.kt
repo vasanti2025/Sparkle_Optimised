@@ -83,6 +83,7 @@ import com.loyalstring.rfid.viewmodel.UiState
 import com.loyalstring.rfid.worker.LocaleHelper
 import com.rscja.deviceapi.entity.UHFTAGInfo
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.OffsetDateTime
@@ -1527,13 +1528,8 @@ fun DeliveryChalanScreen(
                 Toast.LENGTH_SHORT
             ).show()
 
+            viewModel.syncItems(context)
             productListViewModel.refrshProductList()
-            productList.forEach { item ->
-                productListViewModel.updateLocalStockStatus(
-                    tid = item.tid ?: "",
-                    status = "Sold"
-                )
-            }
             viewModel.resetProductScanResults()
 
 

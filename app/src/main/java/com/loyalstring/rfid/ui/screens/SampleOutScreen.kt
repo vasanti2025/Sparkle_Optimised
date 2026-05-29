@@ -955,7 +955,9 @@ fun SampleOutScreen(
             Toast.LENGTH_SHORT
         ).show()
 
+        viewModel.syncItems(context)
 
+        productListViewModel.refrshProductList()
         // ✅ 1) Build data for PDF (use your current UI values / productList)
         val sampleNo = result.SampleOutNo ?: SampleOutNo ?: ""   // ✅ apne response field ke hisab se
         val date = productList.firstOrNull()?.Date ?: ""

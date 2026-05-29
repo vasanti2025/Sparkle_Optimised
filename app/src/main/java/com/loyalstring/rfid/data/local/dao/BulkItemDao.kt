@@ -211,7 +211,7 @@ interface BulkItemDao {
 """)
  suspend fun getDistinctBranch(): List<String>
 
-    @Query("UPDATE bulk_items SET Status = :status WHERE tid = :tid")
-    suspend fun updateStatusByTid(tid: String, status: String)
+    @Query("UPDATE bulk_items SET Status = :status WHERE bulkItemId = :id")
+    suspend fun updateStatusByBulkItemid(id: Int, status: String)
 
 }

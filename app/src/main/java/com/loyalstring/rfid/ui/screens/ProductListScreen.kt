@@ -1,6 +1,8 @@
 package com.loyalstring.rfid.ui.screens
 
-
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
@@ -105,6 +107,8 @@ fun ProductListScreen(
     onBack: () -> Unit,
     navController: NavHostController
 ) {
+
+    val scope = rememberCoroutineScope()
     var isScanning by remember { mutableStateOf(false) }
     val viewModel: ProductListViewModel = hiltViewModel()
     val bulkViewModel: BulkViewModel = hiltViewModel()
@@ -130,7 +134,7 @@ fun ProductListScreen(
     val currentLocales = AppCompatDelegate.getApplicationLocales()
     val currentLang = currentLocales[0]?.language ?: savedLang
     val localizedContext = LocaleHelper.applyLocale(context, currentLang)
-
+    var isPdfExporting by remember { mutableStateOf(false) }
     var deletingItemId by remember { mutableStateOf<Int?>(null) }
 
     val isLoading by viewModel.isLoading.collectAsState()
@@ -155,6 +159,8 @@ fun ProductListScreen(
                     item.rfid?.lowercase()?.contains(query) == true
         }
     }
+
+
 
     LaunchedEffect(deleteResponse) {
         when (deleteResponse) {
@@ -244,7 +250,6 @@ fun ProductListScreen(
                     .background(Color.White)
             ) {
                 Spacer(Modifier.height(12.dp))
-
                 /*  OutlinedTextField(
                 value = searchQuery.value,
                 onValueChange = { searchQuery.value = it },
@@ -279,10 +284,7 @@ fun ProductListScreen(
                         disabledIndicatorColor = Color.Transparent
                     )
                 )
-
-
                 Spacer(Modifier.height(12.dp))
-
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -315,15 +317,71 @@ fun ProductListScreen(
                         icon = painterResource(id = R.drawable.filter_svg)
                     )
                     ActionButton(
-                        text =   localizedContext.getString(R.string.export_pdf),
-                        onClick = { },
-                        modifier = Modifier.defaultMinSize(minWidth = 120.dp),
+                        text = localizedContext.getString(R.string.export_pdf),
+                        onClick = {
+                            isPdfExporting = true
+
+                            scope.launch(Dispatchers.IO) {
+                                try {
+                                    val pdfFile = exportProductsToPdf(
+                                        context = context.applicationContext,
+                                        products = allItems
+                                    )
+
+                                    withContext(Dispatchers.Main) {
+                                        isPdfExporting = false
+                                        Toast.makeText(
+                                            context,
+                                            "PDF Saved: ${pdfFile.absolutePath}",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("PDF_EXPORT", "PDF export failed", e)
+
+                                    withContext(Dispatchers.Main) {
+                                        isPdfExporting = false
+                                        Toast.makeText(
+                                            context,
+                                            "PDF export failed: ${e.message}",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.width(135.dp),
                         gradient = Brush.horizontalGradient(
-                            colors = listOf(Color(0xFFD32940), Color(0xFF5231A7)) // red to purple
+                            colors = listOf(Color(0xFFD32940), Color(0xFF5231A7))
                         ),
                         icon = painterResource(id = R.drawable.pdf)
                     )
 
+                }
+                if (isPdfExporting) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0x88000000)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                strokeWidth = 3.dp,
+                                modifier = Modifier.size(48.dp)
+                            )
+
+                            Spacer(Modifier.height(8.dp))
+
+                            Text(
+                                text = "Creating PDF...",
+                                color = Color.White,
+                                fontFamily = poppins,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
                 }
 
 
@@ -766,7 +824,7 @@ fun ActionButton(
                 shape = RoundedCornerShape(cornerRadius)
             )
             .clickable { onClick() }
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -780,7 +838,7 @@ fun ActionButton(
             Text(
                 text = text,
                 color = textColor,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 softWrap = false
@@ -1018,4 +1076,113 @@ fun ProductImageWithFallback(
             modifier = modifier
         )
     }
+}
+
+fun exportProductsToPdf(
+    context: Context,
+    products: List<BulkItem>
+): File {
+
+    val file = File(
+        context.getExternalFilesDir(null),
+        "LabelledStock_${System.currentTimeMillis()}.pdf"
+    )
+
+    val writer = com.itextpdf.kernel.pdf.PdfWriter(file)
+    val pdf = com.itextpdf.kernel.pdf.PdfDocument(writer)
+    pdf.defaultPageSize = com.itextpdf.kernel.geom.PageSize.A4.rotate()
+
+    val document = com.itextpdf.layout.Document(pdf)
+    document.setMargins(20f, 15f, 20f, 15f)
+
+    document.add(
+        com.itextpdf.layout.element.Paragraph("Labelled Stock Report")
+            .setBold()
+            .setFontSize(16f)
+            .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+    )
+
+    document.add(
+        com.itextpdf.layout.element.Paragraph("Total Items: ${products.size}")
+            .setFontSize(10f)
+            .setMarginBottom(10f)
+    )
+
+    fun headerCell(text: String): com.itextpdf.layout.element.Cell {
+        return com.itextpdf.layout.element.Cell()
+            .add(com.itextpdf.layout.element.Paragraph(text).setFontSize(8f).setBold())
+            .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.BLACK)
+            .setFontColor(com.itextpdf.kernel.colors.ColorConstants.WHITE)
+            .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+            .setPadding(4f)
+    }
+
+    fun bodyCell(text: String?): com.itextpdf.layout.element.Cell {
+        return com.itextpdf.layout.element.Cell()
+            .add(
+                com.itextpdf.layout.element.Paragraph(
+                    text?.takeIf { it.isNotBlank() } ?: "-"
+                ).setFontSize(7f)
+            )
+            .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+            .setPadding(3f)
+    }
+
+    val headers = listOf(
+        "Sr", "Product", "Item Code", "RFID", "Gross Wt", "Stone Wt",
+        "Diamond Wt", "Net Wt", "Category", "Design", "Purity", "SKU", "EPC", "Vendor"
+    )
+
+    val chunkSize = 50
+    val chunks = products.chunked(chunkSize)
+
+    chunks.forEachIndexed { pageIndex, chunk ->
+
+        val table = com.itextpdf.layout.element.Table(
+            floatArrayOf(
+                35f, 90f, 70f, 70f, 55f, 55f, 55f, 55f,
+                70f, 70f, 55f, 65f, 120f, 80f
+            )
+        ).useAllAvailableWidth()
+
+        headers.forEach { table.addHeaderCell(headerCell(it)) }
+
+        chunk.forEachIndexed { index, item ->
+            val srNo = pageIndex * chunkSize + index + 1
+
+            table.addCell(bodyCell(srNo.toString()))
+            table.addCell(bodyCell(item.productName))
+            table.addCell(bodyCell(item.itemCode))
+            table.addCell(bodyCell(item.rfid))
+            table.addCell(bodyCell(item.grossWeight))
+            table.addCell(bodyCell(item.stoneWeight))
+            table.addCell(bodyCell(item.diamondWeight))
+            table.addCell(bodyCell(item.netWeight))
+            table.addCell(bodyCell(item.category))
+            table.addCell(bodyCell(item.design))
+            table.addCell(bodyCell(item.purity))
+            table.addCell(bodyCell(item.sku))
+            table.addCell(
+                bodyCell(
+                    (item.uhfTagInfo?.epc ?: item.epc)?.takeIf {
+                        !it.contains("temp", ignoreCase = true)
+                    }
+                )
+            )
+            table.addCell(bodyCell(item.vendor))
+        }
+
+        document.add(table)
+
+        if (pageIndex != chunks.lastIndex) {
+            document.add(
+                com.itextpdf.layout.element.AreaBreak(
+                    com.itextpdf.layout.properties.AreaBreakType.NEXT_PAGE
+                )
+            )
+        }
+    }
+
+    document.close()
+    return file
 }

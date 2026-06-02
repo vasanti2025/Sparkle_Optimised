@@ -1,7 +1,13 @@
 package com.loyalstring.rfid.ui.screens
+import android.annotation.SuppressLint
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import androidx.compose.foundation.lazy.items
 
 import android.app.Activity
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatDelegate
@@ -228,7 +234,7 @@ fun DeliveryChallanListScreen(
         }
     }
 }
-
+@SuppressLint("MissingPermission")
 @Composable
 fun DeliveryChallanTable(
     companyName: String,
@@ -254,6 +260,9 @@ fun DeliveryChallanTable(
     val printerManager = remember { PrinterManager(context) }
     var showBluetoothControls by remember { mutableStateOf(false) }
     var bluetoothStatus by remember { mutableStateOf("Not connected") }
+
+    var bondedDevices by remember { mutableStateOf<List<android.bluetooth.BluetoothDevice>>(emptyList()) }
+    var showDeviceList by remember { mutableStateOf(false) }
     Column(modifier = Modifier.fillMaxSize()) {
         // Header Row
         Row(
@@ -441,28 +450,6 @@ fun DeliveryChallanTable(
                                             )
                                             if (showBluetoothControls) {
                                                 Spacer(modifier = Modifier.height(8.dp))
-                                              /*  GradientDialogButtonnew(
-                                                    text =  localizedContext.getString(R.string.connect_bluetooth_printer),
-                                                    onClick = {
-                                                        logBondedDevices(context)
-
-                                                        if (activity == null) {
-                                                            bluetoothStatus = "Activity not found"
-                                                            return@GradientDialogButtonnew
-                                                        }
-
-                                                        if (hasBluetoothPermissions(activity)) {
-                                                            printerManager.connectBluetooth("60:6E:41:BE:B7:99") { success, msg ->
-                                                                bluetoothStatus = msg
-                                                                isPrinterConnected = success
-                                                            }
-                                                        } else {
-                                                            requestBluetoothPermissions(activity)
-                                                            bluetoothStatus = "Please grant Bluetooth permissions"
-                                                            isPrinterConnected = false
-                                                        }
-                                                    }
-                                                )*/
 
                                                 GradientDialogButtonnew(
                                                     text = localizedContext.getString(R.string.connect_bluetooth_printer),
@@ -473,37 +460,86 @@ fun DeliveryChallanTable(
                                                         }
 
                                                         if (hasBluetoothPermissions(activity)) {
-                                                            logBondedDevices(context)
+                                                            val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
 
-                                                            bluetoothStatus = "Connecting..."
-                                                            isPrinterConnected = false
+                                                            if (bluetoothAdapter == null) {
+                                                                bluetoothStatus = "Bluetooth not supported"
+                                                                return@GradientDialogButtonnew
+                                                            }
 
-                                                            printerManager.disconnect()
+                                                            if (!bluetoothAdapter.isEnabled) {
+                                                                bluetoothStatus = "Please turn on Bluetooth"
+                                                                return@GradientDialogButtonnew
+                                                            }
 
-                                                            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                                                                printerManager.connectBluetooth("60:6E:41:BE:B7:99") { success, msg ->
-                                                                    bluetoothStatus = msg
-                                                                    isPrinterConnected = success
-                                                                }
-                                                            }, 500)
+                                                            bondedDevices = bluetoothAdapter.bondedDevices.toList()
+                                                            showDeviceList = true
+
+                                                            if (bondedDevices.isEmpty()) {
+                                                                bluetoothStatus = "No paired Bluetooth devices found"
+                                                            } else {
+                                                                bluetoothStatus = "Select printer device"
+                                                            }
+
                                                         } else {
                                                             requestBluetoothPermissions(activity)
                                                             bluetoothStatus = "Please grant Bluetooth permissions"
-                                                            isPrinterConnected = false
                                                         }
                                                     }
                                                 )
 
+                                                // ✅ ADD DEVICE LIST HERE
+                                                if (showDeviceList) {
+                                                    Card(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .heightIn(max = 220.dp),
+                                                        colors = CardDefaults.cardColors(
+                                                            containerColor = Color(0xFFF5F5F5)
+                                                        )
+                                                    ) {
+                                                        LazyColumn(
+                                                            modifier = Modifier.fillMaxWidth()
+                                                        ) {
+                                                            items(bondedDevices) { device ->
+                                                                Text(
+                                                                    text = "${device.name ?: "Unknown"}\n${device.address}",
+                                                                    modifier = Modifier
+                                                                        .fillMaxWidth()
+                                                                        .clickable {
+                                                                            bluetoothStatus = "Connecting to ${device.name ?: device.address}..."
+                                                                            isPrinterConnected = false
+                                                                            showDeviceList = false
+
+                                                                            printerManager.disconnect()
+
+                                                                            Handler(Looper.getMainLooper()).postDelayed({
+                                                                                printerManager.connectBluetooth(device.address) { success, msg ->
+                                                                                    bluetoothStatus = msg
+                                                                                    isPrinterConnected = success
+                                                                                }
+                                                                            }, 500)
+                                                                        }
+                                                                        .padding(10.dp),
+                                                                    fontFamily = poppins,
+                                                                    fontSize = 13.sp
+                                                                )
+
+                                                                Divider()
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
                                                 GradientDialogButtonnew(
-                                                    text =  localizedContext.getString(R.string.print_challan),
+                                                    text = localizedContext.getString(R.string.print_challan),
                                                     onClick = {
                                                         if (selectedPrintData != null) {
-                                                            Log.d("@@","companyName22"+companyName)
-                                                            printerManager.printDeliveryChallanCompact(selectedPrintData,companyName) { _, msg ->
+                                                            printerManager.printDeliveryChallanCompact(selectedPrintData, companyName) { _, msg ->
                                                                 bluetoothStatus = msg
                                                             }
                                                         } else {
-                                                            bluetoothStatus =  localizedContext.getString(R.string.no_print_data_found)
+                                                            bluetoothStatus = localizedContext.getString(R.string.no_print_data_found)
                                                         }
                                                     },
                                                     enabled = isPrinterConnected

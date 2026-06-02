@@ -421,7 +421,7 @@ fun SettingsScreen(
             10
         ),
 
-        // Actions
+   /*     // Actions
         SettingsMenuItem(
             "rates",
             localizedContext.getString(R.string.menu_rates_title),
@@ -431,7 +431,7 @@ fun SettingsScreen(
         ) {
             ///  showRatesEditor  = true
             //  navController.navigate(Screens.DailyRatesEditorScreen.route)
-        },
+        },*/
         SettingsMenuItem(
             "account",
             localizedContext.getString(R.string.account),

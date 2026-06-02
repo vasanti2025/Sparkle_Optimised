@@ -2534,7 +2534,7 @@ class BulkViewModel @Inject constructor(
             val ascii = if (epc.startsWith("E", ignoreCase = true)) {
                 ""
             } else {
-                hexToAscii(epc).trim()
+                cleanRfid(hexToAscii(epc))
             }
 
             val validAscii = if (
@@ -2605,6 +2605,14 @@ class BulkViewModel @Inject constructor(
                 ToastUtils.showToast(context, "Failed to scan")
             }
         }
+    }
+
+    fun cleanRfid(value: String?): String {
+        return value
+            .orEmpty()
+            .replace("\u0000", "")
+            .filter { it.code in 32..126 }
+            .trim()
     }
 
     /*fun loadUnmatchedFast(sourceItems: List<BulkItem>) {

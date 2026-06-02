@@ -1001,25 +1001,28 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
         TODO("Not yet implemented")
     }
 
-    fun hexToAscii(hex: String): String {
-        val cleanHex = hex.replace(" ", "").uppercase()
+fun hexToAscii(hex: String): String {
+    val cleanHex = hex.replace(" ", "").uppercase()
 
-        if (cleanHex.length % 2 != 0) return ""
+    if (cleanHex.length % 2 != 0) return ""
 
-        return try {
-            buildString {
-                for (i in cleanHex.indices step 2) {
-                    val part = cleanHex.substring(i, i + 2)
-                    val char = part.toInt(16).toChar()
-                    if (char.code in 32..126) { // printable ASCII only
-                        append(char)
-                    }
-                }
+    return try {
+        val ascii = buildString {
+            for (i in cleanHex.indices step 2) {
+                val char = cleanHex.substring(i, i + 2).toInt(16).toChar()
+                append(char)
             }
-        } catch (e: Exception) {
-            ""
         }
+
+        ascii
+            .replace("\u0000", "")
+            .trim()
+            .trimStart { it.code < 32 }
+
+    } catch (e: Exception) {
+        ""
     }
+}
 
 
     fun shortSerial(serial: String?): String {

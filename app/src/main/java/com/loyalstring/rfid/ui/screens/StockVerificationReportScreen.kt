@@ -1,5 +1,8 @@
 package com.loyalstring.rfid.ui.screens
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+
 import android.content.Context
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.background
@@ -196,6 +199,9 @@ fun StockVerificationReportScreen(
                     showDateIcon = selectedReportType == "SCAN",
                     onDateClick = { showDatePicker = true }
                 )*/
+
+                val reportScrollState = rememberScrollState()
+                val batchScrollState = rememberScrollState()
                 ReportRadioButtons(
                     selectedReportType = selectedReportType,
                     selectedDate = selectedDate,
@@ -219,7 +225,10 @@ fun StockVerificationReportScreen(
 
                 if (selectedReportType == "SCAN") {
 
-                    ReportHeaderRow(localizedContext)
+                    //ReportHeaderRow(localizedContext)
+                   /* Box(modifier = Modifier.horizontalScroll(reportScrollState)) {
+                        ReportHeaderRow(localizedContext)
+                    }
 
                     when (state) {
 
@@ -241,8 +250,14 @@ fun StockVerificationReportScreen(
                                     .padding(horizontal = 12.dp)
                             ) {
 
-                                items(data.Branches ?: emptyList()) { branch ->
-                                    BranchItem(branch, navController, selectedDate)
+                                items(
+                                    items = data.Branches ?: emptyList(),
+                                    key = { it.BranchId ?: it.hashCode() }
+                                ) { branch ->
+                                  //  BranchItem(branch, navController, selectedDate)
+                                    Box(modifier = Modifier.horizontalScroll(reportScrollState)) {
+                                        BranchItem(branch, navController, selectedDate)
+                                    }
                                 }
                             }
                         }
@@ -252,46 +267,97 @@ fun StockVerificationReportScreen(
                         }
 
                         else -> {}
+                    }*/
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .horizontalScroll(reportScrollState)
+                    ) {
+                        Column(
+                            modifier = Modifier.width(360.dp)
+                        ) {
+                            ReportHeaderRow(localizedContext)
+
+                            when (state) {
+                                is UiState.Loading -> {
+                                    Box(
+                                        Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(localizedContext.getString(R.string.loading))
+                                    }
+                                }
+
+                                is UiState.Success -> {
+                                    val data = (state as UiState.Success).data
+
+                                    LazyColumn(
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        items(
+                                            items = data.Branches ?: emptyList(),
+                                            key = { it.BranchId ?: it.hashCode() }
+                                        ) { branch ->
+                                            BranchItem(branch, navController, selectedDate)
+                                        }
+                                    }
+                                }
+
+                                is UiState.Error -> {
+                                    Text((state as UiState.Error).message)
+                                }
+
+                                else -> {}
+                            }
+                        }
                     }
 
                 } else {
 
-                    BatchHeaderRow(localizedContext=localizedContext)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .horizontalScroll(batchScrollState)
+                    ) {
+                        Column(
+                            modifier = Modifier.width(620.dp)
+                        ) {
+                            BatchHeaderRow(localizedContext = localizedContext)
 
-                    when (state0) {
+                            when (state0) {
+                                is UiState.Loading -> {
+                                    Text("Loading...", modifier = Modifier.padding(16.dp))
+                                }
 
-                        is UiState.Loading -> {
-                            Text("Loading...")
-                        }
+                                is UiState.Success -> {
+                                    val sessions =
+                                        (state0 as UiState.Success).data.Sessions ?: emptyList()
 
-                        is UiState.Success -> {
-
-                            val sessions =
-                                (state0 as UiState.Success).data.Sessions ?: emptyList()
-
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 12.dp)
-                            ) {
-
-                                items(sessions) { session ->
-
-                                    SessionItem(session) {
-
-                                        navController.navigate(
-                                            "batch_details_screen/${session.ScanBatchId}"
-                                        )
+                                    LazyColumn(
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        items(
+                                            items = sessions,
+                                            key = { it.ScanBatchId ?: it.hashCode() }
+                                        ) { session ->
+                                            SessionItem(session) {
+                                                navController.navigate(
+                                                    "batch_details_screen/${session.ScanBatchId}"
+                                                )
+                                            }
+                                        }
                                     }
                                 }
+
+                                is UiState.Error -> {
+                                    Text((state0 as UiState.Error).message)
+                                }
+
+                                else -> {}
                             }
                         }
-
-                        is UiState.Error -> {
-                            Text((state0 as UiState.Error).message)
-                        }
-
-                        else -> {}
                     }
                 }
             }
@@ -815,22 +881,27 @@ fun BatchTableSection(
 
             } else {
 
-                items.forEach { item ->
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(400.dp)
+                ) {
+                    items(
+                        items = items,
+                        key = { it.ItemCode ?: it.RFIDCode ?: it.hashCode() }
+                    ) { item ->
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp)
-                    ) {
-
-                        TableCell(item.ItemCode ?: "", 1.2f)
-                        TableCell(item.ProductName ?: "N/A", 1.3f)
-                        TableCell(item.BranchName ?: "N/A", 1f)
-                        TableCell(item.CategoryName ?: "N/A", 1.1f)
-                        TableCell(item.RFIDCode ?: "-", 1f)
-                      /*  TableCell("${item.GrossWeight ?: 0} g", 0.8f)
-                        TableCell("${item.NetWeight ?: 0} g", 0.8f)*/
-
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                        ) {
+                            TableCell(item.ItemCode ?: "", 1.2f)
+                            TableCell(item.ProductName ?: "N/A", 1.3f)
+                            TableCell(item.BranchName ?: "N/A", 1f)
+                            TableCell(item.CategoryName ?: "N/A", 1.1f)
+                            TableCell(item.RFIDCode ?: "-", 1f)
+                        }
                     }
                 }
             }
@@ -869,7 +940,8 @@ fun SessionItem(
 
     Row(
         modifier = Modifier
-            .fillMaxWidth()
+            //.width(620.dp)
+           .fillMaxWidth()
             .padding(vertical = 6.dp)
             .background(Color(0xFFF5F5F5))
             .clickable { onClick(session) }
@@ -881,12 +953,12 @@ fun SessionItem(
 
         TableText(
             formatDateTime(session.StartedOn),
-            Modifier.weight(1.4f)
+            Modifier.weight(1f)
         )
 
         TableText(
             formatDateTime(session.EndedOn),
-            Modifier.weight(1.4f)
+            Modifier.weight(1f)
         )
 
         QtyBadge(session.TotalQty, Color(0xFFBBDEFB), Modifier.weight(1f))
@@ -902,8 +974,9 @@ fun BatchHeaderRow(localizedContext: Context) {
 
     Row(
         modifier = Modifier
+           // .width(620.dp)
             .fillMaxWidth()
-            .background(Color(0xFFE0E0E0))
+            .background(Color.Black)
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -919,13 +992,13 @@ fun BatchHeaderRow(localizedContext: Context) {
 
 @Composable
 fun HeaderCell(text: String, modifier: Modifier) {
-
     Text(
         text = text,
         modifier = modifier,
         fontSize = 12.sp,
         fontWeight = FontWeight.Bold,
-        textAlign = TextAlign.Center
+        textAlign = TextAlign.Center,
+        color = Color.White
     )
 }
 
@@ -942,23 +1015,16 @@ fun TableText(text: String, modifier: Modifier) {
 
 @Composable
 fun QtyBadge(value: Int, color: Color, modifier: Modifier) {
-
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
-
-        Box(
-            modifier = Modifier
-                .background(color, RoundedCornerShape(8.dp))
-                .padding(horizontal = 10.dp, vertical = 4.dp)
-        ) {
-            Text(
-                value.toString(),
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center
-            )
-        }
+        Text(
+            text = value.toString(),
+            fontSize = 12.sp,
+            textAlign = TextAlign.Center,
+            color = Color.Black
+        )
     }
 }
 
@@ -1321,21 +1387,17 @@ fun formatDateTime(dateTime: String?): String {
     if (dateTime.isNullOrEmpty()) return "-"
 
     return try {
-
         val inputFormat =
             java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault())
 
         val outputFormat =
-            java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault())
+            java.text.SimpleDateFormat("dd/MM/yyyy hh:mm a", java.util.Locale.getDefault())
 
         val date = inputFormat.parse(dateTime)
 
         outputFormat.format(date!!)
-
     } catch (e: Exception) {
-
         dateTime
-
     }
 }
 
@@ -1422,16 +1484,17 @@ fun ReportHeaderRow(localizedContext: Context) {
 
     Row(
         modifier = Modifier
+
             .fillMaxWidth()
             .background(Color.Black)
             .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
 
-        HeaderText(localizedContext.getString(R.string.branch), Modifier.weight(1.6f))
-        HeaderText(localizedContext.getString(R.string.total_inv), Modifier.weight(1f))
-        HeaderText(localizedContext.getString(R.string.matched), Modifier.weight(1f))
-        HeaderText(localizedContext.getString(R.string.unmatched), Modifier.weight(1f))
+        HeaderText(localizedContext.getString(R.string.branch), Modifier.weight(1.3f))
+        HeaderText(localizedContext.getString(R.string.total_inv), Modifier.weight(0.9f))
+        HeaderText(localizedContext.getString(R.string.matched), Modifier.weight(0.9f))
+        HeaderText(localizedContext.getString(R.string.unmatched), Modifier.weight(0.9f))
      //   HeaderText("Match", Modifier.weight(1f))
        // HeaderText("Unm", Modifier.weight(1f))
     }
@@ -1456,6 +1519,7 @@ fun BranchItem(branch: Branch, navController: NavHostController, selectedDate: S
 
     Column(
         modifier = Modifier
+
             .fillMaxWidth()
             .padding(vertical = 6.dp)
     ) {
@@ -1472,14 +1536,16 @@ fun BranchItem(branch: Branch, navController: NavHostController, selectedDate: S
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 14.dp, horizontal = 8.dp),
+                    .padding(vertical = 14.dp, horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
 
                 Text(
-                    branch.BranchName ?: "",
-                    modifier = Modifier.weight(1.6f),
-                    fontSize = 14.sp
+                    text = branch.BranchName ?: "",
+                    modifier = Modifier
+                        .weight(1.3f),
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center
                 )
                 CenterBadge(
                     branch.TotalInventoryItems ?: 0,
@@ -1553,29 +1619,19 @@ fun CenterBadge(
     modifier: Modifier,
     onClick: (() -> Unit)? = null
 ) {
-
     Box(
-        modifier = modifier,
+        modifier = modifier
+            .clickable(enabled = onClick != null) {
+                onClick?.invoke()
+            },
         contentAlignment = Alignment.Center
     ) {
-
-        Box(
-            modifier = Modifier
-                .background(
-                    color,
-                    shape = RoundedCornerShape(8.dp)
-                )
-                .clickable(enabled = onClick != null) {
-                    onClick?.invoke()
-                }
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                value.toString(),
-                fontSize = 12.sp
-            )
-        }
+        Text(
+            text = value.toString(),
+            fontSize = 12.sp,
+            textAlign = TextAlign.Center,
+            color = Color.Black
+        )
     }
 }
 @Composable
@@ -1623,10 +1679,11 @@ fun CategoryItem(
                 Spacer(modifier = Modifier.width(6.dp))
 
                 Text(
-                    category.CategoryName ?: "",
+                    text = category.CategoryName ?: "",
                     modifier = Modifier.weight(1.6f),
                     fontSize = 13.sp,
-                    color = Color(0xFF444444)
+                    color = Color(0xFF444444),
+                    textAlign = TextAlign.Center
                 )
 
                 // 🔵 TOTAL
@@ -1728,12 +1785,12 @@ fun ProductItem(
             Spacer(modifier = Modifier.width(6.dp))
 
             Text(
-                product.ProductName ?: "",
+                text = product.ProductName ?: "",
                 modifier = Modifier.weight(1.6f),
-                fontSize = 13.sp,   // 👈 slightly bigger
-                color = Color(0xFF555555)
+                fontSize = 13.sp,
+                color = Color(0xFF555555),
+                textAlign = TextAlign.Center
             )
-
             CenterBadge(
                 product.TotalInventoryItems ?: 0,
                 Color(0xFFBBDEFB),
@@ -1820,10 +1877,11 @@ fun DesignItem( branchId: Int,
         Spacer(modifier = Modifier.width(6.dp))
 
         Text(
-            design.DesignName ?: "",
+            text = design.DesignName ?: "",
             modifier = Modifier.weight(1.6f),
             fontSize = 12.sp,
-            color = Color(0xFF777777)
+            color = Color(0xFF777777),
+            textAlign = TextAlign.Center
         )
 
         // 🔵 TOTAL

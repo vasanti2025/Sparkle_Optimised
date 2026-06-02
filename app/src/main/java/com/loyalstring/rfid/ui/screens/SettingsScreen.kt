@@ -1,4 +1,10 @@
 package com.loyalstring.rfid.ui.screens
+import android.os.Looper
+import android.os.Handler
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.Bundle
 
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
@@ -305,8 +311,8 @@ fun SettingsScreen(
         if (locationAutoSyncEnabled) {
 
             Log.d("WORKER_TEST", "Scheduling worker2")
-            val activity = context as Activity
-            checkLocationSettings(activity)
+          //  val activity = context as Activity
+          //  checkLocationSettings(activity)
 
             getCurrentLocation(context, context) { latitude, longitude, address ->
 
@@ -1306,7 +1312,7 @@ fun getCurrentLocation(context: Context,context: Context, onLocationFetched: (St
 
 
 @SuppressLint("MissingPermission")
-fun getCurrentLocation(
+/*fun getCurrentLocation(
     localizedContext: Context,
     context: Context,
     onLocationFetched: (String, String, String) -> Unit
@@ -1374,6 +1380,149 @@ fun getCurrentLocation(
                 }
             }
         }
+}*/
+
+
+
+fun getCurrentLocation(
+    localizedContext: Context,
+    context: Context,
+    onLocationFetched: (String, String, String) -> Unit
+) {
+    if (context !is Activity) {
+        Log.e("LOCATION_DEBUG", "Context is not Activity")
+        return
+    }
+
+    val finePermission = ActivityCompat.checkSelfPermission(
+        context,
+        Manifest.permission.ACCESS_FINE_LOCATION
+    )
+
+    val coarsePermission = ActivityCompat.checkSelfPermission(
+        context,
+        Manifest.permission.ACCESS_COARSE_LOCATION
+    )
+
+    if (finePermission != PackageManager.PERMISSION_GRANTED &&
+        coarsePermission != PackageManager.PERMISSION_GRANTED
+    ) {
+        ActivityCompat.requestPermissions(
+            context,
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ),
+            100
+        )
+        return
+    }
+
+    getLocationUsingLocationManager(
+        context = context,
+        onLocationFetched = onLocationFetched
+    )
+}
+
+@SuppressLint("MissingPermission")
+fun getLocationUsingLocationManager(
+    context: Context,
+    onLocationFetched: (String, String, String) -> Unit
+) {
+    val locationManager =
+        context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+
+    val providers = mutableListOf<String>()
+
+    if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+        providers.add(LocationManager.NETWORK_PROVIDER)
+    }
+
+    if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+        providers.add(LocationManager.GPS_PROVIDER)
+    }
+
+    providers.add(LocationManager.PASSIVE_PROVIDER)
+
+    if (providers.isEmpty()) {
+        Toast.makeText(context, "Please turn on device location.", Toast.LENGTH_LONG).show()
+        return
+    }
+
+    Log.d("LOCATION_DEBUG", "Available providers = $providers")
+
+    // 1. First try last known from all providers
+    for (provider in providers) {
+        val lastKnown = locationManager.getLastKnownLocation(provider)
+
+        Log.d("LOCATION_DEBUG", "LastKnown $provider = $lastKnown")
+
+        if (lastKnown != null) {
+            getAddressFromLatLong(
+                context,
+                lastKnown.latitude,
+                lastKnown.longitude,
+                onLocationFetched
+            )
+            return
+        }
+    }
+
+    var locationFound = false
+
+    val listener = object : LocationListener {
+        override fun onLocationChanged(location: Location) {
+            if (locationFound) return
+
+            locationFound = true
+            locationManager.removeUpdates(this)
+
+            Log.d(
+                "LOCATION_DEBUG",
+                "Location found provider=${location.provider}, lat=${location.latitude}, lng=${location.longitude}"
+            )
+
+            getAddressFromLatLong(
+                context,
+                location.latitude,
+                location.longitude,
+                onLocationFetched
+            )
+        }
+
+        override fun onProviderEnabled(provider: String) {}
+        override fun onProviderDisabled(provider: String) {}
+    }
+
+    // 2. Request update from all available providers
+    providers.forEach { provider ->
+        try {
+            locationManager.requestLocationUpdates(
+                provider,
+                1000L,
+                0f,
+                listener,
+                android.os.Looper.getMainLooper()
+            )
+        } catch (e: Exception) {
+            Log.e("LOCATION_DEBUG", "Provider failed: $provider ${e.message}")
+        }
+    }
+
+    // 3. Timeout fallback
+    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+        if (!locationFound) {
+            locationManager.removeUpdates(listener)
+
+            Log.e("LOCATION_DEBUG", "Location timeout. No provider returned location.")
+
+            Toast.makeText(
+                context,
+                "Location not found. Please keep GPS ON and try outside/open area.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }, 60000L)
 }
 
 fun getAddressFromLatLong(

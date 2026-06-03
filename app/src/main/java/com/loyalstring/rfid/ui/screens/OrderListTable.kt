@@ -2,6 +2,7 @@
 package com.loyalstring.rfid.ui.screens
 
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import com.loyalstring.rfid.data.model.deliveryChallan.ChallanDetails
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.loyalstring.rfid.data.local.entity.OrderItem
 import com.loyalstring.rfid.ui.utils.UserPreferences
@@ -35,6 +37,7 @@ import com.loyalstring.rfid.worker.LocaleHelper
 fun OrderListTable(
     onTotalsChange: (baseTotal: Double, gstAmount: Double, finalTotal: Double) -> Unit = { _, _, _ -> },
     onItemUpdated: (index: Int, updated: OrderItem) -> Unit = { _, _ -> },
+    onDeleteItem: (Int) -> Unit = {},
     productList: List<OrderItem>
 ) {
     val horizontalScroll = rememberScrollState()
@@ -74,7 +77,7 @@ fun OrderListTable(
             .padding(bottom = 5.dp)
     ) {
         // 🔹 Scrollable content (Header + Data)
-        Box(
+    /*    Box(
             modifier = Modifier
                 .weight(1f)
                 .horizontalScroll(horizontalScroll)
@@ -145,13 +148,106 @@ fun OrderListTable(
                 }
             }
         }
+*/
+        Column(modifier = Modifier.weight(1f)) {
 
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF2E2E2E))
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(horizontalScroll)
+                ) {
+                    headerTitles.forEach { title ->
+                        Text(
+                            text = title,
+                            modifier = Modifier.width(cellWidth).padding(horizontal = 2.dp),
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                Text(
+                    text = localizedContext.getString(R.string.action),
+                    modifier = Modifier.width(45.dp),
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                items(productList.size) { index ->
+                    val item = productList[index]
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(if (index % 2 == 0) Color(0xFFF4F4F4) else Color.White)
+                            .padding(vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .horizontalScroll(horizontalScroll)
+                                .clickable {
+                                    selectedItem = item
+                                    selectedIndex = index
+                                    showDialog = true
+                                }
+                        ) {
+                            listOf(
+                                item.productName ?: "",
+                                item.itemCode ?: "",
+                                item.grWt ?: "",
+                                item.nWt ?: "",
+                                item.finePlusWt ?: "",
+                                item.stoneAmt ?: "",
+                                item.diamondAmt ?: "",
+                                item.itemAmt ?: "",
+                                item.rfidCode ?: ""
+                            ).forEach { value ->
+                                Text(
+                                    text = value,
+                                    modifier = Modifier.width(cellWidth).padding(horizontal = 2.dp),
+                                    fontSize = 11.sp,
+                                    color = Color.DarkGray,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_delete),
+                            contentDescription = localizedContext.getString(R.string.delete),
+                            modifier = Modifier
+                                .width(45.dp)
+                                .size(18.dp)
+                                .clickable {
+                                    onDeleteItem(index)
+                                }
+                        )
+                    }
+                }
+            }
+        }
         // 🔹 Fixed Footer Row (Totals)
         val totalQty = productList.size
         val totalGross = productList.sumOf { it.grWt?.toDoubleOrNull() ?: 0.0 }
-        val totalNet = productList.sumOf { it.netAmt?.toDoubleOrNull() ?: 0.0 }
+        val totalNet = productList.sumOf { it.nWt?.toDoubleOrNull() ?: 0.0 }
         val totalFine = productList.sumOf { it.makingFixedWastage?.toDoubleOrNull() ?: 0.0 }
         val totalAmt = productList.sumOf { it.itemAmt?.toDoubleOrNull() ?: 0.0 }
+
+        val totalDaimondAmt = productList.sumOf { it.diamondAmt?.toDoubleOrNull() ?: 0.0 }
+        val totalStoneAmt = productList.sumOf { it.stoneAmt?.toDoubleOrNull() ?: 0.0 }
 
         Column {
             Box(
@@ -168,8 +264,8 @@ fun OrderListTable(
                         "%.3f".format(totalGross),
                         "%.3f".format(totalNet),
                         "%.3f".format(totalFine),
-                        "%.2f".format(totalAmt),
-                        "%.2f".format(totalAmt),
+                        "%.2f".format(totalStoneAmt),
+                        "%.2f".format(totalDaimondAmt),
                         "%.2f".format(totalAmt),
                         "%.2f".format(totalAmt)
                     ).forEach { total ->
@@ -185,6 +281,7 @@ fun OrderListTable(
                         )
                     }
                 }
+                Spacer(modifier = Modifier.width(45.dp))
             }
 
             // optional dialog for editing a row

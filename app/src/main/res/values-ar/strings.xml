@@ -523,8 +523,8 @@
     <string name="screw_type">نوع المسمار</string>
     <string name="polish_type">نوع التلميع</string>
 
-    <string name="fine_percent">النسبة %%</string>
-    <string name="enter_fine">أدخل النسبة %%</string>
+    <string name="fine_percent">النسبة %</string>
+    <string name="enter_fine">أدخل النسبة %</string>
 
     <string name="wastage">الهدر</string>
     <string name="enter_wastage">أدخل الهدر</string>
@@ -802,4 +802,8 @@
     <string name="your_subscription_has_expired_please_login_again_to_continue">
     انتهت صلاحية اشتراكك. يرجى تسجيل الدخول مرة أخرى للمتابعة.
 </string>
+    <string name="stone_amt">قيمة الحجر</string>
+    <string name="diamond_amt">قيمة الألماس</string>
+    <string name="enter_stone_amount">أدخل قيمة الحجر</string>
+    <string name="enter_diamond_amount">أدخل قيمة الألماس</string>
 </resources>

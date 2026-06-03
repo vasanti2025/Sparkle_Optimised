@@ -2171,7 +2171,12 @@ fun OrderScreen(
                     // ✅ sirf ek item update
                     productList[index] = updated
                 },
-               productList = productList
+               productList = productList,
+               onDeleteItem = { index ->
+                   if (index in productList.indices) {
+                       productList.removeAt(index)
+                   }
+               }
             )
 
             /*      DeliveryChallanItemListTable(

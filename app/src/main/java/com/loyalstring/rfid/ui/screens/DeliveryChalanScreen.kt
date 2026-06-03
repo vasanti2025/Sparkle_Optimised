@@ -2492,6 +2492,11 @@ MakingPerGram=${touchMatch.MakingPerGram}
                 onItemUpdated = { index, updated ->
                     // ✅ sirf ek item update
                     productList[index] = updated
+                },
+                onDeleteItem = { index ->
+                    if (index in productList.indices) {
+                        productList.removeAt(index)
+                    }
                 }
             )
 

@@ -555,8 +555,8 @@
     <string name="screw_type">Screw Type</string>
     <string name="polish_type">Polish Type</string>
 
-    <string name="fine_percent">Fine %%</string>
-    <string name="enter_fine">Enter Fine %%</string>
+    <string name="fine_percent">Fine %</string>
+    <string name="enter_fine">Enter Fine %</string>
 
     <string name="wastage">Wastage</string>
     <string name="enter_wastage">Enter wastage</string>
@@ -838,5 +838,9 @@
     <string name="your_subscription_has_expired_please_contact_support">Your subscription has expired. Please contact support.</string>
     <string name="subscription_expiry_warning">Your subscription will expire in %1$d day(s). Please renew soon.</string>
     <string name="your_subscription_has_expired_please_login_again_to_continue">Your subscription has expired. Please login again to continue.</string>
+    <string name="stone_amt">Stone Amt</string>
+    <string name="diamond_amt">Diamond Amt</string>
+    <string name="enter_stone_amount">Enter stone amount</string>
+    <string name="enter_diamond_amount">Enter diamond amount</string>
 
 </resources>

@@ -1,5 +1,7 @@
 // File: DeliveryChallanItemListTable.kt
 package com.loyalstring.rfid.ui.screens
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.background
@@ -24,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.loyalstring.rfid.data.model.deliveryChallan.ChallanDetails
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.viewmodel.OrderViewModel
@@ -34,7 +37,8 @@ import com.loyalstring.rfid.worker.LocaleHelper
 fun DeliveryChallanItemListTable(
     productList: List<ChallanDetails>,
     onTotalsChange: (baseTotal: Double, gstAmount: Double, finalTotal: Double) -> Unit = { _, _, _ -> },
-    onItemUpdated: (index: Int, updated: ChallanDetails) -> Unit = { _, _ -> }
+    onItemUpdated: (index: Int, updated: ChallanDetails) -> Unit = { _, _ -> },
+    onDeleteItem: (index: Int) -> Unit = {}
 ) {
     val horizontalScroll = rememberScrollState()
     var selectedItem by remember { mutableStateOf<ChallanDetails?>(null) }
@@ -62,6 +66,7 @@ fun DeliveryChallanItemListTable(
         localizedContext.getString(R.string.d_amt),
         localizedContext.getString(R.string.item_amt),
         localizedContext.getString(R.string.rfid_code)
+
     )
 
     val cellWidth = 70.dp
@@ -73,69 +78,101 @@ fun DeliveryChallanItemListTable(
             .padding(bottom = 5.dp)
     ) {
         // 🔹 Scrollable content (Header + Data)
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .horizontalScroll(horizontalScroll)
-        ) {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth()
+        Row(modifier = Modifier.weight(1f)) {
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(horizontalScroll)
             ) {
-                // Header
-                item {
-                    Row(
-                        modifier = Modifier
-                            .background(Color(0xFF2E2E2E))
-                            .padding(vertical = 4.dp)
-                    ) {
-                        headerTitles.forEach { title ->
-                            Text(
-                                text = title,
-                                modifier = Modifier
-                                    .width(cellWidth)
-                                    .padding(horizontal = 2.dp),
-                                color = Color.White,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
+                LazyColumn {
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .background(Color(0xFF2E2E2E))
+                                .padding(vertical = 4.dp)
+                        ) {
+                            headerTitles.forEach { title ->
+                                Text(
+                                    text = title,
+                                    modifier = Modifier.width(cellWidth).padding(horizontal = 2.dp),
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+
+                    items(productList.size) { index ->
+                        val item = productList[index]
+                        Row(
+                            modifier = Modifier
+                                .background(if (index % 2 == 0) Color(0xFFF4F4F4) else Color.White)
+                                .padding(vertical = 3.dp)
+                                .clickable {
+                                    selectedItem = item
+                                    selectedIndex = index
+                                    showDialog = true
+                                },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            listOf(
+                                item.ProductName ?: "",
+                                item.ItemCode ?: "",
+                                item.GrossWt ?: "",
+                                item.NetWt ?: "",
+                                item.FineWastageWt ?: "",
+                                item.StoneAmount ?: "",
+                                item.DiamondSellAmount ?: "",
+                                item.ItemAmount ?: "",
+                                item.RFIDCode ?: ""
+                            ).forEach { value ->
+                                Text(
+                                    text = value,
+                                    modifier = Modifier.width(cellWidth).padding(horizontal = 2.dp),
+                                    fontSize = 11.sp,
+                                    color = Color.DarkGray,
+                                    maxLines = 1
+                                )
+                            }
                         }
                     }
                 }
+            }
 
-                // Data rows
-                items(productList.size) { index ->
-                    val item = productList[index]
-                    Row(
+            LazyColumn(modifier = Modifier.width(cellWidth)) {
+                item {
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .background(if (index % 2 == 0) Color(0xFFF4F4F4) else Color.White)
-                            .padding(vertical = 3.dp)
-                            .clickable {
-                                selectedItem = item
-                                selectedIndex = index
-                                showDialog = true
-                            },
-                        verticalAlignment = Alignment.CenterVertically
+                            .width(cellWidth)
+                            .background(Color(0xFF2E2E2E))
+                            .padding(vertical = 4.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        listOf(
-                            item.ProductName ?: "",
-                            item.ItemCode ?: "",
-                            item.GrossWt ?: "",
-                            item.NetWt ?: "",
-                            item.FineWastageWt ?: "",
-                            item.StoneAmount ?: "",
-                            item.DiamondSellAmount ?: "",
-                            item.ItemAmount ?: "",
-                            item.RFIDCode ?: ""
-                        ).forEach { value ->
-                            Text(
-                                text = value,
-                                modifier = Modifier
-                                    .width(cellWidth)
-                                    .padding(horizontal = 2.dp),
-                                fontSize = 11.sp,
-                                color = Color.DarkGray,
-                                maxLines = 1
+                        Text(
+                            text = localizedContext.getString(R.string.action),
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                items(productList.size) { index ->
+                    Box(
+                        modifier = Modifier
+                            .width(cellWidth)
+                            .height(30.dp)
+                            .background(if (index % 2 == 0) Color(0xFFF4F4F4) else Color.White),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        IconButton(onClick = { onDeleteItem(index) }) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_delete),
+                                contentDescription = "Delete",
+                                tint = Color.Red,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
@@ -149,6 +186,8 @@ fun DeliveryChallanItemListTable(
         val totalNet = productList.sumOf { it.NetWt?.toDoubleOrNull() ?: 0.0 }
         val totalFine = productList.sumOf { it.FineWastageWt?.toDoubleOrNull() ?: 0.0 }
         val totalAmt = productList.sumOf { it.ItemAmount?.toDoubleOrNull() ?: 0.0 }
+        val totdiamondAmt = productList.sumOf { it.DiamondAmt?.toDoubleOrNull() ?: 0.0 }
+        val totstoneAMt = productList.sumOf { it.StoneAmount?.toDoubleOrNull() ?: 0.0 }
 
         Column {
             Box(
@@ -165,8 +204,8 @@ fun DeliveryChallanItemListTable(
                         "%.3f".format(totalGross),
                         "%.3f".format(totalNet),
                         "%.3f".format(totalFine),
-                        "%.2f".format(totalAmt),
-                        "%.2f".format(totalAmt),
+                        "%.2f".format(totstoneAMt),
+                        "%.2f".format(totdiamondAmt),
                         "%.2f".format(totalAmt),
                         "%.2f".format(totalAmt)
                     ).forEach { total ->

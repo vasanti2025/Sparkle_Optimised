@@ -44,6 +44,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -195,7 +196,7 @@ fun OrderDetailsDialogEditAndDisplay(
     var qty by rememberSaveable(initKey) { mutableStateOf("") }
 
     var stoneAmt by rememberSaveable(initKey) { mutableStateOf("") }
-
+    var diamondAmt by rememberSaveable(initKey) { mutableStateOf("") }
     // Gross focus (auto calc should not override when user typing)
     var grossHasFocus by remember { mutableStateOf(false) }
 
@@ -238,7 +239,11 @@ fun OrderDetailsDialogEditAndDisplay(
 
         val rate = asDouble(ratePerGRam)
         val hallmark = asDouble(hallMarkAmt)
-        val baseAmt = (net * rate) + hallmark
+      //  val baseAmt = (net * rate) + hallmark
+        val stoneAmount = asDouble(stoneAmt)
+        val diamondAmount = asDouble(diamondAmt)
+
+        val baseAmt = (net * rate) + hallmark + stoneAmount + diamondAmount
 
         val mrpVal = asDouble(mrp)
         itemAmt = if (mrpVal > 0) fmt2(mrpVal) else fmt2(baseAmt)
@@ -270,7 +275,7 @@ fun OrderDetailsDialogEditAndDisplay(
         size = stableItem.size?.takeIf { !it.equals("null", true) } ?: ""
         length = stableItem.length.orEmpty()
         stoneAmt = stableItem.stoneAmt.orEmpty()
-
+        diamondAmt = stableItem.diamondAmt.orEmpty()
         remark = stableItem.remark.orEmpty()
         typeOfColors = stableItem.typeOfColor?.takeIf { !it.equals("null", true) } ?: "Select color"
         screwType = stableItem.screwType.orEmpty()
@@ -372,7 +377,7 @@ fun OrderDetailsDialogEditAndDisplay(
         stoneWt, dimondWt,
         finePercentage, wastage,
         ratePerGRam,
-        hallMarkAmt, mrp
+        hallMarkAmt, mrp, stoneAmt, diamondAmt
     ) {
         recalcAll()
     }
@@ -545,6 +550,22 @@ fun OrderDetailsDialogEditAndDisplay(
                         value = ratePerGRam,
                         placeholder = localizedContext.getString(R.string.enter_rate),
                         onChange = { ratePerGRam = it }
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    FieldRowInput(
+                        label = localizedContext.getString(R.string.stone_amt),
+                        value = stoneAmt,
+                        placeholder =  localizedContext.getString(R.string.enter_stone_amount),
+                        onChange = { stoneAmt = it }
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    FieldRowInput(
+                        label = localizedContext.getString(R.string.diamond_amt),
+                        value = diamondAmt,
+                        placeholder = localizedContext.getString(R.string.enter_diamond_amount),
+                        onChange = { diamondAmt = it }
                     )
                     Spacer(modifier = Modifier.height(4.dp))
 
@@ -879,7 +900,7 @@ fun OrderDetailsDialogEditAndDisplay(
                                 image = stableItem?.image.orEmpty(),
                                 netAmt = "",
 
-                                diamondAmt = stableItem?.diamondAmt.orEmpty(),
+                                diamondAmt = diamondAmt,
 
                                 categoryId = stableItem?.categoryId ?: 0,
                                 categoryName = stableItem?.categoryName.orEmpty(),
@@ -1098,7 +1119,8 @@ private fun DateRow(
                     DatePickerDialog(
                         context,
                         { _, year, month, dayOfMonth ->
-                            val selectedDate = Calendar.getInstance().apply { set(year, month, dayOfMonth) }
+                            val selectedDate =
+                                Calendar.getInstance().apply { set(year, month, dayOfMonth) }
                             onPick(dateFormatter.format(selectedDate.time))
                         },
                         cal.get(Calendar.YEAR),

@@ -459,7 +459,7 @@ fun AddProductScreen(
                 onSave = {
                     if (isSaving) return@ScanBottomBar
                     isSaving = true
-                    try {
+
                         viewModel.barcodeReader.close()
 
                         /* fun get(label: String) =
@@ -572,45 +572,37 @@ fun AddProductScreen(
                             Status = "Active"
                         )
                         scope.launch {
-                            val isStockAdded =
-                                viewModel.insertLabelledStock(request)
+                            val isStockAdded = viewModel.insertLabelledStock(request)
+                            val apiMessage = viewModel.addProductMessage.value
 
+                            ToastUtils.showToast(context, apiMessage)
 
-
-                            Log.d("AddProductScreen", "isStockAdded" + isStockAdded)
                             if (isStockAdded) {
-                                ToastUtils.showToast(context,
-                                    localizedContext.getString(R.string.stock_added_successfully))
                                 bulkViewModel.syncItems(context)
 
-                            }else
-                            {
-                                ToastUtils.showToast(context,
-                                    localizedContext.getString(R.string.failed_to_add_stock))
+                                updateField("Vendor", "")
+                                updateField("Product", "")
+                                updateField("Category", "")
+                                updateField("Design", "")
+                                updateField("Purity", "")
+                                updateField("SKU", "")
+                                updateField("Gross Weight", "")
+                                updateField("RFID Code", "")
+                                updateField("EPC", "")
+                                updateField("Net Weight", "")
+                                updateField("Diamond Weight", "")
+                                updateField("Making/Gram", "")
+                                updateField("Making %", "")
+                                updateField("Fix Making", "")
+                                updateField("Fix Wastage", "")
+                                updateField("Stone Amount", "")
+                                updateField("Diamond Amount", "")
+                                updateField("Stone Weight", "")
                             }
-                            updateField("Vendor", "")
-                            updateField("Product", "")
-                            updateField("Category", "")
-                            updateField("Design", "")
-                            updateField("Purity", "")
-                            updateField("SKU", "")
-                            updateField("Gross Weight", "")
-                            updateField("RFID Code", "")
-                            updateField("EPC", "")
-                            updateField("Net Weight", "")
-                            updateField("Diamond Weight", "")
-                            updateField("Making/Gram", "")
-                            updateField("Making %", "")
-                            updateField("Fix Making", "")
-                            updateField("Fix Wastage", "")
-                            updateField("Stone Amount", "")
-                            updateField("Diamond Amount", "")
-                            updateField("Stone Weight", "")
 
+                            isSaving = false
                         }
-                    } finally {
-                        isSaving = false
-                    }
+
                 },
 
                 onList = { navController.navigate(Screens.ProductListScreen.route) },
@@ -667,7 +659,14 @@ fun AddProductScreen(
                     onImageUrlChange = { imageUrl.value = it },
                     onValueChange = { value ->
                         if (!isDisabled) {
-                            updateField(field.label, value)
+                            val finalValue =
+                                if (field.label == "RFID Code") {
+                                    value.uppercase()
+                                } else {
+                                    value
+                                }
+
+                            updateField(field.label, finalValue)
                             when (field.label) {
                                 "Vendor" -> updateField("SKU", "")
                                 "Category" -> {
@@ -1340,6 +1339,11 @@ fun FormRow(
                 .fillMaxHeight()
                 .clip(RoundedCornerShape(6.dp))
                 .background(Color.White)
+                .clickable {
+                    if (field.isDropdown && filteredOptions.isNotEmpty()) {
+                        expanded = true
+                    }
+                }
                 .padding(horizontal = 12.dp),
             contentAlignment = Alignment.CenterStart
         ) {
@@ -1358,7 +1362,7 @@ fun FormRow(
                         fontSize = 13.sp
                     )
                 } else {
-                    Column {
+                   /* Column {
                         BasicTextField(
                             value = value,
                             onValueChange = {newValue -> onValueChange(newValue)},
@@ -1423,6 +1427,71 @@ fun FormRow(
                                 }
                             }
                         )
+
+                        DropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            filteredOptions.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option, fontFamily = poppins) },
+                                    onClick = {
+                                        onValueChange(option)
+                                        expanded = false
+
+                                        if (field.label == "SKU") {
+                                            skuList?.find { it.StockKeepingUnit == option }?.let {
+                                                onSkuSelected?.invoke(it)
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }*/
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight()
+                            .clickable {
+                                expanded = true
+                            },
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = value.ifEmpty { "select" },
+                                color = if (value.isEmpty()) Color.LightGray else Color.Black,
+                                fontSize = 14.sp,
+                                fontFamily = poppins,
+                                maxLines = 1,
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            if (value.isNotEmpty()) {
+                                Icon(
+                                    imageVector = Icons.Default.Clear,
+                                    contentDescription = "Clear",
+                                    tint = Color.Gray,
+                                    modifier = Modifier
+                                        .padding(end = 8.dp)
+                                        .size(20.dp)
+                                        .clickable {
+                                            onValueChange("")
+                                        }
+                                )
+                            }
+
+                            Icon(
+                                imageVector = Icons.Filled.ArrowDropDown,
+                                contentDescription = "Dropdown"
+                            )
+                        }
 
                         DropdownMenu(
                             expanded = expanded,

@@ -1,5 +1,8 @@
 package com.loyalstring.rfid.ui.screens
 
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -137,6 +140,14 @@ fun ProductListScreen(
     var isPdfExporting by remember { mutableStateOf(false) }
     var deletingItemId by remember { mutableStateOf<Int?>(null) }
 
+    var showFilterDialog by remember { mutableStateOf(false) }
+
+    var selectedSku by remember { mutableStateOf("") }
+    var selectedCategory by remember { mutableStateOf("") }
+    var selectedProduct by remember { mutableStateOf("") }
+    var selectedDesign by remember { mutableStateOf("") }
+    var selectedPurity by remember { mutableStateOf("") }
+
     val isLoading by viewModel.isLoading.collectAsState()
     LaunchedEffect(Unit) {
         ensureProductImagesFolder(context)
@@ -150,13 +161,46 @@ fun ProductListScreen(
 
     //   val allItems by viewModel.productList.collectAsState(initial = emptyList())
     val allItems by viewModel.productList.collectAsStateWithLifecycle()
-    val filteredItems = remember(searchQuery.value, allItems) {
+    /*val filteredItems = remember(searchQuery.value, allItems) {
         allItems.filter { item ->
             val query = searchQuery.value.trim().lowercase()
 
             item.itemCode?.lowercase()?.contains(query) == true ||
                     item.productName?.lowercase()?.contains(query) == true ||
                     item.rfid?.lowercase()?.contains(query) == true
+        }
+    }*/
+
+    val filteredItems = remember(
+        searchQuery.value,
+        allItems,
+        selectedSku,
+        selectedCategory,
+        selectedProduct,
+        selectedDesign,
+        selectedPurity
+    ) {
+        allItems.filter { item ->
+            val query = searchQuery.value.trim().lowercase()
+
+            val searchMatch =
+                query.isBlank() ||
+                        item.itemCode?.lowercase()?.contains(query) == true ||
+                        item.productName?.lowercase()?.contains(query) == true ||
+                        item.rfid?.lowercase()?.contains(query) == true
+
+            val skuMatch = selectedSku.isBlank() || item.sku == selectedSku
+            val categoryMatch = selectedCategory.isBlank() || item.category == selectedCategory
+            val productMatch = selectedProduct.isBlank() || item.productName == selectedProduct
+            val designMatch = selectedDesign.isBlank() || item.design == selectedDesign
+            val purityMatch = selectedPurity.isBlank() || item.purity == selectedPurity
+
+            searchMatch &&
+                    skuMatch &&
+                    categoryMatch &&
+                    productMatch &&
+                    designMatch &&
+                    purityMatch
         }
     }
 
@@ -229,7 +273,15 @@ fun ProductListScreen(
                 onList = { navController.navigate(Screens.ProductListScreen.route) },
                 onScan = { /* Scan logic */ },
                 onGscan = { /* Gscan logic */ },
-                onReset = { /* Reset logic */ },
+                onReset = {   searchQuery.value = ""
+
+                    selectedSku = ""
+                    selectedCategory = ""
+                    selectedProduct = ""
+                    selectedDesign = ""
+                    selectedPurity = ""
+
+                    showFilterDialog = false },
                 isScanning = isScanning,
                 isEditMode=isEditMode,
                 isScreen=false,
@@ -309,10 +361,12 @@ fun ProductListScreen(
                         }
                     )
                     ActionButton(
-                        text =   localizedContext.getString(R.string.filter),
-                        onClick = { },
+                        text = localizedContext.getString(R.string.filter),
+                        onClick = {
+                            showFilterDialog = true
+                        },
                         gradient = Brush.horizontalGradient(
-                            colors = listOf(Color(0xFFD32940), Color(0xFF5231A7)) // red to purple
+                            colors = listOf(Color(0xFFD32940), Color(0xFF5231A7))
                         ),
                         icon = painterResource(id = R.drawable.filter_svg)
                     )
@@ -357,6 +411,34 @@ fun ProductListScreen(
                         icon = painterResource(id = R.drawable.pdf)
                     )
 
+                }
+
+                if (showFilterDialog) {
+                    ProductFilterDialog(
+                        allItems = allItems,
+                        selectedSku = selectedSku,
+                        selectedCategory = selectedCategory,
+                        selectedProduct = selectedProduct,
+                        selectedDesign = selectedDesign,
+                        selectedPurity = selectedPurity,
+                        onSkuChange = { selectedSku = it },
+                        onCategoryChange = { selectedCategory = it },
+                        onProductChange = { selectedProduct = it },
+                        onDesignChange = { selectedDesign = it },
+                        onPurityChange = { selectedPurity = it },
+                        onDismiss = { showFilterDialog = false },
+                        onClear = {
+                            selectedSku = ""
+                            selectedCategory = ""
+                            selectedProduct = ""
+                            selectedDesign = ""
+                            selectedPurity = ""
+                            showFilterDialog = false
+                        },
+                        onApply = {
+                            showFilterDialog = false
+                        }
+                    )
                 }
                 if (isPdfExporting) {
                     Box(
@@ -741,6 +823,124 @@ fun ProductListScreen(
                         color = Color.White,
                         fontFamily = poppins,
                         fontSize = 14.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ProductFilterDialog(
+    allItems: List<BulkItem>,
+    selectedSku: String,
+    selectedCategory: String,
+    selectedProduct: String,
+    selectedDesign: String,
+    selectedPurity: String,
+    onSkuChange: (String) -> Unit,
+    onCategoryChange: (String) -> Unit,
+    onProductChange: (String) -> Unit,
+    onDesignChange: (String) -> Unit,
+    onPurityChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onClear: () -> Unit,
+    onApply: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = Color.White
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                FilterDropDown("SKU", selectedSku, allItems.mapNotNull { it.sku }.distinct(), onSkuChange)
+                FilterDropDown("Category", selectedCategory, allItems.mapNotNull { it.category }.distinct(), onCategoryChange)
+                FilterDropDown("Product", selectedProduct, allItems.mapNotNull { it.productName }.distinct(), onProductChange)
+                FilterDropDown("Design", selectedDesign, allItems.mapNotNull { it.design }.distinct(), onDesignChange)
+                FilterDropDown("Purity", selectedPurity, allItems.mapNotNull { it.purity }.distinct(), onPurityChange)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    GradientButton(
+                        text = "Cancel",
+                        onClick = onClear,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    GradientButton(
+                        text = "Ok",
+                        onClick = onApply,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FilterDropDown(
+    label: String,
+    selectedValue: String,
+    options: List<String>,
+    onValueChange: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFF1F1F1), RoundedCornerShape(8.dp))
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            fontFamily = poppins,
+            fontSize = 14.sp
+        )
+
+        Box(
+            modifier = Modifier
+                .weight(1.6f)
+                .background(Color.White, RoundedCornerShape(4.dp))
+                .clickable { expanded = true }
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+        ) {
+            Text(
+                text = selectedValue.ifBlank { "Tap to enter..." },
+                fontSize = 12.sp,
+                fontFamily = poppins,
+                color = if (selectedValue.isBlank()) Color.Gray else Color.Black
+            )
+
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("All") },
+                    onClick = {
+                        onValueChange("")
+                        expanded = false
+                    }
+                )
+
+                options.forEach { value ->
+                    DropdownMenuItem(
+                        text = { Text(value) },
+                        onClick = {
+                            onValueChange(value)
+                            expanded = false
+                        }
                     )
                 }
             }

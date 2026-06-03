@@ -1,5 +1,6 @@
 package com.loyalstring.rfid.ui.screens
 
+import android.annotation.SuppressLint
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -21,6 +22,7 @@ import com.loyalstring.rfid.R
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.worker.LocaleHelper
 
+@SuppressLint("StringFormatInvalid")
 @Composable
 fun DeliveryChallanSummaryRow(
     gstPercent: Double = 3.0,

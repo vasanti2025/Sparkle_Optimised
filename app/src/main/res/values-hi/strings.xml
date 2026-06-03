@@ -529,8 +529,8 @@
     <string name="screw_type">स्क्रू प्रकार</string>
     <string name="polish_type">पॉलिश प्रकार</string>
 
-    <string name="fine_percent">फाइन %%</string>
-    <string name="enter_fine">फाइन %% दर्ज करें</string>
+    <string name="fine_percent">फाइन %</string>
+    <string name="enter_fine">फाइन % दर्ज करें</string>
 
     <string name="wastage">वेस्टेज</string>
     <string name="enter_wastage">वेस्टेज दर्ज करें</string>
@@ -812,4 +812,8 @@
     <string name="your_subscription_has_expired_please_login_again_to_continue">
     आपकी सदस्यता समाप्त हो गई है। कृपया जारी रखने के लिए फिर से लॉगिन करें।
 </string>
+    <string name="stone_amt">स्टोन राशि</string>
+    <string name="diamond_amt">डायमंड राशि</string>
+    <string name="enter_stone_amount">स्टोन राशि दर्ज करें</string>
+    <string name="enter_diamond_amount">डायमंड राशि दर्ज करें</string>
 </resources>

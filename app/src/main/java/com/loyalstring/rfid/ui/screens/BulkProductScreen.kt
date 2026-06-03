@@ -414,9 +414,14 @@ fun BulkProductScreen(
                             BasicTextField(
                                 value = itemCodeList[index] ?: "",
                                 onValueChange = { newValue ->
-                                    itemCodeList[index] = newValue
+                                    val capitalValue = newValue.uppercase()
+
+                                    itemCodeList[index] = capitalValue
+
                                     if (viewModel.isBulkMode.value) {
-                                        tags.forEachIndexed { i, _ -> itemCodeList[i] = newValue }
+                                        tags.forEachIndexed { i, _ ->
+                                            itemCodeList[i] = capitalValue
+                                        }
                                     }
                                 },
                                 singleLine = true,
@@ -446,7 +451,7 @@ fun BulkProductScreen(
                         ) {
                             BasicTextField(
                                 value = rfidMap[index] ?: "",
-                                onValueChange = { newRFID -> viewModel.updateRfidForIndex(index, newRFID) },
+                                onValueChange = { newRFID ->  viewModel.updateRfidForIndex(index, newRFID.uppercase()) },
                                 singleLine = true,
                                 textStyle = LocalTextStyle.current.copy(fontSize = 11.sp, color = Color.DarkGray),
                                 modifier = Modifier

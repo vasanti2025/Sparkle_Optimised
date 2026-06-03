@@ -106,6 +106,8 @@ class SingleProductViewModel @Inject constructor(
 
 
 
+
+
     /*venodr function*/
     fun getAllVendor(request: ClientCodeRequest) {
         viewModelScope.launch {
@@ -398,15 +400,38 @@ class SingleProductViewModel @Inject constructor(
         }
     }
 
+    var addProductMessage = mutableStateOf("")
+        private set
+
     suspend fun insertLabelledStock(request: InsertProductRequest): Boolean =
         withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val result = repository.insertLabelledStock(request) // suspend repo call that returns Result<*>
-            val ok = result.isSuccess
-            if (ok) {
-                // side effects are fine here
-                bulkRepository.syncBulkItemsFromServer(ClientCodeRequest(request.ClientCode))
-            }
-            ok
+
+            val result = repository.insertLabelledStock(request)
+
+            result.fold(
+                onSuccess = { response ->
+
+                    val apiSuccess = response.isNotEmpty()
+
+                    addProductMessage.value =
+                        if (apiSuccess) "Stock added successfully" else "Stock not added"
+
+                    if (apiSuccess) {
+                        bulkRepository.syncBulkItemsFromServer(
+                            ClientCodeRequest(request.ClientCode)
+                        )
+                    }
+
+                    apiSuccess
+                },
+                onFailure = { error ->
+
+                    addProductMessage.value =
+                        error.message ?: "Something went wrong"
+
+                    false
+                }
+            )
         }
     suspend fun updateLabelledStock(request: List<EditDataRequest>): Boolean =
         withContext(Dispatchers.IO) {

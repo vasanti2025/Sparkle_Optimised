@@ -91,6 +91,8 @@ fun DeliveryChallanDialogEditAndDisplay(
     /* ============================
        State
        ============================ */
+
+    var diamondAmt by remember { mutableStateOf("") }
     var branch by remember { mutableStateOf("") }
     var exhibition by remember { mutableStateOf("") }
     var remark by remember { mutableStateOf("") }
@@ -164,7 +166,10 @@ fun DeliveryChallanDialogEditAndDisplay(
 
         val rate = asDouble(ratePerGRam)
         val hallmark = asDouble(hallMarkAmt)
-        val baseAmt = (net * rate) + hallmark
+        val stoneAmount = asDouble(stoneAmt)
+        val diamondAmount = asDouble(diamondAmt)
+
+        val baseAmt = (net * rate) + hallmark + stoneAmount + diamondAmount
 
         val mrpVal = asDouble(mrp)
         itemAmt = if (mrpVal > 0) fmt2(mrpVal) else fmt2(baseAmt)
@@ -185,7 +190,10 @@ fun DeliveryChallanDialogEditAndDisplay(
 
         val rate = asDouble(ratePerGRam)
         val hallmark = asDouble(hallMarkAmt)
-        val baseAmt = (net * rate) + hallmark
+        val stoneAmount = asDouble(stoneAmt)
+        val diamondAmount = asDouble(diamondAmt)
+
+        val baseAmt = (net * rate) + hallmark + stoneAmount + diamondAmount
 
         val mrpVal = asDouble(mrp)
         itemAmt = if (mrpVal > 0) fmt2(mrpVal) else fmt2(baseAmt)
@@ -223,7 +231,17 @@ fun DeliveryChallanDialogEditAndDisplay(
         hallMarkAmt = s.HallmarkAmount.orEmpty()
         mrp = s.MRP.orEmpty()
         ratePerGRam = s.totayRate.orEmpty()
-        stoneAmt = s.StoneAmount.orEmpty()
+        stoneAmt = s.StoneAmt
+            ?: s.StoneAmount
+                    ?: s.TotalStoneAmount
+                    ?: "0.00"
+
+        diamondAmt = s.DiamondAmt
+            ?: s.DiamondAmt
+                    ?: s.TotalDiamondAmount
+                    ?: s.DiamondSellAmount
+                    ?: s.DiamondPurchaseAmount
+                    ?: "0.00"
         categoryId = s.CategoryId ?: 0
 
         // initial calc
@@ -390,12 +408,19 @@ fun DeliveryChallanDialogEditAndDisplay(
                     }
 
                     Spacer(Modifier.height(4.dp))
+                    FieldRow(localizedContext.getString(R.string.stone_amount), stoneAmt, enabled = true) { newVal ->
+                        stoneAmt = newVal
+                        recalcAll()
+                    }
 
                     Spacer(Modifier.height(4.dp))
 
-                    FieldRow(localizedContext.getString(R.string.stone_amount), stoneAmt, enabled = true) { newVal ->
-                        stoneAmt = newVal
+                    FieldRow(localizedContext.getString(R.string.diamond_amt), diamondAmt, enabled = true) { newVal ->
+                        diamondAmt = newVal
+                        recalcAll()
                     }
+
+                    Spacer(Modifier.height(4.dp))
 
                     // NetWt display
                     Row(
@@ -633,6 +658,11 @@ fun DeliveryChallanDialogEditAndDisplay(
                                 StoneAmount = stoneAmt,
                                 StoneAmt = stoneAmt,
                                 TotalStoneAmount = stoneAmt,
+
+                                DiamondAmt = diamondAmt,
+                                TotalDiamondAmount = diamondAmt,
+                                DiamondSellAmount = diamondAmt,
+                                DiamondPurchaseAmount = diamondAmt,
                             )
 
                             onSave(updated)

@@ -90,6 +90,8 @@ fun QuotationDialogEditAndDisplay(
     /* ============================
        State
        ============================ */
+    var stoneAmt by remember { mutableStateOf("") }
+    var diamondAmt by remember { mutableStateOf("") }
     var branch by remember { mutableStateOf("") }
     var exhibition by remember { mutableStateOf("") }
     var remark by remember { mutableStateOf("") }
@@ -126,8 +128,7 @@ fun QuotationDialogEditAndDisplay(
     var finePlusWt by remember { mutableStateOf("") }
     var qty by remember { mutableStateOf("") }
 
-    // keep if needed elsewhere
-    var stoneAmt by remember { mutableStateOf("") }
+
 
     /* ============================
        Calculation (SAME as Delivery Challan dialog)
@@ -163,7 +164,10 @@ fun QuotationDialogEditAndDisplay(
 
         val rate = asDouble(ratePerGRam)
         val hallmark = asDouble(hallMarkAmt)
-        val baseAmt = (net * rate) + hallmark
+        val stoneAmount = asDouble(stoneAmt)
+        val diamondAmount = asDouble(diamondAmt)
+
+        val baseAmt = (net * rate) + hallmark + stoneAmount + diamondAmount
 
         val mrpVal = asDouble(mrp)
         itemAmt = if (mrpVal > 0) fmt2(mrpVal) else fmt2(baseAmt)
@@ -182,7 +186,10 @@ fun QuotationDialogEditAndDisplay(
 
         val rate = asDouble(ratePerGRam)
         val hallmark = asDouble(hallMarkAmt)
-        val baseAmt = (net * rate) + hallmark
+        val stoneAmount = asDouble(stoneAmt)
+        val diamondAmount = asDouble(diamondAmt)
+
+        val baseAmt = (net * rate) + hallmark + stoneAmount + diamondAmount
 
         val mrpVal = asDouble(mrp)
         itemAmt = if (mrpVal > 0) fmt2(mrpVal) else fmt2(baseAmt)
@@ -193,6 +200,7 @@ fun QuotationDialogEditAndDisplay(
        ============================ */
     LaunchedEffect(selectedItem) {
         val s = selectedItem ?: return@LaunchedEffect
+
 
         productName = cleanStr(s.ProductName)
         itemCode = cleanStr(s.ItemCode)
@@ -224,7 +232,20 @@ fun QuotationDialogEditAndDisplay(
         // rate will come from DailyRate (purity-based), but keep existing if any
         ratePerGRam = cleanStr(s.RatePerGram).ifBlank { cleanStr(s.MetalRate) }
 
-        stoneAmt = cleanStr(s.StoneAmount)
+        stoneAmt = cleanStr(
+            s.StoneAmt
+                ?: s.StoneAmount
+                ?: s.TotalStoneAmount
+                ?: "0.00"
+        )
+
+        diamondAmt = cleanStr(
+            s.DiamondAmt
+                ?: s.TotalDiamondAmount
+                ?: s.DiamondSellAmount
+                ?: s.DiamondPurchaseAmount
+                ?: "0.00"
+        )
 
         // initial calc
         recalcAll()
@@ -472,6 +493,18 @@ fun QuotationDialogEditAndDisplay(
                     FieldRow(localizedContext.getString(R.string.label_quantity), qty,enabled = true) { qty = it }
                     Spacer(Modifier.height(4.dp))
 
+                    FieldRow(localizedContext.getString(R.string.stone_amt), stoneAmt, enabled = true) { newVal ->
+                        stoneAmt = newVal
+                        recalcAll()
+                    }
+                    Spacer(Modifier.height(4.dp))
+
+                    FieldRow(localizedContext.getString(R.string.diamond_amt), diamondAmt, enabled = true) { newVal ->
+                        diamondAmt = newVal
+                        recalcAll()
+                    }
+                    Spacer(Modifier.height(4.dp))
+
                     FieldRow(localizedContext.getString(R.string.label_hallmark_amount), hallMarkAmt,enabled = true) { newVal ->
                         hallMarkAmt = newVal
                         recalcAll()
@@ -614,7 +647,15 @@ fun QuotationDialogEditAndDisplay(
                                 Size = size,
                                 DiamondColour = typeOfColors,
                                 Description = remark,
-                                Quantity = qty
+                                Quantity = qty,
+                                StoneAmount = stoneAmt,
+                                TotalStoneAmount = stoneAmt,
+                                StoneAmt = stoneAmt,
+
+                                DiamondAmt = diamondAmt,
+                                TotalDiamondAmount = diamondAmt,
+                                DiamondSellAmount = diamondAmt,
+                                DiamondPurchaseAmount = diamondAmt,
                             )
 
                             onSave(updated)

@@ -1210,7 +1210,7 @@ fun QuotationScreen(
                     ClientCode = clientCode,
                     StoneAmount = challan.StoneAmt ?: "0.00",
                     //SampleOutNo = newLastSampleOutNO,
-                    //DiamondAmount = challan.DiamondAmt ?: "",
+                    DiamondAmt = challan.DiamondAmt ?: "",
                     Pieces = challan.Pieces ?: "0",
                     CategoryName = challan.CategoryName ?: "",
                     ProductName = challan.ProductName ?: "",

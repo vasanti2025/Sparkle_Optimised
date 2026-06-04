@@ -32,6 +32,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewModelScope
 
 import androidx.navigation.NavHostController
@@ -55,6 +58,7 @@ fun BulkProductScreen(
     onBack: () -> Unit,
     navController: NavHostController
 ) {
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     val viewModel: BulkViewModel = hiltViewModel()
     val context = LocalContext.current
@@ -78,7 +82,7 @@ fun BulkProductScreen(
 
     var clickedIndex by remember { mutableStateOf<Int?>(null) }
 
-
+    var isScanning by remember { mutableStateOf(false) }
     var selectedPower by remember { mutableIntStateOf(5) }
 
     val userPreferences = UserPreferences.getInstance(context)
@@ -94,10 +98,45 @@ fun BulkProductScreen(
         )
     }
 
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    viewModel.barcodeReader.openIfNeeded()
+                }
+
+                Lifecycle.Event.ON_PAUSE -> {
+                    viewModel.stopScanning()
+                    viewModel.stopBarcodeScanner()
+                    viewModel.barcodeReader.close()
+                    isScanning = false
+                }
+
+                Lifecycle.Event.ON_DESTROY -> {
+                    viewModel.stopScanning()
+                    viewModel.stopBarcodeScanner()
+                    viewModel.barcodeReader.close()
+                }
+
+                else -> Unit
+            }
+        }
+
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.stopScanning()
+            viewModel.stopBarcodeScanner()
+            viewModel.barcodeReader.close()
+        }
+    }
+
     // For each row, maintain its own itemCode
     val itemCodeList = remember { mutableStateMapOf<Int, String>() }
 
-    var isScanning by remember { mutableStateOf(false) }
+
     val isBulkMode by viewModel.isBulkMode.collectAsState()
 
     LaunchedEffect(shouldNavigateBack) {
@@ -237,6 +276,7 @@ fun BulkProductScreen(
 
                 onScan = {
                     viewModel.setBulkMode(false)
+                    viewModel.barcodeReader.openIfNeeded()
                     val activeIndex = viewModel.lastClickedIndex
                     Log.d("UI", "Scan button pressed → lastClickedIndex = $activeIndex")
                     viewModel.startSingleScan(22)
@@ -244,6 +284,7 @@ fun BulkProductScreen(
 
                 onGscan = {
                     viewModel.setBulkMode(true)
+                    viewModel.barcodeReader.openIfNeeded()
                     if (isScanning) {
                         viewModel.stopScanning()
                         isScanning = false

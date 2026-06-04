@@ -1,5 +1,6 @@
 package com.loyalstring.rfid.ui.screens
 
+import androidx.compose.foundation.lazy.rememberLazyListState
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -49,6 +50,9 @@ fun SearchScreen(
     navController: NavHostController,
     listKey: String? = "unmatchedItems"
 ) {
+    val listState = rememberLazyListState()
+    var lastSearchItems by remember { mutableStateOf<List<SearchItem>>(emptyList()) }
+    var lastSortedSearchItems by remember { mutableStateOf<List<SearchItem>>(emptyList()) }
     val searchViewModel: SearchViewModel = hiltViewModel()
     val context = LocalContext.current
     val activity = context.findActivity() as? MainActivity
@@ -114,6 +118,11 @@ fun SearchScreen(
 
 
     val searchItems = searchViewModel.searchItems
+    LaunchedEffect(searchItems) {
+        if (searchItems.isNotEmpty()) {
+            lastSearchItems = searchItems
+        }
+    }
 
     // ✅ Update filtered list when query changes (normal mode only)
     /*   LaunchedEffect(searchQuery) {
@@ -211,7 +220,7 @@ fun SearchScreen(
 
 
 
-    val filteredItems by remember(
+/* vasanti   val filteredItems by remember(
         searchItems, filteredDbItems, isScanning, isUnmatchedList, searchQuery, inputItems
     ) {
         derivedStateOf {
@@ -248,8 +257,55 @@ fun SearchScreen(
                 emptyList()
             }
         }
+    }*/
+    val filteredItems by remember(
+        searchItems,
+        filteredDbItems,
+        isScanning,
+        isUnmatchedList,
+        searchQuery,
+        inputItems,
+        lastSortedSearchItems
+    ) {
+        derivedStateOf {
+            val query = searchQuery.trim()
+
+            val baseList: List<SearchItem> = when {
+                isScanning && searchItems.isNotEmpty() -> searchItems
+                !isScanning && lastSortedSearchItems.isNotEmpty() -> lastSortedSearchItems
+
+                isUnmatchedList -> inputItems.map { it.toSearchItem() }
+
+                query.isNotBlank() -> filteredDbItems.map { it.toSearchItem() }
+
+                else -> emptyList()
+            }
+
+            baseList.sortedWith(
+                compareByDescending<SearchItem> {
+                    it.proximityPercent
+                }.thenByDescending {
+                    query.isNotBlank() && (
+                            it.itemCode.equals(query, true) ||
+                                    it.rfid.equals(query, true) ||
+                                    it.epc.equals(query, true)
+                            )
+                }
+            )
+        }
     }
 
+    LaunchedEffect(filteredItems.firstOrNull()?.epc, filteredItems.firstOrNull()?.proximityPercent) {
+        if (filteredItems.isNotEmpty()) {
+            listState.scrollToItem(0)
+        }
+    }
+
+    LaunchedEffect(isScanning, searchItems) {
+        if (isScanning && searchItems.isNotEmpty()) {
+            lastSortedSearchItems = searchItems.sortedByDescending { it.proximityPercent }
+        }
+    }
 
 
     // ✅ RFID key listener + lifecycle-driven auto-scan
@@ -259,10 +315,13 @@ fun SearchScreen(
             override fun onRfidKeyPressed() {
                 // latestIsScanning always gives the CURRENT value (rememberUpdatedState, no stale closure)
                 if (latestIsScanning) {
-                    isScanning = false  // instant UI feedback
+                    lastSortedSearchItems = searchItems.sortedByDescending { it.proximityPercent }
+
+                    isScanning = false
                     coroutineScope.launch(Dispatchers.IO) {
                         searchViewModel.stopSearch()
                     }
+
                     Log.d("SEARCH", "RFID STOPPED")
                 } else {
                     val itemsToSearch = when {
@@ -327,6 +386,8 @@ fun SearchScreen(
         }
     }
 
+
+
     Scaffold(
         topBar = {
             GradientTopBar(
@@ -370,11 +431,16 @@ fun SearchScreen(
                             Log.d("SEARCH", "⚠️ No items to scan")
                         }
                     } else {
-                        isScanning = false  // instant UI feedback
-                        coroutineScope.launch(Dispatchers.IO) {
-                            searchViewModel.stopSearch()
-                        }
-                        Log.d("SEARCH", "Manual SCAN stopped")
+
+                            lastSortedSearchItems = searchItems.sortedByDescending { it.proximityPercent }
+
+                            isScanning = false
+                            coroutineScope.launch(Dispatchers.IO) {
+                                searchViewModel.stopSearch()
+                            }
+
+                            Log.d("SEARCH", "Manual SCAN stopped")
+
                     }
                 },
                 onGscan = {
@@ -382,6 +448,8 @@ fun SearchScreen(
                 },
                 onReset = {
                     searchQuery = ""
+                    lastSearchItems = emptyList()
+                    lastSortedSearchItems = emptyList()
                     filteredDbItems = emptyList()
                     searchViewModel.stopSearch()
                     isScanning = false
@@ -431,7 +499,8 @@ fun SearchScreen(
                     )
                 }
             } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                LazyColumn( modifier = Modifier.fillMaxSize(),
+                    state = listState) {
                     item { HeaderRow() }
                     itemsIndexed(filteredItems, key = { index, item -> "${item.epc}-$index" }) { index, item ->
                         SearchItemRow(index, item)

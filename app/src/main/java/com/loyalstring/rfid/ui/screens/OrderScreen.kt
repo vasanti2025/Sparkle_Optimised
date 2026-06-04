@@ -955,7 +955,7 @@ fun OrderScreen(
             // 4. FineWt = NetWt * Fine% (yahi field use kar raha hun)
             val finePercent = safeDouble(matchedItem.makingPercent)
             val fineWt = netWt * finePercent / 100.0
-            selectedItem = matchedItem.toItemCodeResponse()
+            selectedItem = matchedItem.toItemCodeResponse(context)
             // --- Build SampleOutDetails ---
             val productDetail = OrderItem(
 
@@ -1150,7 +1150,7 @@ fun OrderScreen(
             val finalImageUrl =
                 if (!lastImagePath.isNullOrBlank()) "$baseUrl$lastImagePath" else ""
 
-            selectedItem = matchedItem.toItemCodeResponse()
+            selectedItem = matchedItem.toItemCodeResponse(context)
 
             val newProduct = OrderItem(
                 branchId = (matchedItem.branchId ?: 0).toString(),

@@ -131,7 +131,7 @@ val DiamondPacketName: String?,
 val HexCode: String?,
 val DiamondDeduct: String?,
 val SoldDate: String?,
-val OldItemCode: String?,
+val OldItemCode: Any?,
 val Stones: List<Any>,
 val Diamonds: List<Any>,
 val InvoiceDetails: List<Any>,
@@ -141,6 +141,8 @@ val StonePieces: String?,
 val Quantity: Int?,
 val StoneWeight: String?,
     val epc:String?,
+   val  SKUId:Int?,
+    val UserId:Int?
 )
 
 data class Branch(

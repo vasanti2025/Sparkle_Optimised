@@ -525,7 +525,7 @@ fun DeliveryChalanScreen(
                         Purity = matchedItem.purity ?: "",
                         DesignName = matchedItem.design ?: "",
                         CompanyId = 0?: 0,
-                        BranchId = matchedItem.branchId ?: 0,
+                        BranchId = resolveBranchId(matchedItem.branchId, context, userPreferences, employee),
                         CounterId = matchedItem.counterId ?: 0,
                         EmployeeId = 0,
                         LabelledStockId = 0 ?: 0,
@@ -934,7 +934,7 @@ fun DeliveryChalanScreen(
                 Purity = matchedItem.purity ?: "",
                 DesignName = matchedItem.design ?: "",
                 CompanyId = 0,
-                BranchId = matchedItem.branchId ?:  UserPreferences.getInstance(context).getBranchID()!!.toInt(),
+                BranchId = resolveBranchId(matchedItem.branchId, context, userPreferences, employee),
                 CounterId = matchedItem.counterId ?: 0,
                 EmployeeId = 0,
                 LabelledStockId = matchedItem.bulkItemId ?: 0,
@@ -990,7 +990,7 @@ fun DeliveryChalanScreen(
         val newChallanNo = lastNo + 1
 
         val clientCode = employee?.clientCode ?: return@LaunchedEffect
-        val branchId = UserPreferences.getInstance(context).getBranchID()!!.toInt()
+        val branchId = resolveBranchId(null, context, userPreferences, employee)
 
 
         Log.d("DeliveryChallan", "➡️ Adding challan with No: $newChallanNo")
@@ -1004,7 +1004,7 @@ fun DeliveryChalanScreen(
 
         Log.d("@@","branchId"+branchId)
         val request = AddDeliveryChallanRequest(
-            BranchId = branchId?.toInt() ?: userPreferences.getBranchID()!!.toInt(),
+            BranchId = branchId,
             TransactionAmtType = "Cash",
             TransactionMetalType = "Gold",
             MetalType = "Gold",
@@ -1237,7 +1237,7 @@ fun DeliveryChalanScreen(
                         Purity = matchedItem.purity ?: "",
                         DesignName = matchedItem.design ?: "",
                         CompanyId = 0?: 0,
-                        BranchId = matchedItem.branchId ?: 0,
+                        BranchId = resolveBranchId(matchedItem.branchId, context, userPreferences, employee),
                         CounterId = matchedItem.counterId ?: 0,
                         EmployeeId = 0,
                         LabelledStockId = 0 ?: 0,
@@ -2171,7 +2171,7 @@ MakingPerGram=${touchMatch.MakingPerGram}
             Purity = matchedItem.purity ?: "",
             DesignName = matchedItem.design ?: "",
             CompanyId = 0,
-            BranchId = matchedItem.branchId ?: UserPreferences.getInstance(context).getBranchID()!!.toInt(),
+            BranchId = resolveBranchId(matchedItem.branchId, context, userPreferences, employee),
             CounterId = matchedItem.counterId ?: 0,
             EmployeeId = employee?.employeeId ?: 0,
             LabelledStockId = matchedItem.bulkItemId,
@@ -2252,7 +2252,7 @@ MakingPerGram=${touchMatch.MakingPerGram}
                             CustomerId = deliveryChallanViewModel.selectedChallan.value!!.CustomerId,
                             CustomerName = deliveryChallanViewModel.selectedChallan.value!!.CustomerName.toString(),
                             VendorId = 0,
-                            BranchId = productList.get(0).BranchId,
+                            BranchId = resolveBranchId(productList.firstOrNull()?.BranchId, context, userPreferences, employee),
                             TotalAmount = productList.sumOf { it.ItemAmount?.toDoubleOrNull() ?: 0.0 }.toString(),
                             PaymentMode = "Cash",
                             Offer = "0.0",
@@ -2330,7 +2330,7 @@ MakingPerGram=${touchMatch.MakingPerGram}
                     } else {
 
                         val clientCode = employee?.clientCode ?: return@ScanBottomBar
-                        val branchId = employee.branchNo ?: UserPreferences.getInstance(context).getBranchID()!!.toInt()
+                        val branchId = resolveBranchId(employee.branchNo, context, userPreferences, employee)
 
                         // 🔹 Step 1: Fetch last challan no
                         isSaving = true
@@ -2580,7 +2580,8 @@ MakingPerGram=${touchMatch.MakingPerGram}
                     val resolvedBranchId = branchList
                         ?.firstOrNull { it.BranchName == fields?.branchName }
                         ?.Id
-                        ?: old.BranchId
+                        ?.takeIf { it > 0 }
+                        ?: resolveBranchId(old.BranchId, context, userPreferences, employee)
 
                     productList[i] = old.copy(
                         BranchId = resolvedBranchId,
@@ -2737,7 +2738,7 @@ fun buildChallanDetails(
         Purity = matchedItem.purity ?: "",
         DesignName = matchedItem.design ?: "",
         CompanyId = 0?: 0,
-        BranchId = matchedItem.branchId ?:UserPreferences.getInstance(context).getBranchID()!!.toInt(),
+        BranchId = resolveBranchId(matchedItem.branchId, context, employee = employee),
         CounterId = matchedItem.counterId ?: 0,
         EmployeeId = 0,
         LabelledStockId = matchedItem.bulkItemId ?: 0,
@@ -2835,9 +2836,22 @@ fun resetAllFields(
     Log.d("DeliveryChallan", "🧹 All fields reset")
 }
 
+/** Uses item branch when > 0; otherwise branch from preferences or employee default. */
+fun resolveBranchId(
+    branchId: Int?,
+    context: Context,
+    userPreferences: UserPreferences = UserPreferences.getInstance(context),
+    employee: Employee? = userPreferences.getEmployee(Employee::class.java)
+): Int {
+    if (branchId != null && branchId > 0) return branchId
+    val prefBranch = userPreferences.getBranchID() ?: 0
+    if (prefBranch > 0) return prefBranch
+    val defaultBranch = employee?.defaultBranchId ?: 0
+    if (defaultBranch > 0) return defaultBranch
+    return employee?.branchNo?.takeIf { it > 0 } ?: 0
+}
 
-
-fun DeliveryChallanItem.toChallanDetails(): ChallanDetails {
+fun DeliveryChallanItem.toChallanDetails(context: Context): ChallanDetails {
     return ChallanDetails(
         ChallanId = 0,
         MRP = this.mrp ?: "0.0",
@@ -2915,7 +2929,7 @@ fun DeliveryChallanItem.toChallanDetails(): ChallanDetails {
         Purity = this.purity ?: "",
         DesignName = this.designName ?: "",
         CompanyId = this.companyId,
-        BranchId = this.branchId.toIntOrNull() ?: 0,
+        BranchId = resolveBranchId(this.branchId.toIntOrNull(), context),
         CounterId = this.counterId,
         EmployeeId = 0,
         LabelledStockId = this.id,
@@ -2937,7 +2951,7 @@ fun DeliveryChallanItem.toChallanDetails(): ChallanDetails {
 
 
 
-fun BulkItem.toItemCodeResponse(): ItemCodeResponse {
+fun BulkItem.toItemCodeResponse(context: Context): ItemCodeResponse {
     return ItemCodeResponse(
         Id = this.bulkItemId ?: 0,
         ProductTitle = this.productName.orEmpty(),
@@ -2960,7 +2974,7 @@ fun BulkItem.toItemCodeResponse(): ItemCodeResponse {
         TIDNumber = this.tid.orEmpty(),
         BoxId = this.boxId ?: 0,
         BoxName = this.boxName.orEmpty(),
-        BranchId = this.branchId ?: 0,
+        BranchId = resolveBranchId(this.branchId, context),
         BranchName = this.branchName.orEmpty(),
         PacketId = this.packetId ?: 0,
         PacketName = this.packetName.orEmpty(),

@@ -31,6 +31,7 @@ import androidx.compose.ui.res.painterResource
 
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,6 +50,8 @@ import com.loyalstring.rfid.worker.LocaleHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+
+private val QuotationActionColumnWidth = 76.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,8 +94,8 @@ fun QuotationListScreen(
         .sortedByDescending { it.id }
         .take(visibleItems)
 
-    // ✅ Localized column headers
-    val headerTitles = listOf(
+    // Scrollable data columns only — Actions stay fixed on the right
+    val scrollableHeaderTitles = listOf(
         localizedContext.getString(R.string.header_s_no),
         localizedContext.getString(R.string.Quotation_no),
         localizedContext.getString(R.string.header_customer_name),
@@ -103,14 +106,13 @@ fun QuotationListScreen(
         localizedContext.getString(R.string.header_stone_weight),
         localizedContext.getString(R.string.header_diamond_weight),
         localizedContext.getString(R.string.header_quantity),
-        localizedContext.getString(R.string.header_action),
         localizedContext.getString(R.string.order_date),
         localizedContext.getString(R.string.delivery_date),
     )
 
-    val columnWidths = listOf(
-        45.dp, 60.dp, 100.dp, 100.dp, 90.dp, 90.dp, 100.dp,
-        70.dp, 70.dp, 70.dp, 70.dp, 50.dp, 170.dp
+    val scrollableColumnWidths = listOf(
+        40.dp, 68.dp, 96.dp, 72.dp, 100.dp, 64.dp,
+        64.dp, 56.dp, 56.dp, 56.dp, 44.dp, 72.dp, 72.dp
     )
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -139,8 +141,8 @@ fun QuotationListScreen(
 
         QuotationTable(
             navController = navController,
-            headerTitles = headerTitles,
-            columnWidths = columnWidths,
+            scrollableHeaderTitles = scrollableHeaderTitles,
+            scrollableColumnWidths = scrollableColumnWidths,
             data = visibleData,
             onLoadMore = {
                 if (visibleItems < filteredData.size) visibleItems += 10
@@ -163,8 +165,8 @@ fun QuotationListScreen(
 @Composable
 fun QuotationTable(
     navController: NavHostController,
-    headerTitles: List<String>,
-    columnWidths: List<Dp>,
+    scrollableHeaderTitles: List<String>,
+    scrollableColumnWidths: List<Dp>,
     data: List<QuotationListResponse>,
     onLoadMore: () -> Unit,
     isLoading: Boolean,
@@ -172,53 +174,59 @@ fun QuotationTable(
     localizedContext: Context
 ) {
     val sharedScrollState = rememberScrollState()
+    val customerHeader = localizedContext.getString(R.string.header_customer_name)
+    val productHeader = localizedContext.getString(R.string.header_product_name)
+    val actionHeader = localizedContext.getString(R.string.header_actions)
 
     Column(modifier = Modifier.fillMaxSize()) {
 
-        // Header Row
+        // Header: scrollable columns + fixed Actions on the right
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Color.DarkGray)
-                .padding(vertical = 8.dp)
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
                 modifier = Modifier
-                    .horizontalScroll(sharedScrollState)
                     .weight(1f)
+                    .horizontalScroll(sharedScrollState)
             ) {
-                headerTitles.dropLast(1).forEachIndexed { index, title ->
+                scrollableHeaderTitles.forEachIndexed { index, title ->
                     Text(
                         text = title,
                         modifier = Modifier
-                            .width(columnWidths[index])
-                            .padding(6.dp),
+                            .width(scrollableColumnWidths[index])
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
                         fontFamily = poppins,
-                        fontSize = 12.sp
+                        fontSize = 11.sp,
+                        maxLines = 1
                     )
                 }
             }
 
-            // Fixed Action Header
             Box(
                 modifier = Modifier
-                    .width(columnWidths.last())
-                    .height(32.dp),
+                    .width(QuotationActionColumnWidth)
+                    .background(Color(0xFF424242))
+                    .padding(vertical = 2.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = localizedContext.getString(R.string.header_actions),
-                    fontSize = 12.sp,
+                    text = actionHeader,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
-                    fontFamily = poppins
+                    fontFamily = poppins,
+                    maxLines = 1
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        HorizontalDivider(color = Color(0xFFE0E0E0), thickness = 1.dp)
 
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -228,7 +236,6 @@ fun QuotationTable(
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 itemsIndexed(data) { index, challan ->
 
-                    // 🔹 Trigger auto load more when reaching last item
                     if (index == data.lastIndex) {
                         onLoadMore()
                     }
@@ -236,10 +243,9 @@ fun QuotationTable(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 6.dp),
+                            .padding(vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Scrollable content row
                         Row(
                             modifier = Modifier
                                 .weight(1f)
@@ -253,64 +259,61 @@ fun QuotationTable(
                                 (index + 1).toString(),
                                 challan.quotationNo ?: "",
                                 challan.customer?.FirstName ?: "",
-
-                                "" ?: "",
-
+                                "",
                                 designNames,
-                                "" ?: "0.000",
+                                "",
                                 challan.grossWt ?: "0.000",
                                 challan.stoneWt ?: "0.000",
                                 challan.totalDiamondWeight ?: "0.000",
                                 challan.qty ?: "0",
-                                challan.createdOn?:"",
-                                challan.quotationDate?:""
+                                challan.createdOn ?: "",
+                                challan.quotationDate ?: ""
                             )
 
                             values.forEachIndexed { i, rawValue ->
-                                val textValue = rawValue?.toString().orEmpty()
-
+                                val textValue = rawValue.toString()
                                 val isMultiLine =
-                                    headerTitles.getOrNull(i) == localizedContext.getString(R.string.header_product_name) ||
-                                            headerTitles.getOrNull(i) == localizedContext.getString(R.string.header_customer_name)
+                                    scrollableHeaderTitles.getOrNull(i) == customerHeader ||
+                                        scrollableHeaderTitles.getOrNull(i) == productHeader
 
                                 Text(
                                     text = textValue,
                                     modifier = Modifier
-                                        .width(columnWidths[i])
-                                        .padding(6.dp),
-                                    maxLines = if (isMultiLine) 5 else 1,
+                                        .width(scrollableColumnWidths[i])
+                                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                                    maxLines = if (isMultiLine) 3 else 1,
                                     style = LocalTextStyle.current.copy(
                                         color = Color.Black,
                                         fontSize = 11.sp,
                                         fontFamily = poppins,
-                                        lineHeight = 14.sp
+                                        lineHeight = 13.sp
                                     )
                                 )
                             }
                         }
 
-                        // Fixed Actions
                         Row(
                             modifier = Modifier
-                                .width(columnWidths.last())
-                                .height(40.dp),
-                            horizontalArrangement = Arrangement.spacedBy(
-                                6.dp,
-                                Alignment.CenterHorizontally
-                            ),
+                                .width(QuotationActionColumnWidth)
+                                .background(Color(0xFFFAFAFA)),
+                            horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Edit Button
-                            IconButton(onClick = {
-                                CoroutineScope(Dispatchers.Main).launch {
-                                    val QuotationNo = challan.quotationNo ?: ""
-                                    Log.d(
-                                        "Edit",
-                                        "EDIT Screen $QuotationNo challan.Id ${challan.id}"
-                                    )
-                                    navController.navigate("updateQuotationScreen/${challan.id}/$QuotationNo")
-                                }
-                            }) {
+                            IconButton(
+                                onClick = {
+                                    CoroutineScope(Dispatchers.Main).launch {
+                                        val quotationNo = challan.quotationNo ?: ""
+                                        Log.d(
+                                            "Edit",
+                                            "EDIT Screen $quotationNo challan.Id ${challan.id}"
+                                        )
+                                        navController.navigate(
+                                            "updateQuotationScreen/${challan.id}/$quotationNo"
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
                                 Icon(
                                     painter = painterResource(id = R.drawable.ic_edit_svg),
                                     contentDescription = localizedContext.getString(R.string.cd_edit),
@@ -319,26 +322,31 @@ fun QuotationTable(
                                 )
                             }
 
-                            // Print Button
-                            IconButton(onClick = {
-                                CoroutineScope(Dispatchers.Main).launch {
-                                    val sampleOutNoSafe = challan.quotationNo ?: ""
-                                   val data = challan.toQuotationPrintData(context)
-                                    GenerateQuotationPdf(context, data)
-                                    Log.d("Print", "PRINT Screen $sampleOutNoSafe challan.Id ${challan.id}")
-                                }
-                            }) {
+                            IconButton(
+                                onClick = {
+                                    CoroutineScope(Dispatchers.Main).launch {
+                                        val sampleOutNoSafe = challan.quotationNo ?: ""
+                                        val printData = challan.toQuotationPrintData(context)
+                                        GenerateQuotationPdf(context, printData)
+                                        Log.d(
+                                            "Print",
+                                            "PRINT Screen $sampleOutNoSafe challan.Id ${challan.id}"
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
                                 Icon(
                                     painter = painterResource(id = R.drawable.print_svg),
                                     contentDescription = localizedContext.getString(R.string.cd_print),
                                     tint = Color(0xFF37474F),
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
                         }
                     }
 
-                    Divider(color = Color(0xFFE0E0E0))
+                    HorizontalDivider(color = Color(0xFFE0E0E0), thickness = 1.dp)
                 }
             }
         }
@@ -435,59 +443,78 @@ fun QuotationListResponse.toQuotationPrintData(context: Context): QuotationPrint
 
 @Composable
 fun QuotationSearchBar(value: String, onValueChange: (String) -> Unit, localizedContext: Context) {
+    val searchTextStyle = LocalTextStyle.current.copy(
+        color = Color.Black,
+        fontSize = 13.sp,
+        fontFamily = poppins,
+        lineHeight = 16.sp
+    )
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(12.dp)
-            .height(45.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .height(38.dp)
+            .clip(RoundedCornerShape(10.dp))
             .background(Color(0xFFF2F2F2))
-            .border(1.dp, Color.Gray, RoundedCornerShape(12.dp)),
+            .border(1.dp, Color.Gray, RoundedCornerShape(10.dp)),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             Icons.Default.Search,
             contentDescription = localizedContext.getString(R.string.cd_search),
-            modifier = Modifier.padding(start = 12.dp),
+            modifier = Modifier
+                .padding(start = 10.dp)
+                .size(18.dp),
             tint = Color.Gray
         )
-        Spacer(modifier = Modifier.width(8.dp))
-        Box(modifier = Modifier.fillMaxWidth()) {
+        Spacer(modifier = Modifier.width(6.dp))
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            contentAlignment = Alignment.CenterStart
+        ) {
             BasicTextField(
                 value = value,
                 onValueChange = onValueChange,
                 singleLine = true,
-                textStyle = LocalTextStyle.current.copy(color = Color.Black, fontSize = 16.sp),
+                maxLines = 1,
+                textStyle = searchTextStyle,
                 cursorBrush = SolidColor(Color.Gray),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(end = if (value.isNotEmpty()) 36.dp else 12.dp),
+                    .padding(
+                        start = 2.dp,
+                        end = if (value.isNotEmpty()) 4.dp else 8.dp
+                    ),
                 keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Search)
             )
             if (value.isEmpty()) {
                 Text(
                     text = localizedContext.getString(R.string.search_hint_sample_out),
                     color = Color.Gray,
-                    fontSize = 16.sp,
+                    fontSize = 13.sp,
+                    fontFamily = poppins,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(start = 4.dp)
+                        .fillMaxWidth()
+                        .padding(start = 2.dp, end = 8.dp)
                 )
             }
-            if (value.isNotEmpty()) {
-                IconButton(
-                    onClick = { onValueChange("") },
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 4.dp)
-                        .size(24.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = localizedContext.getString(R.string.cd_clear),
-                        tint = Color.Gray
-                    )
-                }
+        }
+        if (value.isNotEmpty()) {
+            IconButton(
+                onClick = { onValueChange("") },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = localizedContext.getString(R.string.cd_clear),
+                    tint = Color.Gray,
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
     }

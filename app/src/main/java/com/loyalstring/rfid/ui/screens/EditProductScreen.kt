@@ -78,6 +78,9 @@ import com.loyalstring.rfid.viewmodel.UploadState
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun EditProductScreen(
@@ -255,7 +258,7 @@ fun EditProductScreen(
                         }
                     }
 
-                    val request = EditDataRequest(
+                   /* val request = EditDataRequest(
                         Id = item.bulkItemId ?: 0,
                         ProductTitle = productName,
                         ClipWeight = "",
@@ -281,7 +284,7 @@ fun EditProductScreen(
                         MakingPerGram = makingGram,
                         MakingFixedWastage = fixedWastage,
                         MakingPercentage = makingPer,
-                        TotalStoneWeight = item.totalStoneWt.toString(),
+                        TotalStoneWeight = item.totalStoneWt.toString()?:"0.00",
                         TotalStoneAmount = item.stoneAmount,
                         TotalStonePieces = "",
                         TotalDiamondWeight = item.diamondWeight,
@@ -395,8 +398,211 @@ fun EditProductScreen(
                         StonePieces = "",
                         Quantity = 1,
                         StoneWeight = swt,
-                        epc = epc
+                        epc = epc,
+                        SKUId= item.SKUId,
+                        UserId = employee?.userId
+                    )*/
+                   fun safeStr(value: Any?, defaultValue: String = ""): String {
+                       return value?.toString()
+                           ?.trim()
+                           ?.takeIf { it.isNotBlank() && !it.equals("null", true) }
+                           ?: defaultValue
+                   }
+
+                    fun safeDouble(value: Any?, defaultValue: Double = 0.0): Double {
+                        return value?.toString()
+                            ?.trim()
+                            ?.takeIf { it.isNotBlank() && !it.equals("null", true) }
+                            ?.toDoubleOrNull()
+                            ?: defaultValue
+                    }
+
+                    val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+
+                    val request = EditDataRequest(
+                        Id = item.bulkItemId ?: 0,
+
+                        ProductTitle = safeStr(productName, safeStr(item.productName)),
+                        ClipWeight = "0.000",
+                        ClipQuantity = "0",
+                        ItemCode = safeStr(itemCode, safeStr(item.itemCode)),
+                        HSNCode = "",
+                        Description = "",
+                        ProductCode = safeStr(productCode),
+
+                        MetalName = "",
+                        CategoryId = categoryId ?: 0,
+                        ProductId = productId,
+                        DesignId = designId,
+                        PurityId = purityId,
+
+                        Colour = "",
+                        Size = "",
+                        WeightCategory = null,
+
+                        GrossWt = safeStr(gwt, safeStr(item.grossWeight, "0.000")),
+                        NetWt = safeStr(nwt, safeStr(item.netWeight, "0.000")),
+
+                        CollectionName = "",
+                        OccassionName = "",
+                        Gender = "",
+
+                        MakingFixedAmt = safeStr(fixedmaking, "0.000"),
+                        MakingPerGram = safeStr(makingGram, "0.000"),
+                        MakingFixedWastage = safeStr(fixedWastage, "0.000"),
+                        MakingPercentage = safeStr(makingPer, "0.000"),
+
+                        TotalStoneWeight = safeStr(swt, safeStr(item.totalStoneWt, "0.000")),
+                        TotalStoneAmount = safeStr(stoneAmt, safeStr(item.stoneAmount, "0.00")),
+                        TotalStonePieces = "0",
+
+                        TotalDiamondWeight = safeStr(dwt, safeStr(item.diamondWeight, "0.000")),
+                        TotalDiamondPieces = "0",
+                        TotalDiamondAmount = safeStr(diamondAmount, safeStr(item.diamondAmount, "0.00")),
+
+                        Featured = "",
+                        Pieces = safeStr(item.pcs, "0"),
+                        HallmarkAmount = "",
+                        HUIDCode = "",
+                        MRP = safeStr(item.mrp, "0.000"),
+
+                        // IMPORTANT: do not force wrong blank/null values
+                        VendorId = 1 ?: 1,
+                        FirmName = "",
+                        BoxId = item.boxId ?: 0,
+
+                        TIDNumber = safeStr(epc, safeStr(item.epc)),
+                        RFIDCode = safeStr(rfid, safeStr(item.rfid)),
+
+                        FinePercent = "",
+                        WastagePercent = "",
+
+                        Images = if (!localPath.isNullOrBlank()) localPath else safeStr(item.imageUrl),
+
+                        BlackBeads = "",
+                        Height = "",
+                        Width = "",
+
+                        OrderedItemId = "",
+                        OrderNo = "",
+                        UrdNo = "",
+                        UrdId = null,
+
+                        CuttingGrossWt = "",
+                        CuttingNetWt = "",
+                        MetalRate = "",
+                        LotNumber = "",
+
+                        DeptId = 0,
+                        PurchaseCost = "",
+                        Margin = "",
+
+                        BranchName = safeStr(branchName, safeStr(item.branchName)),
+                        BranchType = "",
+                        BoxName = "",
+                        EstimatedDays = "",
+                        OfferPrice = "",
+                        Rating = "",
+                        Ranking = "",
+
+                        CompanyId = 0,
+                        BranchId = branchId,
+                        EmployeeId = employee?.employeeId,
+
+                        Status = item.Status,
+                        ClientCode = employee?.clientCode,
+                        UpdatedFrom = null,
+                        count = 0,
+                        SalesmanId = null,
+                        TotalCount = 0,
+
+                        // IMPORTANT: web request has MetalId = 1, do not send 0
+                        MetalId = 1?: 1,
+                        WarehouseId = 0,
+
+                        CreatedOn = todayDate,
+                        LastUpdated = todayDate,
+
+                        TaxId = 0,
+                        TaxPercentage = "",
+
+                        OtherWeight = safeStr(dwt, "0.000"),
+                        PouchWeight = "",
+
+                        CategoryName = safeStr(category, safeStr(item.category)),
+                        PurityName = safeStr(purity, safeStr(item.purity)),
+                        TodaysRate = "",
+                        ProductName = safeStr(productName, safeStr(item.productName)),
+                        DesignName = safeStr(design, safeStr(item.design)),
+
+                        DiamondSize = "",
+                        DiamondWeight = safeStr(dwt, safeStr(item.diamondWeight, "0.000")),
+                        DiamondPurchaseRate = "",
+                        DiamondSellRate = "",
+                        DiamondClarity = "",
+                        DiamondColour = "",
+                        DiamondShape = "",
+                        DiamondCut = "",
+                        DiamondSettingType = "",
+                        DiamondCertificate = "",
+                        DiamondPieces = "0",
+                        DiamondPurchaseAmount = safeStr(diamondAmount, safeStr(item.diamondAmount, "0.00")),
+                        DiamondSellAmount = safeStr(diamondAmount, safeStr(item.diamondAmount, "0.00")),
+                        DiamondDescription = "",
+
+                        TagWeight = "",
+                        FindingWeight = "",
+                        LanyardWeight = "",
+
+                        PacketId = 0,
+                        PacketName = "",
+                        CollectionId = 0,
+                        CollectionNameSKU = safeStr(sku, safeStr(item.sku)),
+
+                        PackingWeight = 0.0,
+                        TotalWeight = safeDouble(item.totalGwt, safeDouble(gwt, 0.0)),
+
+                        StoneColour = "",
+                        StoneShape = "",
+                        StoneSize = "",
+                        StoneRatePerPiece = "",
+                        StoneWeightType = "",
+                        StoneCertificate = "",
+                        StoneSettingType = "",
+                        StoneCategory = "",
+
+                        DiamondCategory = "",
+                        FromDate = todayDate,
+                        ToDate = todayDate,
+                        DiamondSleveName = "",
+                        DiamondSizeName = "",
+                        DiamondRate = "",
+                        DiamondAmount = safeStr(diamondAmount, safeStr(item.diamondAmount, "0.00")),
+                        DiamondBoxName = "",
+                        DiamondPacketName = "",
+                        HexCode = "",
+                        DiamondDeduct = "",
+                        SoldDate = todayDate,
+
+                        OldItemCode =false,
+
+                        Stones = emptyList(),
+                        Diamonds = emptyList(),
+                        InvoiceDetails = emptyList(),
+
+                        Counter = "",
+                        Branch = null,
+
+                        StonePieces = "0",
+                        Quantity = 1,
+                        StoneWeight = safeStr(swt, safeStr(item.totalStoneWt, "0.000")),
+
+                        epc = safeStr(epc, safeStr(item.epc)),
+                        SKUId = 1,
+                        UserId = employee?.id
                     )
+
+
                     Log.d("UPDATE_REQ", "purityId=$purityId, makingPer=$makingPer")
 
                     val requestList = listOf(request)

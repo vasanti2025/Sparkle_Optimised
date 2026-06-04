@@ -71,6 +71,7 @@ import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.ui.utils.GradientButton
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
+import com.loyalstring.rfid.viewmodel.BulkViewModel
 import com.loyalstring.rfid.viewmodel.EditProductViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
 import com.loyalstring.rfid.viewmodel.UploadState
@@ -87,6 +88,7 @@ fun EditProductScreen(
 ) {
     val context = LocalContext.current
     val viewModel: EditProductViewModel = hiltViewModel()
+    val bulkViewModel: BulkViewModel = hiltViewModel()
     val singleProductViewModel: SingleProductViewModel=hiltViewModel()
     val cacheDir = context.cacheDir
     val employee = UserPreferences.getInstance(context).getEmployee(Employee::class.java)
@@ -322,7 +324,7 @@ fun EditProductScreen(
                         CompanyId = 0,
                         BranchId = branchId,
                         EmployeeId = employee?.employeeId,
-                        Status = "Active",
+                        Status = item.Status,
                         ClientCode = employee?.clientCode,
                         UpdatedFrom = null,
                         count = 0,
@@ -404,6 +406,7 @@ fun EditProductScreen(
                         if (ok) {
                             // show success snackbar
                             snackbarHostState.showSnackbar("✅ Stock updated successfully!")
+                            bulkViewModel.syncItems(context)
                             navController.popBackStack()
                         }
                     }

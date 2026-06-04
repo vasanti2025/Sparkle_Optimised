@@ -69,9 +69,7 @@ fun AppNavigation(
         ) {
             composable(Screens.HomeScreen.route) {
                 HomeScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController,
                     drawerState,
                     scope
@@ -80,61 +78,43 @@ fun AppNavigation(
 
             composable(Screens.ProductManagementScreen.route) {
                 ProductManagementScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController,
                     userPreferences
                 )
             }
 
             composable(Screens.AddProductScreen.route) {
-                AddProductScreen(onBack = {
-                  goBack(navController)
-                }, navController)
+                AddProductScreen(onBack = { navController.popBackStack() }, navController)
             }
 
             composable(Screens.BulkProductScreen.route) {
-                BulkProductScreen(onBack = {
-                  goBack(navController)
-                }, navController)
+                BulkProductScreen(onBack = { navController.popBackStack() }, navController)
             }
 
             composable(Screens.ImportExcelScreen.route) {
-                ImportExcelScreen(onBack = {
-                  goBack(navController)
-                }, navController)
+                ImportExcelScreen(onBack = { navController.popBackStack() }, navController)
             }
 
             composable(Screens.ProductListScreen.route) {
-                ProductListScreen(onBack = {
-                  goBack(navController)
-                }, navController)
+                ProductListScreen(onBack = { navController.popBackStack() }, navController)
             }
 
             composable(Screens.ScanToDesktopScreen.route) {
-                ScanToDesktopScreen(onBack = {
-                  goBack(navController)
-                }, navController)
+                ScanToDesktopScreen(onBack = { navController.popBackStack() }, navController)
             }
 
             composable(Screens.InventoryMenuScreen.route) {
-                InventoryMenuScreen(onBack = {
-                  goBack(navController)
-                }, navController)
+                InventoryMenuScreen(onBack = { navController.popBackStack() }, navController)
             }
 
             composable(Screens.ScanDisplayScreen.route) {
-                ScanDisplayScreen(onBack = {
-                  goBack(navController)
-                }, navController)
+                ScanDisplayScreen(onBack = { navController.popBackStack() }, navController)
             }
 
             composable(Screens.SearchScreen.route) {
                 SearchScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController = navController,
                     listKey = null
                 )
@@ -152,9 +132,7 @@ fun AppNavigation(
                 val mode = backStackEntry.arguments?.getString("mode") ?: "normal"
 
                 SearchScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController = navController,
                     listKey = if (mode == "unmatched") "unmatchedItems" else null
                 )
@@ -163,18 +141,14 @@ fun AppNavigation(
 
 
             composable(Screens.StockTransferScreenNew.route) {
-                StockTransferScreenNew(onBack = {
-                  goBack(navController)
-                }, navController)
+                StockTransferScreenNew(onBack = { navController.popBackStack() }, navController)
             }
 
             composable(Screens.EditProductScreen.route) {
                 val item = navController.previousBackStackEntry?.savedStateHandle?.get<BulkItem>("item")
                 item?.let {
                     EditProductScreen(
-                        onBack = {
-                          goBack(navController)
-                        },
+                        onBack = { navController.popBackStack() },
                         navController = navController,
                         item = it
                     )
@@ -183,9 +157,7 @@ fun AppNavigation(
 
             composable(Screens.SettingsScreen.route) {
                 SettingsScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController,
                     userPreferences
                 )
@@ -195,9 +167,7 @@ fun AppNavigation(
                 val orderViewModel1: OrderViewModel = androidx.hilt.navigation.compose.hiltViewModel()
                 val singleProductViewModel: SingleProductViewModel = androidx.hilt.navigation.compose.hiltViewModel()
                 OrderScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController,
                     userPreferences,
                     orderViewModel1,
@@ -219,9 +189,7 @@ fun AppNavigation(
 
             composable(Screens.OrderListScreen.route) {
                 OrderLisrScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController,
                     userPreferences
                 )
@@ -234,18 +202,14 @@ fun AppNavigation(
 
             composable(Screens.LocationListScreen.route) {
                 LocationListScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController = navController
                 )
             }
 
             composable(Screens.StockInScreen.route) {
                 StockInScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController = navController,
                     requestType = "In Request"   // ✅ pass the actual value here
                 )
@@ -253,9 +217,7 @@ fun AppNavigation(
 
             composable(Screens.StockOutScreen.route) {
                 StockInScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController = navController,
                     requestType = "Out Request"
                 )
@@ -283,9 +245,7 @@ fun AppNavigation(
                     ?: "0"
 
                 StockTransferDetailScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     labelItems = labelItems,
                     requestType = requestType,
                     selectedTransferType =selectedTransferType,
@@ -314,9 +274,7 @@ fun AppNavigation(
             composable("editDeliveryChallan/{challanId}") { backStackEntry ->
                 val challanId = backStackEntry.arguments?.getString("challanId")?.toIntOrNull()
                 DeliveryChalanScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController = navController,
                     challanId = challanId // ✅ pass here
                 )
@@ -324,9 +282,7 @@ fun AppNavigation(
 
             composable(Screens.DeliveryChallanListScreen.route) {
                 DeliveryChallanListScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController,
                     )
             }
@@ -334,18 +290,14 @@ fun AppNavigation(
             // PERF-FIX: Kept exactly ONE registration of DeliveryChalan route (the duplicate was removed above).
             composable(Screens.DeliveryChalan.route) {
                 DeliveryChalanScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController = navController
                 )
             }
 
             composable(Screens.SampleOutScreen.route) {
                 SampleOutScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController = navController
 
                 )
@@ -353,9 +305,7 @@ fun AppNavigation(
 
             composable(Screens.SampleOutListScreen.route) {
                 SampleOutListScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController,
                 )
             }
@@ -382,9 +332,7 @@ fun AppNavigation(
                 Log.d("@@","ID"+id +"   sampleOutNo "+sampleOutNo)
 
                 SampleOutScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController = navController,
                     Id = id,
                     SampleOutNo = sampleOutNo   // ✅ isko String? hi rakho
@@ -393,9 +341,7 @@ fun AppNavigation(
 
             composable(Screens.SampleInScreen.route) {
                 SampleInScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController = navController
 
                 )
@@ -403,18 +349,14 @@ fun AppNavigation(
 
             composable(Screens.SampleInListScreen.route) {
                 SampleInListScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController,
                 )
             }
 
             composable(Screens.QuotationScreen.route) {
                 QuotationScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController = navController
 
                 )
@@ -422,9 +364,7 @@ fun AppNavigation(
 
             composable(Screens.QuotationListScreen.route) {
                 QuotationListScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController,
                 )
             }
@@ -441,9 +381,7 @@ fun AppNavigation(
                 Log.d("@@","ID"+id +"   QuotationNo "+QuotationNo)
 
                 QuotationScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController = navController,
                     Id = id,
                     QuotationNo = QuotationNo   // ✅ isko String? hi rakho
@@ -452,9 +390,7 @@ fun AppNavigation(
 
             composable(Screens.StockVerificationReport.route) {
                 StockVerificationReportScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController,
                 )
             }
@@ -470,9 +406,7 @@ fun AppNavigation(
                     designId = backStackEntry.arguments?.getString("designId"),
                     type = backStackEntry.arguments?.getString("type"),
                     date = backStackEntry.arguments?.getString("date"),
-                    onBack = {
-                      goBack(navController)
-                    }
+                    onBack = { navController.popBackStack() }
                 )
             }
 
@@ -491,18 +425,14 @@ fun AppNavigation(
 
             composable(Screens.StockTransferPreviewScreen.route) {
                 StockTransferPreviewScreen(
-                    onBack = {
-                      goBack(navController)
-                    },
+                    onBack = { navController.popBackStack() },
                     navController = navController
                 )
             }
 
             composable(Screens.PrivacyPolicyScreen.route) {
                 PrivacyPolicyScreen(
-                    onBack = {
-                      goBack(navController)
-                    }
+                    onBack = { navController.popBackStack() }
                 )
             }
 
@@ -527,18 +457,5 @@ fun AppNavigation(
 
         }
     }
-    
-    
 }
-
-fun goBack(navController: NavHostController) {
-    val popped = navController.popBackStack()
-
-    if (!popped) {
-        navController.navigate(Screens.HomeScreen.route) {
-            launchSingleTop = true
-        }
-    }
-}
-
 

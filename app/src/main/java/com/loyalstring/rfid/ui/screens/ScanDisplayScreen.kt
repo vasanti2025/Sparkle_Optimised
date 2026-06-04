@@ -691,7 +691,10 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
                 if (!isScanning) {
                     isScanning = true
                     scope.launch(Dispatchers.Default) {
-                        bulkViewModel.setFilteredItems(scannedItemsSequence.map { it.originalBulkItem }.toList())
+                      // vasanti  bulkViewModel.setFilteredItems(scannedItemsSequence.map { it.originalBulkItem }.toList())
+                        bulkViewModel.setFilteredItems(
+                            displayItems.map { it.originalBulkItem }
+                        )
                     }
                     bulkViewModel.startScanningInventory(selectedPower)
                 } else {
@@ -718,12 +721,13 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
 
                 if (isScanningValue && allMatchedValue) {
 
-                    currentCategory = null
+                   /* vasanti
+                   currentCategory = null
                     currentProduct = null
                     currentDesign = null
                     selectedCategories.clear()
                     selectedProducts.clear()
-                    selectedDesigns.clear()
+                    selectedDesigns.clear()*/
 
                     bulkViewModel.stopScanningAndCompute()
                     isScanning = false
@@ -885,7 +889,10 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
                         if (!isScanning) {
                             isScanning = true
                             // bulkViewModel.resetScanResults()
-                            bulkViewModel.setFilteredItems(scannedItemsSequence.map { it.originalBulkItem }.toList())   // ✅ only current scope
+                           //vasanti bulkViewModel.setFilteredItems(scannedItemsSequence.map { it.originalBulkItem }.toList())   // ✅ only current scope
+                            bulkViewModel.setFilteredItems(
+                                displayItems.map { it.originalBulkItem }
+                            )
                             bulkViewModel.startScanningInventory(selectedPower)
                         } else {
                             isScanning = false

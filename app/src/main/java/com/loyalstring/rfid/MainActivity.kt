@@ -696,17 +696,9 @@ private fun SetupNavigation(
                                             }
 
                                             else -> {
-                                               /* scope.launch {
-                                                    drawerState.close()
-                                                    navController.navigate(navigationItem.route)
-                                                }*/
-
-                                                navController.navigate(navigationItem.route) {
-                                                    launchSingleTop = true
-                                                }
-
                                                 scope.launch {
                                                     drawerState.close()
+                                                    navController.navigate(navigationItem.route)
                                                 }
                                             }
                                         }
@@ -805,12 +797,9 @@ fun ProductTopBar(navController: NavHostController) {
         },
         navigationIcon = {
             IconButton(onClick = {
-                val popped = navController.popBackStack()
-
-                if (!popped) {
-                    navController.navigate(Screens.HomeScreen.route) {
-                        launchSingleTop = true
-                    }
+                navController.navigate(Screens.HomeScreen.route) {
+                    popUpTo(navController.graph.startDestinationId)
+                    launchSingleTop = true
                 }
             }) {
                 Icon(

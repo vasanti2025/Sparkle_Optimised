@@ -21,8 +21,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 
@@ -65,7 +63,6 @@ fun BulkProductScreen(
 
     // Observers
     val tags by viewModel.scannedTags.collectAsState()
-    val rfidMap by viewModel.rfidMap.collectAsState()
 
 
     // Dropdown data
@@ -84,6 +81,15 @@ fun BulkProductScreen(
 
     var isScanning by remember { mutableStateOf(false) }
     var selectedPower by remember { mutableIntStateOf(5) }
+
+    var applyItemCodeToAll by remember { mutableStateOf(false) }
+    var applyRfidToAll by remember { mutableStateOf(false) }
+    val applyItemCodeToAllState by rememberUpdatedState(applyItemCodeToAll)
+    val applyRfidToAllState by rememberUpdatedState(applyRfidToAll)
+
+    // Per-row local state — avoids ViewModel updates on each keystroke (keeps keyboard open)
+    val itemCodeList = remember { mutableStateMapOf<Int, String>() }
+    val rfidCodeList = remember { mutableStateMapOf<Int, String>() }
 
     val userPreferences = UserPreferences.getInstance(context)
     val savedLang = userPreferences.getAppLanguage().ifBlank { "en" }
@@ -104,6 +110,12 @@ fun BulkProductScreen(
             when (event) {
                 Lifecycle.Event.ON_RESUME -> {
                     viewModel.barcodeReader.openIfNeeded()
+                    registerBulkBarcodeHandler(
+                        viewModel = viewModel,
+                        rfidCodeList = rfidCodeList,
+                        applyRfidToAll = { applyRfidToAllState },
+                        rowCount = { tags.size }
+                    )
                 }
 
                 Lifecycle.Event.ON_PAUSE -> {
@@ -133,10 +145,6 @@ fun BulkProductScreen(
         }
     }
 
-    // For each row, maintain its own itemCode
-    val itemCodeList = remember { mutableStateMapOf<Int, String>() }
-
-
     val isBulkMode by viewModel.isBulkMode.collectAsState()
 
     LaunchedEffect(shouldNavigateBack) {
@@ -153,6 +161,14 @@ fun BulkProductScreen(
         val listener = object : ScanKeyListener {
 
             override fun onBarcodeKeyPressed() {
+                ensureBarcodeTargetRow(viewModel, rfidCodeList)
+                viewModel.barcodeReader.openIfNeeded()
+                registerBulkBarcodeHandler(
+                    viewModel = viewModel,
+                    rfidCodeList = rfidCodeList,
+                    applyRfidToAll = { applyRfidToAllState },
+                    rowCount = { tags.size }
+                )
                 viewModel.startBarcodeScanning(context)
             }
 
@@ -175,47 +191,14 @@ fun BulkProductScreen(
         }
     }
 
-   /* LaunchedEffect(Unit) {
-        viewModel.barcodeReader.setOnBarcodeScanned { scanned ->
-            val bulk = viewModel.isBulkMode.value
-            if (bulk) {
-                viewModel.setRfidForAllTags(scanned)
-            } else {
-                val targetIndex = viewModel.lastClickedIndex
-                Log.d("SCAN", "Scanned = $scanned | targetIndex = $targetIndex")
-                if (targetIndex != null) {
-                    viewModel.updateRfidForIndex(targetIndex, scanned)
-                    //viewModel.setLastClickedIndex(null)
-                } else {
-                    Log.e("SCAN", "❌ No active field when scanned = $scanned")
-                }
-            }
-        }
-    }*/
-
     LaunchedEffect(Unit) {
-        viewModel.barcodeReader.setOnBarcodeScanned { scanned ->
-            if (scanned.isNullOrBlank()) {
-                // ❌ Scan failed or returned empty
-                Log.e("SCAN", "❌ Empty or failed scan, retrying...")
-                viewModel.retryBarcodeScan()
-                return@setOnBarcodeScanned
-            }
-
-            val bulk = viewModel.isBulkMode.value
-            if (bulk) {
-                viewModel.setRfidForAllTags(scanned)
-            } else {
-                val targetIndex = viewModel.lastClickedIndex
-                Log.d("SCAN", "Scanned = $scanned | targetIndex = $targetIndex")
-                if (targetIndex != null) {
-                    viewModel.updateRfidForIndex(targetIndex, scanned)
-                } else {
-                    Log.e("SCAN", "❌ No active field when scanned = $scanned — reinitializing reader")
-                    viewModel.retryBarcodeScan()
-                }
-            }
-        }
+        viewModel.barcodeReader.openIfNeeded()
+        registerBulkBarcodeHandler(
+            viewModel = viewModel,
+            rfidCodeList = rfidCodeList,
+            applyRfidToAll = { applyRfidToAllState },
+            rowCount = { tags.size }
+        )
     }
 
 
@@ -252,20 +235,14 @@ fun BulkProductScreen(
                         return@ScanBottomBar
                     }
 
-                    tags.forEachIndexed { index, _ ->
-                        val itemCode = itemCodeList[index] ?: ""
-                        if (itemCode.isNotBlank()) {
-
-                            viewModel.saveBulkItems(
-                                selectedCategory,
-                                itemCode,
-                                selectedProduct,
-                                selectedDesign,
-                                tags,
-                                index
-                            )
-                        }
-                    }
+                    viewModel.saveAllBulkProductRows(
+                        category = selectedCategory,
+                        product = selectedProduct,
+                        design = selectedDesign,
+                        scannedTags = tags,
+                        itemCodes = itemCodeList.toMap(),
+                        rfidCodes = rfidCodeList.toMap()
+                    )
 
                     ToastUtils.showToast(context, "Items saved successfully")
                     viewModel.resetScanResults()
@@ -302,6 +279,9 @@ fun BulkProductScreen(
                         viewModel.resetProductScanResults()
 
                         itemCodeList.clear()
+                        rfidCodeList.clear()
+                        applyItemCodeToAll = false
+                        applyRfidToAll = false
 
                     } catch (e: Exception) {
                         e.printStackTrace()
@@ -395,16 +375,46 @@ fun BulkProductScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
 
-                Box(Modifier.width(50.dp), contentAlignment = Alignment.Center) {
-                    Text( localizedContext.getString(R.string.header_sr), color = Color.White, fontSize = 13.sp, fontFamily = poppins)
+                Box(Modifier.width(44.dp), contentAlignment = Alignment.Center) {
+                    Text(localizedContext.getString(R.string.header_sr), color = Color.White, fontSize = 12.sp, fontFamily = poppins)
                 }
 
-                Box(Modifier.width(150.dp), contentAlignment = Alignment.Center) {
-                    Text(localizedContext.getString(R.string.itemcode), color = Color.White, fontSize = 13.sp, fontFamily = poppins)
+                Box(Modifier.width(130.dp), contentAlignment = Alignment.Center) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        BulkApplyAllCheckbox(
+                            checked = applyItemCodeToAll,
+                            onCheckedChange = { applyItemCodeToAll = it }
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            localizedContext.getString(R.string.itemcode),
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontFamily = poppins
+                        )
+                    }
                 }
 
-                Box(Modifier.width(150.dp), contentAlignment = Alignment.Center) {
-                    Text(localizedContext.getString(R.string.rfid_code), color = Color.White, fontSize = 13.sp, fontFamily = poppins)
+                Box(Modifier.width(130.dp), contentAlignment = Alignment.Center) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        BulkApplyAllCheckbox(
+                            checked = applyRfidToAll,
+                            onCheckedChange = { applyRfidToAll = it }
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            localizedContext.getString(R.string.rfid_code),
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontFamily = poppins
+                        )
+                    }
                 }
             }
 
@@ -418,7 +428,7 @@ fun BulkProductScreen(
 
                 itemsIndexed(
                     items = tags,
-                    key = { index, item -> index to (rfidMap[index] ?: "") }   // 🔥 FIXED — forces correct recomposition
+                    key = { index, tag -> "${index}_${tag.epc.orEmpty()}" }
                 ) { index, tag ->
 
                     Row(
@@ -455,20 +465,23 @@ fun BulkProductScreen(
                             BasicTextField(
                                 value = itemCodeList[index] ?: "",
                                 onValueChange = { newValue ->
-                                    val capitalValue = newValue.uppercase()
-
-                                    itemCodeList[index] = capitalValue
-
-                                    if (viewModel.isBulkMode.value) {
-                                        tags.forEachIndexed { i, _ ->
-                                            itemCodeList[i] = capitalValue
-                                        }
-                                    }
+                                    applyItemCodeToRows(
+                                        index = index,
+                                        value = newValue,
+                                        applyToAll = applyItemCodeToAllState,
+                                        itemCodeList = itemCodeList,
+                                        rowCount = tags.size
+                                    )
                                 },
                                 singleLine = true,
                                 textStyle = LocalTextStyle.current.copy(fontSize = 11.sp, color = Color.DarkGray),
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .onFocusChanged { focusState ->
+                                        if (focusState.isFocused) {
+                                            viewModel.setLastClickedIndex(index)
+                                        }
+                                    }
                                     .padding(horizontal = 6.dp),
                                 decorationBox = { innerTextField ->
                                     Box(
@@ -482,8 +495,6 @@ fun BulkProductScreen(
                         Spacer(modifier = Modifier.width(6.dp))
 
                         // --- RFID Code ---
-                        val focusRequester = remember { FocusRequester() }
-
                         Box(
                             modifier = Modifier
                                 .width(150.dp)
@@ -491,17 +502,23 @@ fun BulkProductScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             BasicTextField(
-                                value = rfidMap[index] ?: "",
-                                onValueChange = { newRFID ->  viewModel.updateRfidForIndex(index, newRFID.uppercase()) },
+                                value = rfidCodeList[index] ?: "",
+                                onValueChange = { newRfid ->
+                                    applyRfidToRows(
+                                        index = index,
+                                        value = newRfid,
+                                        applyToAll = applyRfidToAllState,
+                                        rfidCodeList = rfidCodeList,
+                                        rowCount = tags.size
+                                    )
+                                },
                                 singleLine = true,
                                 textStyle = LocalTextStyle.current.copy(fontSize = 11.sp, color = Color.DarkGray),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .focusRequester(focusRequester)
                                     .focusable(true)
                                     .onFocusChanged { focusState ->
                                         if (focusState.isFocused) {
-                                            Log.d("UI", "Focused index = $index ✅")
                                             viewModel.setLastClickedIndex(index)
                                         }
                                     }
@@ -524,20 +541,108 @@ fun BulkProductScreen(
     }
 }
 
-private fun BulkViewModel.retryBarcodeScan() {
+@Composable
+private fun BulkApplyAllCheckbox(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Checkbox(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        modifier = Modifier.size(22.dp),
+        colors = CheckboxDefaults.colors(
+            checkedColor = Color.White,
+            uncheckedColor = Color.White.copy(alpha = 0.7f),
+            checkmarkColor = Color.DarkGray
+        )
+    )
+}
 
-        viewModelScope.launch {
-            delay(300) // short pause before re-initialization
-            try {
-                barcodeReader.close()        // ensure clean state
-                barcodeReader.openIfNeeded() // reopen the device
-                barcodeReader.startDecode()  // start a fresh scan
-                Log.d("BarcodeReader", "🔁 Reader reinitialized and restarted")
-            } catch (e: Exception) {
-                Log.e("BarcodeReader", "Failed to reinitialize scanner: ${e.message}")
-            }
+private fun applyItemCodeToRows(
+    index: Int,
+    value: String,
+    applyToAll: Boolean,
+    itemCodeList: MutableMap<Int, String>,
+    rowCount: Int
+) {
+    val normalized = value.uppercase()
+    if (applyToAll) {
+        for (i in 0 until rowCount) {
+            itemCodeList[i] = normalized
+        }
+    } else {
+        itemCodeList[index] = normalized
+    }
+}
+
+private fun applyRfidToRows(
+    index: Int,
+    value: String,
+    applyToAll: Boolean,
+    rfidCodeList: MutableMap<Int, String>,
+    rowCount: Int
+) {
+    val normalized = value.uppercase()
+    if (applyToAll) {
+        for (i in 0 until rowCount) {
+            rfidCodeList[i] = normalized
+        }
+    } else {
+        rfidCodeList[index] = normalized
+    }
+}
+
+private fun ensureBarcodeTargetRow(
+    viewModel: BulkViewModel,
+    rfidCodeList: Map<Int, String>
+) {
+    if (viewModel.lastClickedIndex != null) return
+    val tagCount = viewModel.scannedTags.value.size
+    val fallbackIndex = (0 until tagCount).firstOrNull { rfidCodeList[it].isNullOrBlank() } ?: 0
+    viewModel.setLastClickedIndex(fallbackIndex)
+}
+
+private fun registerBulkBarcodeHandler(
+    viewModel: BulkViewModel,
+    rfidCodeList: MutableMap<Int, String>,
+    applyRfidToAll: () -> Boolean,
+    rowCount: () -> Int
+) {
+    viewModel.barcodeReader.setOnBarcodeScanned { scanned ->
+        if (scanned.isBlank()) {
+            Log.e("SCAN", "Empty barcode — retrying")
+            viewModel.retryBarcodeScan()
+            return@setOnBarcodeScanned
         }
 
+        var targetIndex = viewModel.lastClickedIndex
+        if (targetIndex == null) {
+            ensureBarcodeTargetRow(viewModel, rfidCodeList)
+            targetIndex = viewModel.lastClickedIndex
+        }
+
+        applyRfidToRows(
+            index = targetIndex ?: 0,
+            value = scanned,
+            applyToAll = applyRfidToAll(),
+            rfidCodeList = rfidCodeList,
+            rowCount = rowCount()
+        )
+    }
+}
+
+fun BulkViewModel.retryBarcodeScan() {
+    viewModelScope.launch {
+        delay(300)
+        try {
+            barcodeReader.close()
+            barcodeReader.openIfNeeded()
+            barcodeReader.startDecode()
+            Log.d("BarcodeReader", "Reader reinitialized and restarted")
+        } catch (e: Exception) {
+            Log.e("BarcodeReader", "Failed to reinitialize scanner: ${e.message}")
+        }
+    }
 }
 
 

@@ -344,7 +344,7 @@
     <string name="product">उत्पाद</string>
 
     <string name="add_single_product">एकल\nउत्पाद जोड़ें</string>
-    <string name="add_bulk_products">बल्क\nउत्पाद जोड़ें</string>
+    <string name="add_bulk_products">बल्क उत्पाद जोड़ें</string>
     <string name="import_excel">एक्सेल\nआयात करें</string>
     <string name="export_excel">एक्सेल\nनिर्यात करें</string>
     <string name="sync_data">डेटा\nसिंक करें</string>

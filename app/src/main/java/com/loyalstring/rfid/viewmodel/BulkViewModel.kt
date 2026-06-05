@@ -1334,26 +1334,28 @@ class BulkViewModel @Inject constructor(
     }
 
 
-    fun saveBulkItems(
+    fun saveAllBulkProductRows(
         category: String,
-        itemCode: String,
         product: String,
         design: String,
         scannedTags: List<UHFTAGInfo>,
-        index: Int
+        itemCodes: Map<Int, String>,
+        rfidCodes: Map<Int, String>
     ) {
         viewModelScope.launch {
-            val itemList = scannedTags.mapNotNull { tag ->
-                val epc = tag.epc ?: return@mapNotNull null
+            val itemList = scannedTags.mapIndexedNotNull { index, tag ->
+                val epc = tag.epc?.trim()?.uppercase().orEmpty()
+                if (epc.isBlank()) return@mapIndexedNotNull null
+                val itemCode = itemCodes[index]?.trim().orEmpty()
+                if (itemCode.isBlank()) return@mapIndexedNotNull null
                 val tid = tag.tid ?: ""
-                // val rfid = epc // or your display RFID if different
 
                 BulkItem(
                     category = category,
                     productName = product,
                     design = design,
                     itemCode = itemCode,
-                    rfid = _rfidMap.value[index]?.takeIf { it.isNotBlank() },
+                    rfid = rfidCodes[index]?.trim()?.takeIf { it.isNotBlank() },
                     grossWeight = "",
                     stoneWeight = "",
                     diamondWeight = "",
@@ -1413,7 +1415,7 @@ class BulkViewModel @Inject constructor(
             if (itemList.isNotEmpty()) {
                 bulkRepository.clearAllItems()
                 bulkRepository.insertBulkItems(itemList)
-                println("SAVED: Saved ${itemList.size} items to DB successfully.")
+                Log.d("BulkVM", "Saved ${itemList.size} bulk rows with per-row itemCode/rfid")
                 _toastMessage.emit("Saved ${itemList.size} items successfully!")
             } else {
                 _toastMessage.emit("No items to save.")

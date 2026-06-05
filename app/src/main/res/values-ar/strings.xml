@@ -340,7 +340,7 @@
     <!--product main screen-->
     <string name="product">منتج</string>
     <string name="add_single_product">إضافة\nمنتج واحد</string>
-    <string name="add_bulk_products">إضافة منتجات\nبالجملة</string>
+    <string name="add_bulk_products">إضافة منتجات بالجملة</string>
     <string name="import_excel">استيراد\nإكسل</string>
     <string name="export_excel">تصدير\nإكسل</string>
     <string name="sync_data">مزامنة\nالبيانات</string>

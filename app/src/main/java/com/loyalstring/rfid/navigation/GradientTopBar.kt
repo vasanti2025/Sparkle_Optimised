@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,7 +48,22 @@ fun GradientTopBar(
 
     navigationIcon?.let {
         TopAppBar(
-            title = { Text(title, color = Color.White, fontFamily = poppins, fontSize = titleTextSize,maxLines = 1) },
+            title = {
+                Text(
+                    text = title.replace("\n", " ").trim(),
+                    color = Color.White,
+                    fontFamily = poppins,
+                    fontSize = titleTextSize,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = if (showCounter) {
+                        Modifier.fillMaxWidth(0.58f)
+                    } else {
+                        Modifier.fillMaxWidth()
+                    }
+                )
+            },
             navigationIcon = it,
             actions = {
                 actions()

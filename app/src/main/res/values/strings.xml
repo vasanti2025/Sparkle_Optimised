@@ -353,7 +353,7 @@
     <!--product main screen-->
     <string name="product">Product</string>
     <string name="add_single_product">Add Single\nProduct</string>
-    <string name="add_bulk_products">Add Bulk\nProducts</string>
+    <string name="add_bulk_products">Add Bulk Products</string>
     <string name="import_excel">Import\nExcel</string>
     <string name="export_excel">Export\nExcel</string>
     <string name="sync_data">Click to\nSync Data</string>

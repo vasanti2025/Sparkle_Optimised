@@ -731,37 +731,53 @@ fun ProductListScreen(
                                     }
                                 }
 
-                                IconButton(onClick = {
-                                    Log.d("EDIT_ITEM", "itemCode=${item.itemCode}, purity=${item.purity}, purityId=${item.purityId}")
-
-                                    try {
-                                        val currentEntry = navController.currentBackStackEntry
-                                        currentEntry?.savedStateHandle?.set("item", item)
-                                        navController.navigate(Screens.EditProductScreen.route)
-                                    } catch (e: Exception) {
-                                        Log.e("NAVIGATION", "BackStackEntry error: ${e.message}")
-                                    }
-                                }, modifier = Modifier.width(30.dp)) {
+                                val isApiActiveItem = item.Status.equals("ApiActive", ignoreCase = true)
+                                IconButton(
+                                    onClick = {
+                                        if (isApiActiveItem) {
+                                            Toast.makeText(
+                                                context,
+                                                localizedContext.getString(R.string.api_active_cannot_edit),
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                            return@IconButton
+                                        }
+                                        Log.d("EDIT_ITEM", "itemCode=${item.itemCode}, purity=${item.purity}, purityId=${item.purityId}")
+                                        try {
+                                            val currentEntry = navController.currentBackStackEntry
+                                            currentEntry?.savedStateHandle?.set("item", item)
+                                            navController.navigate(Screens.EditProductScreen.route)
+                                        } catch (e: Exception) {
+                                            Log.e("NAVIGATION", "BackStackEntry error: ${e.message}")
+                                        }
+                                    },
+                                    modifier = Modifier.width(30.dp)
+                                ) {
                                     Icon(
                                         painter = painterResource(id = com.loyalstring.rfid.R.drawable.ic_edit_svg),
                                         contentDescription = "Edit",
-                                        tint = Color.DarkGray
+                                        tint = if (isApiActiveItem) Color.LightGray else Color.DarkGray
                                     )
                                 }
                                 IconButton(
                                     onClick = {
+                                        if (isApiActiveItem) {
+                                            Toast.makeText(
+                                                context,
+                                                localizedContext.getString(R.string.api_active_cannot_delete),
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                            return@IconButton
+                                        }
                                         selectedItem = item
                                         showConfirmDelete = true
                                     },
-
-
-                                    // onClick = { /* Delete */ },
                                     modifier = Modifier.width(50.dp)
                                 ) {
                                     Icon(
                                         painter = painterResource(id = com.loyalstring.rfid.R.drawable.ic_delete_svg),
                                         contentDescription = "Delete",
-                                        tint = Color.DarkGray
+                                        tint = if (isApiActiveItem) Color.LightGray else Color.DarkGray
                                     )
                                 }
                             }
@@ -781,18 +797,26 @@ fun ProductListScreen(
                     visible = showConfirmDelete,
                     productName = selectedItem?.productName,
                     onConfirm = {
-                        val id = selectedItem?.bulkItemId ?: 0
-                        val clientCode = employee?.clientCode
-                        if (id > 0) {
-                            deletingItemId = id // ✅ keep id safe
-                            singleproductViewModel.deleetProduct(
-                                listOf(
-                                    ProductDeleteModelReq(
-                                        Id = id,
-                                        ClientCode = clientCode.toString()
+                        if (selectedItem?.Status.equals("ApiActive", ignoreCase = true)) {
+                            Toast.makeText(
+                                context,
+                                localizedContext.getString(R.string.api_active_cannot_delete),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            val id = selectedItem?.bulkItemId ?: 0
+                            val clientCode = employee?.clientCode
+                            if (id > 0) {
+                                deletingItemId = id
+                                singleproductViewModel.deleetProduct(
+                                    listOf(
+                                        ProductDeleteModelReq(
+                                            Id = id,
+                                            ClientCode = clientCode.toString()
+                                        )
                                     )
                                 )
-                            )
+                            }
                         }
                         showConfirmDelete = false
                         selectedItem = null

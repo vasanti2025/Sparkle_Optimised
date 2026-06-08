@@ -349,3 +349,17 @@ class PrinterManager(private val context: Context) {
         }
     }
 }
+
+/** Print header: LS000053 → Rough Estimation; else company API name or saved organization. */
+fun resolvePrintHeader(
+    clientCode: String?,
+    companyName: String?,
+    organizationName: String?
+): String {
+    if (clientCode.equals("LS000053", ignoreCase = true)) {
+        return "Rough Estimation"
+    }
+    return companyName?.trim()?.takeIf { it.isNotEmpty() }
+        ?: organizationName?.trim()?.takeIf { it.isNotEmpty() }
+        ?: "Company"
+}

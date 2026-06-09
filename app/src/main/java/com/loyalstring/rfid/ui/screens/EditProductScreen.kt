@@ -55,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,8 +64,10 @@ import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import coil.compose.rememberAsyncImagePainter
+import com.loyalstring.rfid.R
 import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.data.model.login.Employee
+import com.loyalstring.rfid.data.remote.data.Branch
 import com.loyalstring.rfid.data.remote.data.EditDataRequest
 import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.navigation.Screens
@@ -95,6 +98,7 @@ fun EditProductScreen(
     val singleProductViewModel: SingleProductViewModel=hiltViewModel()
     val cacheDir = context.cacheDir
     val employee = UserPreferences.getInstance(context).getEmployee(Employee::class.java)
+    val isApiActiveItem = item.Status.equals("ApiActive", ignoreCase = true)
 
     var shouldNavigateBack by remember { mutableStateOf(false) }
     var showChooser by remember { mutableStateOf(false) }
@@ -244,6 +248,7 @@ fun EditProductScreen(
                 horizontalArrangement = Arrangement.Center
             ) {
                 GradientButton(text = "Cancel", onClick = { navController.popBackStack() })
+                if (!isApiActiveItem) {
                 Spacer(modifier = Modifier.width(12.dp))
                 GradientButton(text = "OK", onClick = {
                     // ✅ Upload only if image is selected
@@ -591,7 +596,10 @@ fun EditProductScreen(
                         InvoiceDetails = emptyList(),
 
                         Counter = "",
-                        Branch = null,
+                        Branch = Branch(
+                            label = safeStr(branchName, safeStr(item.branchName)),
+                            value = branchId ?: 0
+                        ),
 
                         StonePieces = "0",
                         Quantity = 1,
@@ -618,6 +626,7 @@ fun EditProductScreen(
                     }
                 }
                 )
+                }
             }
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) } // 👈 attach host
@@ -682,7 +691,7 @@ fun EditProductScreen(
                     .size(100.dp)
                     .clip(CircleShape)
                     .background(Color.LightGray)
-                    .clickable { showChooser = true },
+                    .clickable(enabled = !isApiActiveItem) { showChooser = true },
                 contentAlignment = Alignment.Center
             ) {
                 if (displayImageSource != null) {
@@ -704,34 +713,45 @@ fun EditProductScreen(
 
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            if (isApiActiveItem) {
+                Text(
+                    text = stringResource(R.string.api_active_cannot_edit),
+                    color = Color.Red,
+                    fontFamily = poppins,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
             InputField("Product Name", productName, { productName = it }, true, isNumber = false)
             InputField("Item Code", itemCode, { itemCode = it }, true, false)
-            InputField("RFID", rfid, { rfid = it }, false, false)
+            InputField("RFID", rfid, { rfid = it }, isApiActiveItem, false)
 
             InputField("G.Wt", gwt, {
                 gwt = it
                 nwt = calculateNetWeight(gwt, swt, dwt)
-            }, false, true)
+            }, isApiActiveItem, true)
             InputField("S.Wt", swt, {
                 swt = it
                 nwt = calculateNetWeight(gwt, swt, dwt)
-            }, false, true)
+            }, isApiActiveItem, true)
             InputField("D.Wt", dwt, {
                 dwt = it
                 nwt = calculateNetWeight(gwt, swt, dwt)
-            }, false, true)
+            }, isApiActiveItem, true)
             InputField("N.Wt", nwt, { nwt = it }, true, true)
             InputField("Category", category, { category = it }, true, false)
             InputField("Design", design, { design = it }, true, false)
             InputField("Purity", purity, { purity = it }, true, false)
-            InputField("Making/Gram", makingGram, { makingGram = it }, false, true)
-            InputField("Making %", makingPer, { makingPer = it }, false, true)
-            InputField("Fixed Making", fixedmaking, { fixedmaking = it }, false, true)
-            InputField("Fixed Wastage", fixedWastage, { fixedWastage = it }, false, true)
-            InputField("Stone Amt", stoneAmt, { stoneAmt = it }, false, true)
-            InputField("Diamond Amt", diamondAmount, { diamondAmount = it }, false, true)
+            InputField("Making/Gram", makingGram, { makingGram = it }, isApiActiveItem, true)
+            InputField("Making %", makingPer, { makingPer = it }, isApiActiveItem, true)
+            InputField("Fixed Making", fixedmaking, { fixedmaking = it }, isApiActiveItem, true)
+            InputField("Fixed Wastage", fixedWastage, { fixedWastage = it }, isApiActiveItem, true)
+            InputField("Stone Amt", stoneAmt, { stoneAmt = it }, isApiActiveItem, true)
+            InputField("Diamond Amt", diamondAmount, { diamondAmount = it }, isApiActiveItem, true)
             InputField("SKU", sku, { sku = it }, true, false)
-            InputField("EPC", epc, { epc = it }, false, false)
+            InputField("EPC", epc, { epc = it }, isApiActiveItem, false)
             InputField("Vendor", vendor, { vendor = it }, true, false)
         }
 

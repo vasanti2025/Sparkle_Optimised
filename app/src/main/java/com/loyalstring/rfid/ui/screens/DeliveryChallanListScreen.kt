@@ -56,6 +56,7 @@ import com.loyalstring.rfid.data.remote.resource.Resource
 import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.ui.utils.PrinterManager
+import com.loyalstring.rfid.ui.utils.resolvePrintHeader
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.DeliveryChallanViewModel
@@ -254,6 +255,17 @@ fun DeliveryChallanTable(
 ) {
     val sharedScrollState = rememberScrollState()
     val viewModel: DeliveryChallanViewModel = hiltViewModel()
+    val employee = remember {
+        UserPreferences.getInstance(context).getEmployee(Employee::class.java)
+    }
+    val organizationName = remember {
+        UserPreferences.getInstance(context).getOrganization()
+    }
+    val printHeader = resolvePrintHeader(
+        clientCode = employee?.clientCode,
+        companyName = companyName,
+        organizationName = organizationName
+    )
 
     var isPrinterConnected by remember { mutableStateOf(false) }
     val activity = context as? Activity
@@ -535,7 +547,7 @@ fun DeliveryChallanTable(
                                                     text = localizedContext.getString(R.string.print_challan),
                                                     onClick = {
                                                         if (selectedPrintData != null) {
-                                                            printerManager.printDeliveryChallanCompact(selectedPrintData, companyName) { _, msg ->
+                                                            printerManager.printDeliveryChallanCompact(selectedPrintData, printHeader) { _, msg ->
                                                                 bluetoothStatus = msg
                                                             }
                                                         } else {

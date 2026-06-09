@@ -791,6 +791,8 @@
     <string name="not_connected">Not connected</string>
     <string name="pdf_not_generated">PDF not generated</string>
     <string name="item_deleted_successfully">Item deleted successfully</string>
+    <string name="api_active_cannot_edit">ApiActive items cannot be edited</string>
+    <string name="api_active_cannot_delete">ApiActive items cannot be deleted</string>
     <string name="product_list">Product List</string>
     <string name="enter_rfid_item_code_product">Enter RFID / Item code / Product</string>
     <string name="list_view">List View</string>

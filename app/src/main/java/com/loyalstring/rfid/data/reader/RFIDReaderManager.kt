@@ -23,6 +23,15 @@ class RFIDReaderManager @Inject constructor(
     val reader: RFIDWithUHFUART?
         get() = _reader
 
+    // Skips re-running _reader?.init(context) + initSounds() on every initReader() call.
+    // Without this, SearchViewModel rebuilds SoundPool and reinitializes hardware on every
+    // startSearch(), adding significant latency each time the SearchScreen auto-scan fires.
+    @Volatile private var isReaderReady = false
+
+    // Tracks whether startInventoryTag() was called and succeeded, so stopInventory() can skip
+    // the 2.5-second hardware timeout (5 retries × 500ms) when the hardware isn't scanning.
+    @Volatile private var isInventoryActive = false
+
     var soundMap: HashMap<Int?, Int?> = HashMap()
     private var soundPool: SoundPool? = null
     private var volumeRatio = 0f
@@ -30,15 +39,15 @@ class RFIDReaderManager @Inject constructor(
     private val soundStreamIds = mutableMapOf<Int, Int>()
 
     fun initReader(): Boolean {
+        if (isReaderReady && _reader != null) return true
         return try {
             if (_reader == null) {
                 _reader = RFIDWithUHFUART.getInstance()
             }
             initSounds()
-            val success = _reader?.init(context
-
-            ) ?: false
+            val success = _reader?.init(context) ?: false
             if (success) {
+                isReaderReady = true
                 Log.d("RFID", "Reader initialized successfully")
             } else {
                 Log.e("RFID", "Reader initialization failed")
@@ -60,20 +69,40 @@ class RFIDReaderManager @Inject constructor(
             soundPlayer.startLoopingSound()
         }
         val started = _reader?.startInventoryTag() ?: false
+        if (started) isInventoryActive = true
         Log.d("RFID", "startInventoryTag: $started")
         return started
     }
 
 
     fun stopInventory() {
+        // Always attempt the hardware stop. The isInventoryActive guard was removed because
+        // releaseScanning() sets it to false without sending a hardware command, which caused
+        // subsequent stopInventory() calls (from resetForDisplay, onScanStopped, scanSingleTagRaw)
+        // to silently skip the hardware stop — leaving the device scanning indefinitely.
+        // releaseScanning() already handles the fast no-hardware-call path for navigation;
+        // stopInventory() is only called for genuine explicit stops where we must try hardware.
+        isInventoryActive = false
         _reader?.stopInventory()
         soundPlayer.stopSound()
         Log.d("RFID", "Inventory stopped")
     }
 
+    // Fast release used when navigating away from a scan screen to a different scan screen.
+    // Resets the inventory flag and stops sound WITHOUT sending the stopInventory() hardware
+    // command — that command takes 2.5s (5 retries × 500ms) and always returns error -1 on this
+    // device. The next startInventoryTag() call naturally restarts a clean inventory session.
+    fun releaseScanning() {
+        isInventoryActive = false
+        soundPlayer.stopSound()
+        Log.d("RFID", "Inventory released (no hardware stop)")
+    }
+
     fun release() {
         _reader?.free()
         _reader = null
+        isReaderReady = false
+        isInventoryActive = false
     }
 
     fun initSounds() {
@@ -96,6 +125,13 @@ class RFIDReaderManager @Inject constructor(
     }*/
    fun playSound(id: Int, loop: Int = 0) {
        try {
+           // Stop all active sound streams before starting a new one.
+           // SoundPool plays multiple streams simultaneously; without this, a previous
+           // sound (e.g. id=2 at 55 RSSI) keeps playing when RSSI shifts to a new bucket
+           // (e.g. id=4), causing two sounds to overlap and distort.
+           soundStreamIds.values.forEach { streamId -> soundPool?.stop(streamId) }
+           soundStreamIds.clear()
+
            val audioMaxVolume =
                am?.getStreamMaxVolume(AudioManager.STREAM_MUSIC)?.toFloat() ?: 1f
 
@@ -115,7 +151,7 @@ class RFIDReaderManager @Inject constructor(
                1f             // playback rate
            ) ?: return
 
-           soundStreamIds[id] = streamId   // ✅ SAME as Java
+           soundStreamIds[id] = streamId
        } catch (e: Exception) {
            e.printStackTrace()
        }
@@ -123,7 +159,12 @@ class RFIDReaderManager @Inject constructor(
 
 
     fun stopSound(id: Int) {
-        soundPool?.stop(id)
+        // SoundPool.stop() requires the stream ID returned by play(), not the sound asset ID.
+        // Previously this passed `id` (1-5) directly, which targeted the wrong stream and
+        // left audio playing indefinitely.
+        val streamId = soundStreamIds[id] ?: return
+        soundPool?.stop(streamId)
+        soundStreamIds.remove(id)
     }
 }
 

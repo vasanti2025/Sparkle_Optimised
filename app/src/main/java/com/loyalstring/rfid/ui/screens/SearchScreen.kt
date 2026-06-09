@@ -40,10 +40,13 @@ import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.SearchViewModel
 import com.rscja.deviceapi.RFIDWithUHFUART
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
 @Composable
 fun SearchScreen(
     onBack: () -> Unit,
@@ -104,7 +107,7 @@ fun SearchScreen(
     // Initial auto-start on first composition (inputItems available immediately from savedStateHandle)
     LaunchedEffect(isUnmatchedList, inputItems) {
         if (isUnmatchedList && inputItems.isNotEmpty()) {
-            delay(600) // give RFID reader time to initialize
+            delay(150) // brief yield to let compose settle before starting IO work
             if (!isScanning) {
                 searchViewModel.startSearch(inputItems, selectedPower)
                 isScanning = true
@@ -281,7 +284,7 @@ fun SearchScreen(
                 else -> emptyList()
             }
 
-            baseList.sortedWith(
+            baseList.toList().sortedWith(
                 compareByDescending<SearchItem> {
                     it.proximityPercent
                 }.thenByDescending {
@@ -325,8 +328,17 @@ fun SearchScreen(
                     Log.d("SEARCH", "RFID STOPPED")
                 } else {
                     val itemsToSearch = when {
-                        isUnmatchedList && latestInputItems.isNotEmpty() -> latestInputItems
-                        !isUnmatchedList && filteredDbItems.isNotEmpty() -> filteredDbItems
+                        isUnmatchedList -> {
+                            val q = searchQuery.trim()
+                            if (q.isNotBlank()) {
+                                latestInputItems.filter {
+                                    it.itemCode?.contains(q, ignoreCase = true) == true ||
+                                    it.rfid?.contains(q, ignoreCase = true) == true ||
+                                    it.epc?.contains(q, ignoreCase = true) == true
+                                }
+                            } else latestInputItems
+                        }
+                        filteredDbItems.isNotEmpty() -> filteredDbItems
                         else -> emptyList()
                     }
                     if (itemsToSearch.isNotEmpty()) {
@@ -350,7 +362,7 @@ fun SearchScreen(
                     // Uses coroutineScope so the 600ms delay doesn't block the observer callback.
                     if (isUnmatchedList && latestInputItems.isNotEmpty() && !latestIsScanning) {
                         coroutineScope.launch {
-                            delay(600)
+                            delay(150)
                             if (!latestIsScanning) {
                                 isScanning = true
                                 launch(Dispatchers.IO) {
@@ -416,8 +428,20 @@ fun SearchScreen(
                 onScan = {
                     if (!isScanning) {
                         val itemsToSearch = when {
-                            isUnmatchedList && inputItems.isNotEmpty() -> inputItems
-                            !isUnmatchedList && filteredDbItems.isNotEmpty() -> filteredDbItems
+                            isUnmatchedList -> {
+                                // If user typed a query, scan only the matching subset of
+                                // unmatched items. Without this, all unmatched items were
+                                // passed to startSearch() regardless of the search filter.
+                                val q = searchQuery.trim()
+                                if (q.isNotBlank()) {
+                                    inputItems.filter {
+                                        it.itemCode?.contains(q, ignoreCase = true) == true ||
+                                        it.rfid?.contains(q, ignoreCase = true) == true ||
+                                        it.epc?.contains(q, ignoreCase = true) == true
+                                    }
+                                } else inputItems
+                            }
+                            filteredDbItems.isNotEmpty() -> filteredDbItems
                             else -> emptyList()
                         }
 
@@ -531,7 +555,12 @@ fun HeaderRow() {
 @Composable
 fun SearchItemRow(index: Int, item: SearchItem) {
     val percent = item.proximityPercent.toFloat()
-    val progressColor = getColorByPercentage(percent.toInt())
+    val animatedPercent by animateFloatAsState(
+        targetValue = percent,
+        animationSpec = tween(durationMillis = 600),
+        label = "searchProximity"
+    )
+    val progressColor = getColorByPercentage(animatedPercent.toInt())
 
     Row(
         modifier = Modifier
@@ -546,7 +575,7 @@ fun SearchItemRow(index: Int, item: SearchItem) {
 
         Box(modifier = Modifier.weight(2f)) {
             LinearProgressIndicator(
-                progress = { percent / 100f },
+                progress = { animatedPercent / 100f },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(10.dp)
@@ -556,7 +585,7 @@ fun SearchItemRow(index: Int, item: SearchItem) {
             )
         }
 
-        Text("${percent.toInt()}%", modifier = Modifier.weight(1f), fontSize = 12.sp)
+        Text("${animatedPercent.toInt()}%", modifier = Modifier.weight(1f), fontSize = 12.sp)
     }
 }
 
@@ -951,7 +980,12 @@ fun HeaderRow() {
 @Composable
 fun SearchItemRow(index: Int, item: SearchItem) {
     val percent = item.proximityPercent.toFloat()
-    val progressColor = getColorByPercentage(percent.toInt())
+    val animatedPercent by animateFloatAsState(
+        targetValue = percent,
+        animationSpec = tween(durationMillis = 600),
+        label = "searchProximity"
+    )
+    val progressColor = getColorByPercentage(animatedPercent.toInt())
 
     Row(
         modifier = Modifier
@@ -966,7 +1000,7 @@ fun SearchItemRow(index: Int, item: SearchItem) {
 
         Box(modifier = Modifier.weight(2f)) {
             LinearProgressIndicator(
-                progress = { percent / 100f },
+                progress = { animatedPercent / 100f },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(10.dp)
@@ -976,7 +1010,7 @@ fun SearchItemRow(index: Int, item: SearchItem) {
             )
         }
 
-        Text("${percent.toInt()}%", modifier = Modifier.weight(1f), fontSize = 12.sp)
+        Text("${animatedPercent.toInt()}%", modifier = Modifier.weight(1f), fontSize = 12.sp)
     }
 }
 

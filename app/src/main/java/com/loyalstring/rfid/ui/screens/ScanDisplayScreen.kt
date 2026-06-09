@@ -66,7 +66,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -538,10 +543,9 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
         }
 
         // 🔹 CASE 3: Exit screen
-        // stop scanning
-        scope.launch {
-            bulkViewModel.stopScanningAndCompute()
-        }
+        // stop scanning — called directly (not in a coroutine) so it completes before onBack()
+        // fires. stopScanningAndCompute() has no suspend points so this is safe on the main thread.
+        bulkViewModel.stopScanningAndCompute()
 
         // cancel upload
         scanDisplayViewModel.clearMessages()
@@ -599,6 +603,7 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
             return
         }
         // 🔹 CASE 3: Exit screen
+        bulkViewModel.stopScanningAndCompute()
         onBack()
     }
 
@@ -681,7 +686,8 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
 
     val activity = LocalContext.current as? MainActivity
 
-    DisposableEffect(Unit) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, activity) {
         val listener = object : ScanKeyListener {
             override fun onBarcodeKeyPressed() {
                 bulkViewModel.startBarcodeScanning(context)
@@ -689,6 +695,14 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
 
             override fun onRfidKeyPressed() {
                 if (!isScanning) {
+                    if (allMatched) {
+                        Toast.makeText(
+                            context,
+                            localizedContext.getString(R.string.all_items_matched_scan_stopped),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        return
+                    }
                     isScanning = true
                     scope.launch(Dispatchers.Default) {
                       // vasanti  bulkViewModel.setFilteredItems(scannedItemsSequence.map { it.originalBulkItem }.toList())
@@ -703,8 +717,19 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
                 }
             }
         }
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> activity?.registerScanKeyListener(listener)
+                Lifecycle.Event.ON_PAUSE -> activity?.unregisterScanKeyListener()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
         activity?.registerScanKeyListener(listener)
-        onDispose { activity?.unregisterScanKeyListener() }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            activity?.unregisterScanKeyListener()
+        }
     }
 
     /*LaunchedEffect(isScanning, allMatched) {
@@ -887,13 +912,21 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
                     onList = { showMenu = true },
                     onScan = {
                         if (!isScanning) {
-                            isScanning = true
-                            // bulkViewModel.resetScanResults()
-                           //vasanti bulkViewModel.setFilteredItems(scannedItemsSequence.map { it.originalBulkItem }.toList())   // ✅ only current scope
-                            bulkViewModel.setFilteredItems(
-                                displayItems.map { it.originalBulkItem }
-                            )
-                            bulkViewModel.startScanningInventory(selectedPower)
+                            if (allMatched) {
+                                Toast.makeText(
+                                    context,
+                                    localizedContext.getString(R.string.all_items_matched_scan_stopped),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            } else {
+                                isScanning = true
+                                // bulkViewModel.resetScanResults()
+                               //vasanti bulkViewModel.setFilteredItems(scannedItemsSequence.map { it.originalBulkItem }.toList())   // ✅ only current scope
+                                bulkViewModel.setFilteredItems(
+                                    displayItems.map { it.originalBulkItem }
+                                )
+                                bulkViewModel.startScanningInventory(selectedPower)
+                            }
                         } else {
                             isScanning = false
                             bulkViewModel.stopScanningAndCompute()
@@ -1694,17 +1727,19 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
                                 // Remove artificial delay
                                 // delay(1000)
 
-                                val latestUnmatched = withContext(Dispatchers.Default) {
+                                val unmatchedBulkItems = withContext(Dispatchers.Default) {
+                                    // toBulkItem() mapping stays on Default — keeps main thread free
                                     scannedItemsSequence
                                         .filter { it.currentScannedStatus.equals("Unmatched", true) }
                                         .distinctBy { it.epc?.trim()?.uppercase() }
-                                        .toList() // Materialize here for passing to navController
+                                        .map { it.toBulkItem() }
+                                        .toList()
                                 }
 
-                                if (latestUnmatched.isNotEmpty()) {
+                                if (unmatchedBulkItems.isNotEmpty()) {
                                     navController.currentBackStackEntry?.savedStateHandle?.set(
                                         "unmatchedItems",
-                                        ArrayList(latestUnmatched.map { it.toBulkItem() })
+                                        ArrayList(unmatchedBulkItems)
                                     )
                                     navController.navigate("search_screen/unmatched") {
                                         // This is the callback from SearchScreen
@@ -2269,10 +2304,21 @@ fun SummaryRow(currentLevel: String, items: List<ScannedBulkItem>, selectedMenu:
 
     val totalQty = totals.first.first
     val totalWtBD = totals.first.second
-    val matchedQty = totals.first.third
+    val rawMatchedQty = totals.first.third
     val matchedWtBD = totals.second.first
-    val unmatchedQty = totals.second.second
+    val rawUnmatchedQty = totals.second.second
     val unmatchedWtBD = totals.second.third
+
+    val matchedQty by animateIntAsState(
+        targetValue = rawMatchedQty,
+        animationSpec = tween(durationMillis = 1000),
+        label = "summaryMatchedQty"
+    )
+    val unmatchedQty by animateIntAsState(
+        targetValue = rawUnmatchedQty,
+        animationSpec = tween(durationMillis = 1000),
+        label = "summaryUnmatchedQty"
+    )
 
     Row(
         Modifier
@@ -2407,6 +2453,12 @@ fun TableDataRow(row: TableRow, currentLevel: String, onRowClick: () -> Unit) {
         }
     }
 
+    val animatedMatchedQty by animateIntAsState(
+        targetValue = computedValues.matchedQty,
+        animationSpec = tween(durationMillis = 1000),
+        label = "matchedQty"
+    )
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -2417,7 +2469,7 @@ fun TableDataRow(row: TableRow, currentLevel: String, onRowClick: () -> Unit) {
         TableCell(row.label, colCategoryWidth)
         TableCell("${computedValues.qty}", colQtyWidth)
         TableCell(formatTo3Decimals(computedValues.grossWeight), colWeightWidth)
-        TableCell("${computedValues.matchedQty}", colMatchedQtyWidth)
+        TableCell("$animatedMatchedQty", colMatchedQtyWidth)
         TableCell(formatTo3Decimals(computedValues.matchedWeight), colMatchedWtWidth)
         StatusIconCell(computedValues.status, colStatusWidth)
     }

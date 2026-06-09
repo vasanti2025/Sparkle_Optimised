@@ -2,6 +2,7 @@ package com.loyalstring.rfid.viewmodel
 
 import android.util.Log
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -52,28 +53,40 @@ class SearchViewModel @Inject constructor(
     private var lastBlinkEpc: String? = null
     private var blinkingJob: Job? = null
     var lastSoundTime = 0L
+    private var lastSearchUiUpdate = 0L
+
+    // Tracks whether this VM has actually started a scan. Avoids calling stopSearch() (which
+    // calls stopInventory() and blocks 2.5s on hardware timeout) when we haven't started anything
+    // yet — e.g. on the very first call from ScanDisplayScreen navigation.
+    private var isScanActive = false
 
     fun startSearch(unmatchedItems: List<BulkItem>, power: Int) {
-        stopSearch() // stop old scan fully before starting new one
+        if (isScanActive) stopSearch() // only stop if we started a scan ourselves
         currentScanPower = power
-        _searchItems.clear()
-        epcToIndex.clear() // PERF-FIX: Reset the O(1) lookup map
+        epcToIndex.clear()
 
-        _searchItems.addAll(unmatchedItems.map { item ->
-            val epcValue = when {
-                !item.epc.isNullOrBlank() -> item.epc!!
-                !item.rfid.isNullOrBlank() -> item.rfid!!
-                !item.itemCode.isNullOrBlank() -> item.itemCode!!
-                else -> ""
-            }
+        // Wrap clear() + addAll() in a single snapshot transaction so Compose never
+        // observes the intermediate empty state. Without this, clear() notifies Compose
+        // immediately, causing itemsIndexed in SearchScreen to rebuild its key index map
+        // while the list is still empty — accessing index 0 of size 0 → crash.
+        Snapshot.withMutableSnapshot {
+            _searchItems.clear()
+            _searchItems.addAll(unmatchedItems.map { item ->
+                val epcValue = when {
+                    !item.epc.isNullOrBlank() -> item.epc!!
+                    !item.rfid.isNullOrBlank() -> item.rfid!!
+                    !item.itemCode.isNullOrBlank() -> item.itemCode!!
+                    else -> ""
+                }
 
-            SearchItem(
-                epc = epcValue,
-                itemCode = item.itemCode ?: "",
-                productName = item.productName ?: "",
-                rfid = item.rfid ?: ""
-            )
-        })
+                SearchItem(
+                    epc = epcValue,
+                    itemCode = item.itemCode ?: "",
+                    productName = item.productName ?: "",
+                    rfid = item.rfid ?: ""
+                )
+            })
+        }
 
         // PERF-FIX: Build O(1) lookup map after list is populated.
         // All three identifier fields are indexed so any of them can be matched
@@ -86,22 +99,32 @@ class SearchViewModel @Inject constructor(
 
         if (readerManager.initReader()) {
             startTagScanning(power)
+            isScanActive = true
         }
     }
 
     fun startTagScanning(power: Int) {
         currentScanPower = power
-        readerManager.reader?.apply {
-            setTagFocus(false)
-            setFastID(false)
-            setDynamicDistance(0)
-        }
-
-
-        readerManager.startInventoryTag(power, true)
-
+        lastSearchUiUpdate = 0L
         scanJob?.cancel()
         scanJob = viewModelScope.launch(Dispatchers.IO) {
+            // setTagFocus/setFastID/setDynamicDistance/startInventoryTag are blocking JNI calls.
+            // They were previously before the coroutine launch, running on the calling thread
+            // (main, via LaunchedEffect) and freezing the navigation transition animation.
+            // Moving them here keeps everything in the single IO coroutine with no structural change.
+            readerManager.reader?.apply {
+                setTagFocus(false)
+                setFastID(false)
+                setDynamicDistance(0)
+            }
+            readerManager.startInventoryTag(power, true)
+
+            // Drain tags that accumulated in the hardware buffer while the scanner was idle
+            // (releaseScanning() doesn't send a hardware stop, so the device keeps scanning).
+            // Without this drain, all backlogged tags are processed at once on resume, causing
+            // rapid-fire playSound() + withContext(Main) calls that freeze the UI and stutter audio.
+            while (readerManager.readTagFromBuffer() != null) { /* discard stale */ }
+
             while (isActive) {
                 val tag = readerManager.readTagFromBuffer()
 
@@ -139,34 +162,59 @@ class SearchViewModel @Inject constructor(
                     val index = epcToIndex[epc.uppercase()]
 
                     if (index != null && index >= 0 && index < _searchItems.size) {
-                        withContext(Dispatchers.Main) {
-                            _searchItems[index] = _searchItems[index].copy(
-                                rssi = rssi,
-                                proximityPercent = proximity
-                            )
+                        // Throttle main-thread dispatches to at most once per 100ms.
+                        // On inventory restart, all nearby tags respond at once (standard RFID
+                        // behavior), flooding the scan loop. Without throttling, rapid-fire
+                        // withContext(Main) calls overwhelm recomposition and distort audio.
+                        val now = System.currentTimeMillis()
+                        if (now - lastSearchUiUpdate >= 50) {
+                            lastSearchUiUpdate = now
+                            withContext(Dispatchers.Main) {
+                                _searchItems[index] = _searchItems[index].copy(
+                                    rssi = rssi,
+                                    proximityPercent = proximity
+                                )
 
-                            val currentTime = System.currentTimeMillis()
+                                /*
+                                val currentTime = System.currentTimeMillis()
 
-                            if (id != -1 && (lastSoundId != id || currentTime - lastSoundTime > 300)) {
-                                lastSoundId = id
-                                readerManager.playSound(id)
-                                lastSoundTime = currentTime
-                            }
-
-                            val searchedEpc = _searchItems[index].epc.trim()
-                            val epcMatched = epc.equals(searchedEpc, ignoreCase = true)
-
-                            if (epcMatched && proximity >= 40) {
-                                if (lastBlinkEpc != epc || blinkingJob?.isActive != true) {
-                                    startContinuousBlink(epc)
+                                // Pure time-based sound throttle: fire only if 400ms have passed.
+                                // The old condition (lastSoundId != id) also fires on every RSSI
+                                // bucket change during a burst, causing rapid overlapping playback
+                                // and audio distortion when many tags are read at once.
+                                if (id != -1 && currentTime - lastSoundTime > 400) {
+                                    lastSoundId = id
+                                    readerManager.playSound(id)
+                                    lastSoundTime = currentTime
                                 }
-                            } else if (lastBlinkEpc == epc && proximity < 40) {
-                                stopBlinkingEpc()
+                                */
+
+                                // Sound logic matching Searchfragment.java:
+                                // Stop the previous stream then play the new one on every tag read.
+                                // playSound() in RFIDReaderManager now stops all active streams
+                                // before starting a new one, so overlap/distortion is prevented
+                                // at the hardware level without needing a time throttle here.
+                                if (id != -1) {
+                                    lastSoundId?.let { readerManager.stopSound(it) }
+                                    lastSoundId = id
+                                    readerManager.playSound(id)
+                                }
+
+                                val searchedEpc = _searchItems[index].epc.trim()
+                                val epcMatched = epc.equals(searchedEpc, ignoreCase = true)
+
+                                if (epcMatched && proximity >= 40) {
+                                    if (lastBlinkEpc != epc || blinkingJob?.isActive != true) {
+                                        startContinuousBlink(epc)
+                                    }
+                                } else if (lastBlinkEpc == epc && proximity < 40) {
+                                    stopBlinkingEpc()
+                                }
                             }
                         }
                     }
                 } else {
-                    delay(100)
+                    delay(50)
                 }
             }
         }
@@ -182,13 +230,21 @@ class SearchViewModel @Inject constructor(
     }
 
     fun stopSearch() {
+        isScanActive = false
         scanJob?.cancel()
         scanJob = null
 
         blinkingJob?.cancel()
         blinkingJob = null
 
-        readerManager.stopInventory()
+        // releaseScanning() instead of stopInventory():
+        // stopInventory() sends a hardware stop command that takes 2.5s (5 retries × 500ms,
+        // always fails with -1 on this device). If the user restarts scanning quickly, the
+        // concurrent stopInventory() + startInventoryTag() JNI calls race on the UART device,
+        // causing tags to buffer and sound events to queue then fire all at once.
+        // releaseScanning() resets the flag and stops sound instantly with no hardware call.
+        // The next startInventoryTag() restarts the session cleanly.
+        readerManager.releaseScanning()
 
         lastSoundId?.let { readerManager.stopSound(it) }
         lastSoundId = null
@@ -316,6 +372,11 @@ class SearchViewModel @Inject constructor(
               try {
                   readerManager.stopInventory()
 
+                  // If cancelled while stopInventory() was blocking, don't restart inventory —
+                  // the new scan's startInventoryTag() will handle it. Restarting here would
+                  // race with the new scan and cause sound/UI bursts.
+                  if (!isActive) break
+
                   reader.readData(
                       "00000000",
                       filterBank,
@@ -329,10 +390,10 @@ class SearchViewModel @Inject constructor(
 
                   delay(120) // LED blink visible
 
+                  readerManager.startInventoryTag(currentScanPower, true)
+
               } catch (e: Exception) {
                   Log.e("RFID", "Blink error: ${e.message}", e)
-              } finally {
-                  readerManager.startInventoryTag(currentScanPower, true)
               }
 
               delay(500)

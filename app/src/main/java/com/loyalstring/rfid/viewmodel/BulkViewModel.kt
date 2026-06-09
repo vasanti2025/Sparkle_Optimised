@@ -73,6 +73,7 @@ import java.net.SocketException
 import java.net.URL
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 @HiltViewModel
@@ -89,6 +90,9 @@ class BulkViewModel @Inject constructor(
     @Volatile
     private var isSyncRunning = false
     @Volatile private var isFirstPageLoaded = false
+
+    // Guard to prevent multiple concurrent hardware stop calls (each can block ~2.5s on main thread)
+    private val isStopInProgress = AtomicBoolean(false)
 
     //private val success = readerManager.initReader()
     private var readerReady = false
@@ -397,6 +401,7 @@ class BulkViewModel @Inject constructor(
 
 
     private var scanJob: Job? = null
+    private var outerScanJob: Job? = null
 
     private val _scanTrigger = MutableStateFlow<String?>(null)
     val scanTrigger: StateFlow<String?> = _scanTrigger
@@ -712,9 +717,10 @@ class BulkViewModel @Inject constructor(
 
         _scannedKeySet.value = emptySet()
         scanJob?.cancel()
+        outerScanJob?.cancel()
         _isScanning.value = true
 
-        viewModelScope.launch(Dispatchers.IO) {
+        outerScanJob = viewModelScope.launch(Dispatchers.IO) {
             if (!ensureReader()) {
                 _isScanning.value = false
                 return@launch
@@ -747,10 +753,10 @@ class BulkViewModel @Inject constructor(
                                     localMatchedSet.add(scannedEpc)
                                 }
 
-                                // Throttle StateFlow updates to max once per 300ms
-                                // This prevents O(n²) Set copies and recomposition storms
+                                // Throttle StateFlow updates to max once per 80ms
+                                // Smaller window → smaller per-batch jumps → smooth count-up in UI
                                 val now = System.currentTimeMillis()
-                                if (now - lastUiUpdate >= 300) {
+                                if (now - lastUiUpdate >= 80) {
                                     _matchedEpcSet.value = localMatchedSet.toHashSet()
                                     lastUiUpdate = now
                                     yield()
@@ -1206,42 +1212,23 @@ class BulkViewModel @Inject constructor(
 
 
     fun stopScanning() {
-        // Cancel scan job first to stop incoming tags
+        // Cancel BOTH the inner scan loop AND the outer hardware-start launch so that
+        // hardware can never start after stopScanning() returns (race-condition fix).
+        outerScanJob?.cancel()
+        outerScanJob = null
         scanJob?.cancel()
         scanJob = null
-
-        // Stop reader hardware
-        try {
-            readerManager.stopSound(1)
-            readerManager.stopInventory()
-        } catch (e: Exception) {
-            Log.e("RFID", "Error stopping reader: ${e.message}")
-        }
-
         _isScanning.value = false
 
-        // Attempt to drain remaining tags from device buffer quickly before stopping
-        // Using try-catch to prevent crashes during buffer drain
-        try {
-            repeat(25) {
-                val tag = readerManager.readTagFromBuffer()
-                if (tag != null && !tag.epc.isNullOrBlank()) {
-                    // Process synchronously on Default dispatcher to avoid race conditions
-                    viewModelScope.launch(Dispatchers.Default) {
-                        try {
-                            handleScannedTag(tag)
-                        } catch (e: Exception) {
-                            Log.e("RFID", "Error handling tag during stop: ${e.message}")
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("RFID", "Error draining buffer: ${e.message}")
-        }
-
-        // Ensure any buffered tags are emitted immediately
+        // Flush in-memory pending tags immediately (no hardware I/O, safe on any thread)
         flushPendingTags()
+
+        // releaseScanning() resets internal state + stops sound without sending the hardware
+        // stopInventory() command. That command takes 2.5s (5 retries × 500ms) and returns
+        // error -1 every time on this device — it never actually stops the hardware.
+        // The hardware resets cleanly when the next startInventoryTag() is called (e.g. when
+        // SearchScreen opens), so we let that transition handle the hardware state.
+        readerManager.releaseScanning()
     }
 
 
@@ -1251,6 +1238,8 @@ class BulkViewModel @Inject constructor(
     // populated until it returned. Now the UI clears instantly and hardware stops in background.
     fun resetForDisplay() {
         // 1. Cancel scan job so no new tags get processed
+        outerScanJob?.cancel()
+        outerScanJob = null
         scanJob?.cancel()
         scanJob = null
         _isScanning.value = false
@@ -1282,13 +1271,23 @@ class BulkViewModel @Inject constructor(
     fun onScanStopped() {
         scanJob?.cancel()
         scanJob = null
-        readerManager.stopInventory()
-        readerManager.stopSound(1)
         scannedEpcList.clear()
         _allScannedTags.value.forEach { tag ->
             tag.epc?.let { epc ->
                 if (!scannedEpcList.contains(epc)) {
                     scannedEpcList.add(epc)
+                }
+            }
+        }
+        if (isStopInProgress.compareAndSet(false, true)) {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    readerManager.stopInventory()
+                    readerManager.stopSound(1)
+                } catch (e: Exception) {
+                    Log.e("RFID", "Error stopping reader: ${e.message}")
+                } finally {
+                    isStopInProgress.set(false)
                 }
             }
         }

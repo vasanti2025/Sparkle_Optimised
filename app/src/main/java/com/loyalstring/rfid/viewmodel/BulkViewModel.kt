@@ -2493,6 +2493,30 @@ class BulkViewModel @Inject constructor(
             ""
         }
     }
+    private fun normalizeEpc(raw: String): String =
+        raw.trim()
+            .uppercase()
+            .replace(" ", "")
+            .replace("\n", "")
+            .replace("\r", "")
+
+    private suspend fun resolveRfidCode(epc: String, index: Int): String {
+        val manual = _rfidMap.value[index].orEmpty().trim()
+        if (manual.isNotBlank() && !manual.equals("scan here", ignoreCase = true)) {
+            return manual
+        }
+
+        val mapped = if (epc.startsWith("E", ignoreCase = true)) {
+            _itemCodeMap.value[epc].orEmpty()
+                .ifBlank { _rfidCodeByEpcMap.value[epc].orEmpty() }
+                .ifBlank { bulkRepository.getItemCodeByEpc(epc) }
+        } else {
+            cleanRfid(hexToAscii(epc))
+        }
+
+        return mapped.trim()
+    }
+
     fun sendScannedData(
         tags: List<UHFTAGInfo>,
         androidId: String,
@@ -2505,91 +2529,48 @@ class BulkViewModel @Inject constructor(
             return
         }
 
-        val formatted = LocalDateTime.now()
-            .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"))
-
-        val clientCode = employee?.clientCode
-
-        val data = tags.mapIndexedNotNull { index, tag ->
-
-            val epc = tag.epc
-                .trim()
-                .uppercase()
-                .replace(" ", "")
-                .replace("\n", "")
-                .replace("\r", "")
-
-            val rfid = _rfidMap.value[index]
-                .orEmpty()
-                .trim()
-
-            val validRfid = if (
-                rfid.isBlank() ||
-                rfid.equals("scan here", ignoreCase = true)
-            ) {
-                ""
-            } else {
-                rfid
-            }
-
-            val ascii = if (epc.startsWith("E", ignoreCase = true)) {
-                ""
-            } else {
-                cleanRfid(hexToAscii(epc))
-            }
-
-            val validAscii = if (
-                ascii.isBlank() ||
-                ascii.equals("scan here", ignoreCase = true)
-            ) {
-                ""
-            } else {
-                ascii
-            }
-
-            val finalCode = when {
-                validRfid.isNotBlank() -> validRfid
-                validAscii.isNotBlank() -> validAscii
-                else -> ""
-            }.trim()
-
-            if (
-                epc.isBlank() ||
-                finalCode.isBlank() ||
-                finalCode.equals("scan here", ignoreCase = true)
-            ) {
-                Log.d("SKIP_SEND", "Skipped INDEX=$index EPC=$epc RFID='$rfid' ASCII='$ascii' FINAL='$finalCode'")
-                return@mapIndexedNotNull null
-            }
-
-            Log.d(
-                "DEBUG_SEND",
-                "INDEX=$index EPC=$epc RFID='$rfid' ASCII='$ascii' FINAL='$finalCode'"
-            )
-
-            ScannedDataToService(
-                tIDValue = epc,
-                rFIDCode = finalCode,
-                createdOn = formatted,
-                lastUpdated = formatted,
-                id = 0,
-                clientCode = clientCode,
-                statusType = true,
-                deviceId = androidId
-            )
-        }
-
-        Log.e(
-            "FINAL_SEND",
-            "tags=${tags.size}, rfidMap=${_rfidMap.value.size}, data=${data.size}"
-        )
-
-        if (data.isEmpty()) {
-            ToastUtils.showToast(context, "No valid RFID data found")
-            return
-        }
-
         viewModelScope.launch {
+            val formatted = LocalDateTime.now()
+                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"))
+            val clientCode = employee?.clientCode
+
+            val data = tags.mapIndexedNotNull { index, tag ->
+                val epc = normalizeEpc(tag.epc)
+                val finalCode = resolveRfidCode(epc, index)
+
+                if (
+                    epc.isBlank() ||
+                    finalCode.isBlank() ||
+                    finalCode.equals("scan here", ignoreCase = true)
+                ) {
+                    Log.d("SKIP_SEND", "Skipped INDEX=$index EPC=$epc FINAL='$finalCode'")
+                    return@mapIndexedNotNull null
+                }
+
+                Log.d("DEBUG_SEND", "INDEX=$index EPC=$epc FINAL='$finalCode'")
+
+                ScannedDataToService(
+                    tIDValue = epc,
+                    rFIDCode = finalCode,
+                    createdOn = formatted,
+                    lastUpdated = formatted,
+                    id = 0,
+                    clientCode = clientCode,
+                    statusType = true,
+                    deviceId = androidId
+                )
+            }
+
+            Log.e(
+                "FINAL_SEND",
+                "tags=${tags.size}, rfidMap=${_rfidMap.value.size}, data=${data.size}"
+            )
+
+            if (data.isEmpty()) {
+                ToastUtils.showToast(context, "No valid RFID data found")
+                return@launch
+            }
+
             try {
                 val response = apiService.addAllScannedData(data)
 

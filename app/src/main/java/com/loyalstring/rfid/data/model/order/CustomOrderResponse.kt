@@ -100,5 +100,7 @@ data class CustomOrderResponse(
     val HallmarkAmount:String,
     /*new parameter added for the GSM client*/
     val WeightCategories:String,
-    val SKUId:Int
+    val SKUId:Int,
+    val RfidCode:String,
+    val TidNumber:String
     ): Serializable, Parcelable

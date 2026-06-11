@@ -3,6 +3,7 @@ package com.loyalstring.rfid.ui.screens
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.os.Environment
 import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatDelegate
@@ -1562,7 +1563,9 @@ fun OrderScreen(
             ),
 
             syncStatus = false,
-            LastUpdated = null
+            LastUpdated = null,
+            RfidCode = "",
+            TidNumber = ""
         )
         if (isOnline) {
             orderViewModel.addOrderCustomer(customerObj)
@@ -1765,7 +1768,7 @@ fun OrderScreen(
                            AdvanceAmt = "0",
                            PaidAmt = "25000",
                            TaxableAmt = taxableAmt.toString(),
-                           GstAmount =  String.format("%.2f", gstAmt),
+                           GstAmount = String.format("%.2f", gstAmt),
                            GstCheck = isGstApplied.toString(),
                            Category = "Ring",
                            TDSCheck = "false",
@@ -1779,9 +1782,11 @@ fun OrderScreen(
 
                                CustomOrderItem(
                                    CustomOrderId = editOrder?.CustomOrderId?.toInt() ?: 0,
-                                   RFIDCode =product?.rfidCode.toString(),
-                                   OrderDate = isoDateTimeOrNull(product.orderDate) ?: nowIsoDateTime(),
-                                   DeliverDate = isoDateTimeOrNull(product.deliverDate) ?: nowIsoDateTime(),
+                                   RFIDCode = product?.rfidCode.toString(),
+                                   OrderDate = isoDateTimeOrNull(product.orderDate)
+                                       ?: nowIsoDateTime(),
+                                   DeliverDate = isoDateTimeOrNull(product.deliverDate)
+                                       ?: nowIsoDateTime(),
                                    SKUId = editOrder?.SKUId ?: 0,
                                    SKU = product.sku,
                                    CategoryId = selectedItem?.CategoryId,
@@ -1803,7 +1808,7 @@ fun OrderScreen(
                                    Length = product.length,
                                    TypesOdColors = product.typeOfColor,
                                    Quantity = qtyOrOne(product.qty),
-                                   RatePerGram =product.todaysRate,
+                                   RatePerGram = product.todaysRate,
                                    MakingPerGram = product.makingPerGram,
                                    MakingFixed = product.makingFixedAmt,
                                    FixedWt = "",
@@ -1859,7 +1864,7 @@ fun OrderScreen(
                                    Purity = product.purity,
                                    Status = "",
                                    URDNo = "",
-                                   HallmarkAmount =product.hallmarkAmt,
+                                   HallmarkAmount = product.hallmarkAmt,
                                    WeightCategories = product.CategoryWt,
                                    Stones = emptyList(),
                                    Diamond = emptyList()
@@ -1909,8 +1914,16 @@ fun OrderScreen(
                                Id = editOrder?.Customer?.Id ?: 0,
                                CreatedOn = "2025-07-08",
                                LastUpdated = "2025-07-08",
-                               StatusType = true
-                           )
+                               StatusType = true,
+                           ),
+                           Id = TODO(),
+                           syncStatus = TODO(),
+                           LastUpdated = TODO(),
+                           HallmarkAmount = TODO(),
+                           WeightCatogories = TODO(),
+                           SKUId = TODO(),
+                           RfidCode = TODO(),
+                           TidNumber = TODO()
                        )
 
                        if (isOnline) {
@@ -2404,7 +2417,7 @@ fun CustomOrderItem.toItemCodeResponse(): ItemCodeResponse {
 
 suspend fun generateTablePdfWithImages1(context: Context, order: CustomOrderRequest,localizedContext:Context) {
     val file = File(
-        context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS),
+        context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS),
         "Order_${order.Customer.FirstName}.pdf"
     )
     val writer = PdfWriter(file)
@@ -2861,7 +2874,9 @@ fun buildOrderRequest(
         ),
 
         syncStatus = false,
-        LastUpdated = null
+        LastUpdated = null,
+        RfidCode = "",
+        TidNumber = ""
     )
 
 }
@@ -2993,8 +3008,8 @@ private fun buildOrderItemFromSelectedItem(
         diamondAmt = diamondAmt.toString(),
 
         // ✅ daily-rate based amount
-        itemAmt = String.format(java.util.Locale.US, "%.2f", itemAmt),
-        netAmt  = String.format(java.util.Locale.US, "%.2f", itemAmt),
+        itemAmt = String.format(Locale.US, "%.2f", itemAmt),
+        netAmt  = String.format(Locale.US, "%.2f", itemAmt),
 
         grWt = selectedItem.GrossWt?.toString() ?: "0.0",
         nWt  = selectedItem.NetWt?.toString() ?: "0.0",
@@ -3074,7 +3089,7 @@ private fun qtyOrOne(raw: Any?): String {
 
 suspend fun generateTablePdfWithImages(context: Context, order: CustomOrderResponse,localizedContext:Context) {
     val file = File(
-        context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS),
+        context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS),
         "Order_${order.Customer.FirstName}.pdf"
     )
     val writer = PdfWriter(file)

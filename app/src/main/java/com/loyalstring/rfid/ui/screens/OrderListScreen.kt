@@ -134,6 +134,8 @@ fun OrderLisrScreen(
         localizedContext.getString(R.string.customer_name),
         localizedContext.getString(R.string.contact),
         localizedContext.getString(R.string.product),
+        localizedContext.getString(R.string.rfid_code),
+        localizedContext.getString(R.string.tid_number),
         localizedContext.getString(R.string.branch),
         localizedContext.getString(R.string.qty),
         localizedContext.getString(R.string.header_total_weight),
@@ -152,6 +154,8 @@ fun OrderLisrScreen(
         60.dp,  // Customer Name
         70.dp,  // Contact
         110.dp,  // Product
+        80.dp,  // RFID Code
+        70.dp,  // TID Number
         70.dp,  // Branch
         40.dp,   // Qty
         60.dp, // tot wt
@@ -373,8 +377,10 @@ fun OrderTableWithPagination(
                                 row.OrderNo ?: "",
                                 row.Customer?.FirstName ?: "",
                                 row.Customer?.Mobile ?: "",
-                                row.CustomOrderItem.joinToString(", ") { it.ProductName ?: "" },
-                                row.CustomOrderItem.joinToString(", ") { it.BranchName ?: "" },
+                                row.CustomOrderItem.joinToString(", ") { it.ProductName.orEmpty() },
+                                row.RfidCode ?: "",
+                                row.TidNumber ?: "",
+                                row.CustomOrderItem.joinToString(", ") { it.BranchName.orEmpty() },
                                 row.CustomOrderItem.sumOf { it.Quantity?.toIntOrNull() ?: 0 }.toString(),
                                 totalWt,
                                 totalgrWt,

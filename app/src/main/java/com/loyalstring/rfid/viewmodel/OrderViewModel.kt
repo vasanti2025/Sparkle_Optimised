@@ -596,7 +596,9 @@ class OrderViewModel @Inject constructor(
             uRDPurchases = emptyList(), // You can map if needed
             Customer = this.Customer,
             syncStatus = this.syncStatus,
-            LastUpdated = this.LastUpdated
+            LastUpdated = this.LastUpdated,
+            RfidCode = this.RfidCode,
+            TidNumber = this.TidNumber
         )
     }
 
@@ -1009,7 +1011,9 @@ class OrderViewModel @Inject constructor(
             ProductName = ""?.toString().orEmpty(),
             HallmarkAmount=this.HallmarkAmount.toString(),
             WeightCategories=this.WeightCatogories.toString(),
-            SKUId=this.SKUId?:0
+            SKUId=this.SKUId?:0,
+            RfidCode = this.RfidCode.toString(),
+            TidNumber=this.TidNumber
 
         )
     }

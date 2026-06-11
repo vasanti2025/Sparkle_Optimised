@@ -47,6 +47,7 @@ androidx-hilt = "1.2.0"
 # WorkManager
 work-runtime-ktx = "2.9.1"
 ui = "1.10.6"
+lifecycle-viewmodel-savedstate = "2.10.0"
 
 [plugins]
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
@@ -126,3 +127,4 @@ androidx-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "a
 androidx-hilt-work = { module = "androidx.hilt:hilt-work", version.ref = "androidx-hilt" }
 androidx-hilt-compiler = { module = "androidx.hilt:hilt-compiler", version.ref = "androidx-hilt" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui", version.ref = "ui" }
+androidx-lifecycle-viewmodel-savedstate = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-savedstate", version.ref = "lifecycle-viewmodel-savedstate" }

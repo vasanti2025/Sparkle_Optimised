@@ -18,8 +18,8 @@ android {
         applicationId = "com.loyalstring.rfid"
         minSdk = 26
         targetSdk = 36
-       versionCode = 107
-        versionName = "2.5"
+       versionCode = 108
+        versionName = "2.6"
         /*versionCode = 8
         versionName = "1.8"*/
 
@@ -104,6 +104,7 @@ dependencies {
     implementation(libs.androidx.espresso.core)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.lifecycle.viewmodel.savedstate)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
     androidTestImplementation(platform(libs.androidx.compose.bom))

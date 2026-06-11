@@ -4,13 +4,17 @@ import android.util.Log
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.snapshots.SnapshotStateList
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.data.local.entity.SearchItem
+import com.loyalstring.rfid.data.model.ClientCodeRequest
+import com.loyalstring.rfid.data.model.order.CustomOrderItem
+import com.loyalstring.rfid.data.model.order.CustomOrderResponse
+import com.loyalstring.rfid.data.model.order.OrderSearchRequest
 import com.loyalstring.rfid.data.reader.RFIDReaderManager
 import com.loyalstring.rfid.repository.BulkRepositoryImpl
+import com.loyalstring.rfid.repository.OrderRepository
 import com.rscja.deviceapi.RFIDWithUHFUART
 import com.rscja.deviceapi.interfaces.IUHF
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,7 +31,7 @@ import javax.inject.Inject
 class SearchViewModel @Inject constructor(
     private val readerManager: RFIDReaderManager,
     private val bulkRepositoryImpl: BulkRepositoryImpl,
-    savedStateHandle: SavedStateHandle
+    private val orderRepository: OrderRepository
 ) : ViewModel() {
 
   /*  private var _searchItems = mutableStateListOf<SearchItem>()
@@ -42,11 +46,6 @@ class SearchViewModel @Inject constructor(
     private val epcToIndex = HashMap<String, Int>()
 
     private var currentScanPower: Int = 10
-
-    init {
-        val unmatched = savedStateHandle.get<List<BulkItem>>("unmatchedItems") ?: emptyList()
-        Log.d("SearchViewModel", "Received ${unmatched.size} items")
-    }
 
     private var scanJob: Job? = null
     private var lastSoundId: Int? = null
@@ -222,6 +221,246 @@ class SearchViewModel @Inject constructor(
 
     suspend fun getAllBulkItemsFromDb(): List<BulkItem> {
         return bulkRepositoryImpl.getAllBulkItems().first()
+    }
+
+    suspend fun searchOrdersByRfid(clientCode: String, rfidCode: String): List<BulkItem> {
+        if (clientCode.isBlank() || rfidCode.isBlank()) return emptyList()
+
+        val query = rfidCode.trim()
+        return try {
+            val orders = fetchOrdersForSearch(clientCode, query)
+            orders.flatMap { order ->
+                val parentMatches = order.orderLevelMatches(query)
+                val items = order.CustomOrderItem.orEmpty()
+
+                when {
+                    parentMatches && items.isEmpty() -> {
+                        listOfNotNull(
+                            runCatching { order.toOrderLevelBulkItem() }
+                                .onFailure { e ->
+                                    Log.e("SearchViewModel", "Skip invalid order header", e)
+                                }
+                                .getOrNull()
+                        )
+                    }
+                    parentMatches -> {
+                        items.mapNotNull { item ->
+                            runCatching { item.toSearchBulkItem(order) }
+                                .onFailure { e ->
+                                    Log.e("SearchViewModel", "Skip invalid order item", e)
+                                }
+                                .getOrNull()
+                        }
+                    }
+                    else -> {
+                        items
+                            .filter { it.matchesOrderQuery(query) }
+                            .mapNotNull { item ->
+                                runCatching { item.toSearchBulkItem(order) }
+                                    .onFailure { e ->
+                                        Log.e("SearchViewModel", "Skip invalid order item", e)
+                                    }
+                                    .getOrNull()
+                            }
+                    }
+                }
+            }.filter { it.hasSearchableIdentifier() }
+        } catch (e: Exception) {
+            Log.e("SearchViewModel", "Order search failed", e)
+            emptyList()
+        }
+    }
+
+    private suspend fun fetchOrdersForSearch(clientCode: String, rfidCode: String): List<CustomOrderResponse> {
+        try {
+            val rfidResponse = orderRepository.searchOrdersByRfid(
+                OrderSearchRequest(clientCode = clientCode, rfidCode = rfidCode)
+            )
+            if (rfidResponse.isSuccessful && !rfidResponse.body().isNullOrEmpty()) {
+                return rfidResponse.body()!!
+            }
+        } catch (e: Exception) {
+            Log.e("SearchViewModel", "Order RFID API failed, trying full list", e)
+        }
+
+        try {
+            val allResponse = orderRepository.getAllOrderList(ClientCodeRequest(clientCode))
+            if (allResponse.isSuccessful && !allResponse.body().isNullOrEmpty()) {
+                return allResponse.body()!!
+            }
+        } catch (e: Exception) {
+            Log.e("SearchViewModel", "GetAllOrders API failed, trying cache", e)
+        }
+
+        return try {
+            orderRepository.getOrderListCache(clientCode)
+        } catch (e: Exception) {
+            Log.e("SearchViewModel", "Order cache read failed", e)
+            emptyList()
+        }
+    }
+
+    private fun CustomOrderResponse.orderLevelMatches(query: String): Boolean {
+        return matchesSearchQuery(RfidCode.safeStr(), query) ||
+                matchesSearchQuery(TidNumber.safeStr(), query)
+    }
+
+    private fun CustomOrderItem.matchesOrderQuery(query: String): Boolean {
+        return matchesSearchQuery(RFIDCode.safeStr(), query) ||
+                matchesSearchQuery(ItemCode.safeStr(), query) ||
+                matchesSearchQuery(TIDNumber.safeStr(), query)
+    }
+
+    private fun matchesSearchQuery(value: String, query: String): Boolean {
+        if (value.isBlank() || query.isBlank()) return false
+        return value.equals(query, true) || value.contains(query, true)
+    }
+
+    private fun BulkItem.hasSearchableIdentifier(): Boolean {
+        return !rfid.isNullOrBlank() ||
+                !itemCode.isNullOrBlank() ||
+                !tid.isNullOrBlank() ||
+                !epc.isNullOrBlank()
+    }
+
+    private fun String?.safeStr(): String = this?.trim().orEmpty()
+
+    private fun CustomOrderResponse.toOrderLevelBulkItem(): BulkItem? {
+        val rfid = RfidCode.safeStr()
+        val tid = TidNumber.safeStr()
+      //  val searchKey = rfid.ifBlank { tid }
+        val searchKey = tid.ifBlank { rfid }
+        if (searchKey.isBlank()) return null
+
+        return BulkItem(
+            productName = ProductName.safeStr().ifBlank { null },
+            itemCode = null,
+            rfid = rfid.ifBlank { null },
+            epc = searchKey,
+            grossWeight = null,
+            stoneWeight = null,
+            diamondWeight = null,
+            netWeight = null,
+            category = null,
+            design = null,
+            purity = null,
+            makingPerGram = null,
+            makingPercent = null,
+            fixMaking = null,
+            fixWastage = null,
+            stoneAmount = null,
+            diamondAmount = null,
+            sku = null,
+            tid = tid.ifBlank { null },
+            box = null,
+            designCode = null,
+            productCode = null,
+            imageUrl = null,
+            totalQty = Qty.safeStr().toIntOrNull() ?: 1,
+            pcs = null,
+            matchedPcs = null,
+            totalGwt = null,
+            matchGwt = null,
+            totalStoneWt = null,
+            matchStoneWt = null,
+            totalNetWt = null,
+            matchNetWt = null,
+            unmatchedQty = null,
+            matchedQty = null,
+            unmatchedGrossWt = null,
+            mrp = MRP.safeStr().toDoubleOrNull() ?: 0.0,
+            counterName = null,
+            counterId = null,
+            boxId = null,
+            boxName = null,
+            branchId = 0,
+            branchName = null,
+            packetId = null,
+            packetName = null,
+            scannedStatus = OrderStatus.safeStr().ifBlank { null },
+            categoryId = CategoryId,
+            productId = 0,
+            branchType = null,
+            designId = 0,
+            vendor = null,
+            totalWt = null,
+            CategoryWt = null,
+            SKUId = SKUId,
+            purityId = 0,
+            Status = null
+        )
+    }
+
+    private fun CustomOrderItem.toSearchBulkItem(order: CustomOrderResponse): BulkItem {
+       /* val rfid = RFIDCode.safeStr().ifBlank { order.RfidCode.safeStr() }
+        val tid = TIDNumber.safeStr().ifBlank { order.TidNumber.safeStr() }
+        val code = ItemCode.safeStr()
+        val searchKey = rfid.ifBlank { tid }.ifBlank { code }*/
+
+        val rfid = RFIDCode.safeStr().ifBlank { order.RfidCode.safeStr() }
+        val tid = TIDNumber.safeStr().ifBlank { order.TidNumber.safeStr() }
+        val code = ItemCode.safeStr()
+
+// IMPORTANT: scanner reads EPC/TID, so keep TID first
+        val searchKey = tid.ifBlank { rfid }.ifBlank { code }
+
+        return BulkItem(
+            productName = ProductName.safeStr().ifBlank { null },
+            itemCode = code.ifBlank { null },
+            rfid = rfid.ifBlank { code.ifBlank { null } },
+            epc = searchKey.ifBlank { null },
+            grossWeight = GrossWt.safeStr().ifBlank { null },
+            stoneWeight = StoneWt.safeStr().ifBlank { null },
+            diamondWeight = DiamondWt.safeStr().ifBlank { null },
+            netWeight = NetWt.safeStr().ifBlank { null },
+            category = CategoryName.safeStr().ifBlank { null },
+            design = DesignName.safeStr().ifBlank { null },
+            purity = PurityName.safeStr().ifBlank { null },
+            makingPerGram = MakingPerGram.safeStr().ifBlank { null },
+            makingPercent = MakingPercentage.safeStr().ifBlank { null },
+            fixMaking = MakingFixed.safeStr().ifBlank { null },
+            fixWastage = MakingFixedWastage.safeStr().ifBlank { null },
+            stoneAmount = StoneAmount.safeStr().ifBlank { null },
+            diamondAmount = DiamondAmount.safeStr().ifBlank { null },
+            sku = SKU.safeStr().ifBlank { null },
+            tid = tid.ifBlank { null },
+            box = null,
+            designCode = null,
+            productCode = ProductCode.safeStr().ifBlank { null },
+            imageUrl = Image.safeStr().ifBlank { null },
+            totalQty = Quantity.safeStr().toIntOrNull() ?: 1,
+            pcs = Quantity.safeStr().toIntOrNull(),
+            matchedPcs = null,
+            totalGwt = null,
+            matchGwt = null,
+            totalStoneWt = null,
+            matchStoneWt = null,
+            totalNetWt = null,
+            matchNetWt = null,
+            unmatchedQty = null,
+            matchedQty = null,
+            unmatchedGrossWt = null,
+            mrp = MRP.safeStr().toDoubleOrNull() ?: 0.0,
+            counterName = CounterId.safeStr().ifBlank { null },
+            counterId = CounterId.safeStr().toIntOrNull(),
+            boxId = null,
+            boxName = null,
+            branchId = BranchId,
+            branchName = BranchName.safeStr().ifBlank { null },
+            packetId = null,
+            packetName = null,
+            scannedStatus = OrderStatus.safeStr().ifBlank { null },
+            categoryId = CategoryId ?: 0,
+            productId = ProductId,
+            branchType = null,
+            designId = DesignId,
+            vendor = VendorName.safeStr().ifBlank { null },
+            totalWt = TotalWt.safeStr().toDoubleOrNull(),
+            CategoryWt = null,
+            SKUId = SKUId,
+            purityId = PurityId,
+            Status = Status.safeStr().ifBlank { null }
+        )
     }
 
     fun clearSearchItems() {

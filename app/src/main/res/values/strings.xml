@@ -329,6 +329,7 @@
     <string name="d_amt">D Amt</string>
     <string name="item_amt">Item Amt</string>
     <string name="rfid_code">RFID Code</string>
+    <string name="tid_number">TID Number</string>
 
     <!-- GST label: GST 3.00% -->
     <string name="gst_with_percent">GST %1$.2f%%</string>

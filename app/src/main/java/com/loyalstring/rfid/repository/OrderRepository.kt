@@ -14,6 +14,7 @@ import com.loyalstring.rfid.data.model.order.CustomOrderResponse
 import com.loyalstring.rfid.data.model.order.CustomOrderUpdateResponse
 import com.loyalstring.rfid.data.model.order.ItemCodeResponse
 import com.loyalstring.rfid.data.model.order.LastOrderNoResponse
+import com.loyalstring.rfid.data.model.order.OrderSearchRequest
 import com.loyalstring.rfid.data.remote.api.RetrofitInterface
 import com.loyalstring.rfid.data.remote.data.DailyRateResponse
 import com.loyalstring.rfid.data.remote.data.DeleteOrderRequest
@@ -60,6 +61,10 @@ class OrderRepository @Inject constructor(
     /*get All order list*/
     suspend fun getAllOrderList(clientCodeRequest: ClientCodeRequest): Response<List<CustomOrderResponse>> {
         return apiService.getAllOrderList(clientCodeRequest)
+    }
+
+    suspend fun searchOrdersByRfid(request: OrderSearchRequest): Response<List<CustomOrderResponse>> {
+        return apiService.searchOrdersByRfid(request)
     }
 
     suspend fun insertOrderItems(items: OrderItem) {

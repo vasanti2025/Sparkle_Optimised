@@ -1,9 +1,9 @@
 package com.loyalstring.rfid.ui.screens
+
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-
 import android.os.Build
 import android.util.Log
 import android.widget.Toast
@@ -116,15 +116,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.URL
 import java.text.DecimalFormat
+import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-
-import kotlinx.coroutines.flow.onEach
-import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
@@ -150,7 +149,7 @@ fun OrderOldScreen(
 
     LaunchedEffect(shouldNavigateBack) {
         if (shouldNavigateBack) {
-            kotlinx.coroutines.delay(50)
+            delay(50)
             onBack()
         }
     }
@@ -1527,7 +1526,7 @@ fun OrderScreenContent(
                                         GSTApplied = isGstApplied.toString(),
                                         Discount = "",
                                         TotalNetAmount = taxableAmt.toString(),
-                                        TotalGSTAmount =  String.format("%.2f", gstAmt),
+                                        TotalGSTAmount = String.format("%.2f", gstAmt),
                                         TotalPurchaseAmount = calculatedTotalAmount.toString(),
                                         ReceivedAmount = "",
                                         TotalBalanceMetal = "",
@@ -1535,7 +1534,7 @@ fun OrderScreenContent(
                                         TotalFineMetal = totalFinemetal,
                                         CourierCharge = null,
                                         SaleType = null,
-                                        OrderDate =  orderDate,
+                                        OrderDate = orderDate,
                                         OrderCount = "1",
                                         AdditionTaxApplied = AdditionTaxApplied.toString(),
                                         CategoryId = 2,
@@ -1580,7 +1579,7 @@ fun OrderScreenContent(
                                         AdvanceAmt = "0",
                                         PaidAmt = "25000",
                                         TaxableAmt = taxableAmt.toString(),
-                                        GstAmount =  String.format("%.2f", gstAmt),
+                                        GstAmount = String.format("%.2f", gstAmt),
                                         GstCheck = isGstChecked.toString(),
                                         Category = "Ring",
                                         TDSCheck = "false",
@@ -1594,9 +1593,11 @@ fun OrderScreenContent(
 
                                             CustomOrderItem(
                                                 CustomOrderId = 0,
-                                                RFIDCode =selectedItem?.RFIDCode.toString(),
-                                                OrderDate = product.orderDate?.takeIf { it.isNotBlank() } ?: todayDate,
-                                                DeliverDate = product.deliverDate?.takeIf { it.isNotBlank() } ?: todayDate,
+                                                RFIDCode = selectedItem?.RFIDCode.toString(),
+                                                OrderDate = product.orderDate?.takeIf { it.isNotBlank() }
+                                                    ?: todayDate,
+                                                DeliverDate = product.deliverDate?.takeIf { it.isNotBlank() }
+                                                    ?: todayDate,
                                                 SKUId = 0,
                                                 SKU = product.sku,
                                                 CategoryId = product.categoryId,
@@ -1675,14 +1676,14 @@ fun OrderScreenContent(
                                                 Purity = product.purity,
                                                 Status = "",
                                                 URDNo = "",
-                                                HallmarkAmount =product.hallmarkAmt,
+                                                HallmarkAmount = product.hallmarkAmt,
                                                 Stones = emptyList(),
                                                 Diamond = emptyList(),
                                                 WeightCategories = product.CategoryWt
                                             )
                                         },
 
-                                        Payments =emptyList(),
+                                        Payments = emptyList(),
                                         uRDPurchases = listOf(URDPurchase("")),
                                         Customer = Customer(
                                             FirstName = selectedCustomer.FirstName.orEmpty(),
@@ -1725,8 +1726,17 @@ fun OrderScreenContent(
                                             Id = selectedCustomer.Id ?: 0,
                                             CreatedOn = "2025-07-08",
                                             LastUpdated = "2025-07-08",
-                                            StatusType = true
-                                        ),
+                                            StatusType = true,
+
+                                            ),
+                                        Id = TODO(),
+                                        syncStatus = TODO(),
+                                        LastUpdated = TODO(),
+                                        HallmarkAmount = TODO(),
+                                        WeightCatogories = TODO(),
+                                        SKUId = TODO(),
+                                        RfidCode = TODO(),
+                                        TidNumber = TODO(),
                                     )
                                     if (isOnline) {
                                         orderViewModel.addOrderCustomer(request)
@@ -1836,7 +1846,7 @@ fun OrderScreenContent(
                                     AdvanceAmt = "0",
                                     PaidAmt = "25000",
                                     TaxableAmt = taxableAmt.toString(),
-                                    GstAmount =  String.format("%.2f", gstAmt),
+                                    GstAmount = String.format("%.2f", gstAmt),
                                     GstCheck = isGstChecked.toString(),
                                     Category = "Ring",
                                     TDSCheck = "false",
@@ -1850,7 +1860,7 @@ fun OrderScreenContent(
 
                                         CustomOrderItem(
                                             CustomOrderId = 0,
-                                            RFIDCode =product?.rfidCode.toString(),
+                                            RFIDCode = product?.rfidCode.toString(),
                                             OrderDate = product.orderDate,
                                             DeliverDate = product.deliverDate,
                                             SKUId = 0,
@@ -1874,7 +1884,7 @@ fun OrderScreenContent(
                                             Length = product.length,
                                             TypesOdColors = product.typeOfColor,
                                             Quantity = product.qty,
-                                            RatePerGram =product.todaysRate,
+                                            RatePerGram = product.todaysRate,
                                             MakingPerGram = product.makingPerGram,
                                             MakingFixed = product.makingFixedAmt,
                                             FixedWt = "",
@@ -1930,7 +1940,7 @@ fun OrderScreenContent(
                                             Purity = product.purity,
                                             Status = "",
                                             URDNo = "",
-                                            HallmarkAmount  =product.hallmarkAmt,
+                                            HallmarkAmount = product.hallmarkAmt,
                                             Stones = emptyList(),
                                             Diamond = emptyList(),
                                             WeightCategories = product.CategoryWt
@@ -1980,8 +1990,18 @@ fun OrderScreenContent(
                                         Id = editOrder?.Customer?.Id ?: 0,
                                         CreatedOn = "2025-07-08",
                                         LastUpdated = "2025-07-08",
-                                        StatusType = true
-                                    )
+                                        StatusType = true,
+                                        // RfidCode = editOrder?.Customer?.RfidCode.orEmpty(),
+
+                                    ),
+                                    Id = TODO(),
+                                    syncStatus = TODO(),
+                                    LastUpdated = TODO(),
+                                    HallmarkAmount = TODO(),
+                                    WeightCatogories = TODO(),
+                                    SKUId = TODO(),
+                                    RfidCode = TODO(),
+                                    TidNumber = TODO()
                                 )
                                 if (isOnline) {
                                     orderViewModel.updateOrderCustomer(request)
@@ -2652,7 +2672,9 @@ fun CustomOrderRequest.toCustomOrderResponse(): CustomOrderResponse {
         Id = 0,
         HallmarkAmount = this.HallmarkAmount.toString(),
         WeightCategories = this.WeightCatogories.toString(),
-        SKUId = this.SKUId?:0
+        SKUId = this.SKUId ?: 0,
+        RfidCode = this.RfidCode,
+        TidNumber = this.TidNumber
 
     )
 }

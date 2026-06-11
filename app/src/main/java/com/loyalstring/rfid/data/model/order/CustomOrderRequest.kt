@@ -102,6 +102,8 @@ data class CustomOrderRequest(
     val LastUpdated: String? = null,
     val HallmarkAmount:String?=null,
     val WeightCatogories:String?=null,
-    val SKUId:Int?=0
+    val SKUId:Int?=0,
+    val    RfidCode:String,
+    val TidNumber:String
 
 )

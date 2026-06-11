@@ -1,6 +1,7 @@
 package com.loyalstring.rfid.data.model.order
 
 import android.os.Parcelable
+import com.google.gson.annotations.SerializedName
 import kotlinx.parcelize.Parcelize
 
 @Parcelize
@@ -88,6 +89,7 @@ data class CustomOrderItem(
  val HallmarkAmount: String?,
  val WeightCategories: String?,
  val Stones: List<Stone>,
- val Diamond: List<Diamond>
+ val Diamond: List<Diamond>,
+ @SerializedName("TIDNumber") val TIDNumber: String? = null
 ) : Parcelable
 

@@ -11,6 +11,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -43,8 +44,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.nativeKeyCode
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -104,7 +115,9 @@ fun DeliveryChalanScreen(
     val deliveryChallanViewModel: DeliveryChallanViewModel = hiltViewModel()
     val context = LocalContext.current
     var selectedPower by remember { mutableStateOf(10) }
-    var isScanning by remember { mutableStateOf(false) }
+    val isScanning by viewModel.isScanning.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val scanFocusRequester = remember { FocusRequester() }
     //var showSuccessDialog by remember { mutableStateOf(false) }
     var isEditMode by remember { mutableStateOf(false) }
     var firstPress by remember { mutableStateOf(false) }
@@ -1615,7 +1628,7 @@ fun DeliveryChalanScreen(
             onResetSelectedItem = { selectedItem = it },
             onResetDropdownItemcode = { showDropdownItemcode = it },
             onResetProductList = { productList.clear() },
-            onResetScanning = { isScanning = it },
+            onResetScanning = { viewModel.stopScanning() },
             viewModel = viewModel,
             deliveryChallanViewModel = deliveryChallanViewModel)
     }
@@ -1631,36 +1644,46 @@ fun DeliveryChalanScreen(
     }
 
     val activity = LocalContext.current as? MainActivity
-    DisposableEffect(Unit) {
+
+    LaunchedEffect(scanTrigger) {
+        when (scanTrigger) {
+            "scan" -> viewModel.toggleScanning(selectedPower)
+            "barcode" -> viewModel.startBarcodeScanning(context)
+        }
+        if (scanTrigger != null) {
+            viewModel.clearScanTrigger()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        scanFocusRequester.requestFocus()
+    }
+
+    DisposableEffect(lifecycleOwner, activity) {
         val listener = object : ScanKeyListener {
             override fun onBarcodeKeyPressed() {
-                viewModel.startBarcodeScanning(context)
+                viewModel.onScanKeyPressed("barcode")
             }
 
             override fun onRfidKeyPressed() {
-                if (!isScanning) {
-                    isScanning = true
-                   /* scope.launch(Dispatchers.Default) {
-                        viewModel.setFilteredItems(scannedItemsSequence.map { it.originalBulkItem }.toList())
-                    }*/
-                    viewModel.startScanningInventory(selectedPower)
-                } else {
-                    isScanning = false
-                    viewModel.stopScanningAndCompute()
-                }
+                Log.d("SCAN_KEY", "Delivery challan RFID hardware key")
+                viewModel.onScanKeyPressed("scan")
             }
         }
-        activity?.registerScanKeyListener(listener)
-        onDispose { activity?.unregisterScanKeyListener() }
-    }
-
-    LaunchedEffect(scanTrigger) {
-        scanTrigger?.let { type ->
-            when (type) {
-                "scan" -> if (productList.size != 1) viewModel.startScanning(30)
-                "barcode" -> viewModel.startBarcodeScanning(context)
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> activity?.registerScanKeyListener(listener)
+                Lifecycle.Event.ON_PAUSE -> activity?.unregisterScanKeyListener()
+                else -> Unit
             }
-            viewModel.clearScanTrigger()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        activity?.registerScanKeyListener(listener)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            activity?.unregisterScanKeyListener()
+            viewModel.stopScanning()
         }
     }
 
@@ -2210,6 +2233,26 @@ MakingPerGram=${touchMatch.MakingPerGram}
 
 
     Scaffold(
+        modifier = Modifier
+            .focusRequester(scanFocusRequester)
+            .focusable(true)
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown) {
+                    when (event.key.nativeKeyCode) {
+                        139 -> {
+                            viewModel.onScanKeyPressed("barcode")
+                            true
+                        }
+                        280, 293 -> {
+                            viewModel.onScanKeyPressed("scan")
+                            true
+                        }
+                        else -> false
+                    }
+                } else {
+                    false
+                }
+            },
         topBar = {
             GradientTopBar(
                 title = localizedContext.getString(R.string.delivery_challan),
@@ -2344,18 +2387,7 @@ MakingPerGram=${touchMatch.MakingPerGram}
                 onScan = {
                     viewModel.startSingleScan(20)
                 },
-                onGscan = {
-                    if (isScanning) {
-                        viewModel.stopScanning()
-                        isScanning = false
-                    } else {
-                        viewModel.startScanning(selectedPower)
-                        isScanning = true
-                    }
-
-                    // viewModel.toggleScanning(selectedPower)
-
-                },
+                onGscan = { viewModel.toggleScanning(selectedPower) },
                 onReset = {
                     firstPress = false
 
@@ -2368,7 +2400,7 @@ MakingPerGram=${touchMatch.MakingPerGram}
                         onResetSelectedItem = { selectedItem = it },
                         onResetDropdownItemcode = { showDropdownItemcode = it },
                         onResetProductList = { productList.clear() },
-                        onResetScanning = { isScanning = it },
+                        onResetScanning = { viewModel.stopScanning() },
                         viewModel = viewModel,
                         deliveryChallanViewModel = deliveryChallanViewModel
 
@@ -2826,6 +2858,7 @@ fun resetAllFields(
     onResetProductList()
 
     // Stop scanning and clear scan data
+    viewModel.stopScanning()
     onResetScanning(false)
     viewModel.resetProductScanResults()
     viewModel.stopBarcodeScanner()

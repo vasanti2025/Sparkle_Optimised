@@ -31,7 +31,7 @@ android {
     buildTypes {
         debug {
             signingConfig = signingConfigs.getByName("debug")
-            isDebuggable = false
+            isDebuggable = true
             isMinifyEnabled = false
         }
         
@@ -44,10 +44,8 @@ android {
         }
     }
 
-    android {
-        aaptOptions {
-            noCompress += "tflite"
-        }
+    aaptOptions {
+        noCompress += "tflite"
     }
 
     compileOptions {
@@ -162,7 +160,7 @@ dependencies {
     implementation ("androidx.fragment:fragment-ktx:1.8.2")
     implementation("com.opencsv:opencsv:5.9")
     implementation("com.itextpdf:itext7-core:7.2.5")
-    implementation("com.itextpdf:kernel:7.2,5")
+    implementation("com.itextpdf:kernel:7.2.5")
     implementation("com.itextpdf:layout:7.2.5")
     implementation("com.sun.mail:android-mail:1.6.7")
     implementation("com.sun.mail:android-activation:1.6.7")

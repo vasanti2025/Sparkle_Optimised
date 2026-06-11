@@ -613,25 +613,26 @@ class BulkViewModel @Inject constructor(
     fun toggleScanning(selectedPower: Int) {
         if (_isScanning.value) {
             stopScanning()
-            _isScanning.value = false
             Log.d("RFID", "Scanning stopped by toggle")
         } else {
-            // resetScanResults()
-            // setFilteredItems(_allItems) // or _filteredSource depending on scope
             startScanning(selectedPower)
-            _isScanning.value = true
             Log.d("RFID", "Scanning started by toggle")
         }
     }
 
-
-
-
-
+    private var lastScanKeyAt = 0L
 
     fun onScanKeyPressed(type: String) {
+        val now = System.currentTimeMillis()
+        if (now - lastScanKeyAt < 250) return
+        lastScanKeyAt = now
         _scanTrigger.value = type
     }
+
+
+
+
+
 
     fun clearScanTrigger() {
         _scanTrigger.value = null
@@ -855,23 +856,26 @@ class BulkViewModel @Inject constructor(
 
 
     fun startScanning(selectedPower: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
+        if (_isScanning.value) return
+
+        scanJob?.cancel()
+        outerScanJob?.cancel()
+        _isScanning.value = true
+
+        outerScanJob = viewModelScope.launch(Dispatchers.IO) {
             if (!ensureReader()) {
                 Log.e("RFID", "Reader not connected.")
+                _isScanning.value = false
                 return@launch
             }
             readerManager.startInventoryTag(selectedPower, false)
             readerManager.playSound(1, 0)
-            scanJob?.cancel()
-            if (scanJob?.isActive == true) return@launch
 
             scanJob = viewModelScope.launch(Dispatchers.IO) {
                 while (isActive) {
                     try {
                         val tag = readerManager.readTagFromBuffer()
-                        // Null-safe check for tag and epc
                         if (tag != null && !tag.epc.isNullOrBlank()) {
-                            // Avoid DB calls in the hot path; update UI immediately
                             handleScannedTag(tag)
                         }
                     } catch (e: Exception) {
@@ -880,10 +884,6 @@ class BulkViewModel @Inject constructor(
                 }
             }
         }
-//        else {
-//            Log.e("RFID", "Reader not connected.")
-//            return
-//        }
     }
 
     /*fun stopScanningAndCompute() {

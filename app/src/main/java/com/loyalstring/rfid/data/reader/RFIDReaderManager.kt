@@ -37,6 +37,7 @@ class RFIDReaderManager @Inject constructor(
     private var volumeRatio = 0f
     private var am: AudioManager? = null
     private val soundStreamIds = mutableMapOf<Int, Int>()
+    @Volatile private var soundsInitialized = false
 
     fun initReader(): Boolean {
         if (isReaderReady && _reader != null) return true
@@ -106,6 +107,8 @@ class RFIDReaderManager @Inject constructor(
     }
 
     fun initSounds() {
+        if (soundsInitialized) return
+        soundsInitialized = true
         soundPool = SoundPool(10, AudioManager.STREAM_MUSIC, 5)
         soundMap[1] = soundPool?.load(context, R.raw.barcodebeep, 1)
         soundMap[2] = soundPool?.load(context, R.raw.sixty, 1)

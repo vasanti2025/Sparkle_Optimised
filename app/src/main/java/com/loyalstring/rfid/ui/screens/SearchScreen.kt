@@ -42,13 +42,13 @@ import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.SearchViewModel
 import com.rscja.deviceapi.RFIDWithUHFUART
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.snap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class SearchDataType(val label: String) {
+ enum class SearchDataType(val label: String) {
     LABEL_STOCK("LabelStock"),
     ORDER("Order"),
     BOX("Box")
@@ -111,20 +111,22 @@ fun SearchScreen(
 
     BackHandler { onBack() }
 
-    // ✅ Load DB items once
+    // Load DB items + pre-warm RFID reader so first scan has no init delay
     LaunchedEffect(Unit) {
-        allDbItems = withContext(Dispatchers.IO) {
-            searchViewModel.getAllBulkItemsFromDb()
+        withContext(Dispatchers.IO) {
+            searchViewModel.preWarmReader()
+            allDbItems = searchViewModel.getAllBulkItemsFromDb()
         }
     }
 
     // Initial auto-start on first composition (inputItems available immediately from savedStateHandle)
     LaunchedEffect(isUnmatchedList, inputItems) {
         if (isUnmatchedList && inputItems.isNotEmpty()) {
-            delay(150) // brief yield to let compose settle before starting IO work
             if (!isScanning) {
-                searchViewModel.startSearch(inputItems, selectedPower)
                 isScanning = true
+                withContext(Dispatchers.Default) {
+                    searchViewModel.startSearch(inputItems, selectedPower)
+                }
                 Log.d("AUTO_SCAN", "Initial auto scan started (${inputItems.size} items)")
             }
         } else if (!isUnmatchedList) {
@@ -170,7 +172,10 @@ fun SearchScreen(
             return@LaunchedEffect
         }
 
-        delay(300)
+        if (selectedSearchType == SearchDataType.ORDER) {
+            delay(300)
+            if (query != searchQuery.trim()) return@LaunchedEffect
+        }
 
         val matched = when (selectedSearchType) {
             SearchDataType.LABEL_STOCK -> {
@@ -204,11 +209,12 @@ fun SearchScreen(
         filteredDbItems = matched
 
         if (matched.isNotEmpty()) {
-            withContext(Dispatchers.IO) {
-                searchViewModel.startSearch(matched, selectedPower)
+            if (!isScanning) {
+                isScanning = true
+                withContext(Dispatchers.Default) {
+                    searchViewModel.startSearch(matched, selectedPower)
+                }
             }
-            isScanning = true
-            Log.d("AUTO_SCAN", "Auto scan started for matched item")
         } else {
             if (isScanning) {
                 searchViewModel.stopSearch()
@@ -306,8 +312,11 @@ fun SearchScreen(
             val query = searchQuery.trim()
 
             val baseList: List<SearchItem> = when {
-                isScanning && searchItems.isNotEmpty() -> searchItems
-                !isScanning && lastSortedSearchItems.isNotEmpty() -> lastSortedSearchItems
+                isScanning -> if (searchItems.isNotEmpty()) searchItems else when {
+                    isUnmatchedList -> inputItems.map { it.toSearchItem() }
+                    query.isNotBlank() -> filteredDbItems.map { it.toSearchItem() }
+                    else -> emptyList()
+                }
 
                 isUnmatchedList -> inputItems.map { it.toSearchItem() }
 
@@ -375,7 +384,7 @@ fun SearchScreen(
                     }
                     if (itemsToSearch.isNotEmpty()) {
                         isScanning = true  // instant UI feedback
-                        coroutineScope.launch(Dispatchers.IO) {
+                        coroutineScope.launch(Dispatchers.Default) {
                             searchViewModel.startSearch(itemsToSearch, latestSelectedPower)
                         }
                         Log.d("SEARCH", "RFID STARTED scanning ${itemsToSearch.size} items")
@@ -393,15 +402,10 @@ fun SearchScreen(
                     // Auto-restart scan on every RESUME when unmatched items exist and not scanning.
                     // Uses coroutineScope so the 600ms delay doesn't block the observer callback.
                     if (isUnmatchedList && latestInputItems.isNotEmpty() && !latestIsScanning) {
-                        coroutineScope.launch {
-                            delay(150)
-                            if (!latestIsScanning) {
-                                isScanning = true
-                                launch(Dispatchers.IO) {
-                                    searchViewModel.startSearch(latestInputItems, latestSelectedPower)
-                                }
-                                Log.d("AUTO_SCAN", "Auto scan restarted on RESUME (${latestInputItems.size} items)")
-                            }
+                        isScanning = true
+                        coroutineScope.launch(Dispatchers.Default) {
+                            searchViewModel.startSearch(latestInputItems, latestSelectedPower)
+                            Log.d("AUTO_SCAN", "Auto scan restarted on RESUME (${latestInputItems.size} items)")
                         }
                     }
                 }
@@ -479,7 +483,7 @@ fun SearchScreen(
 
                         if (itemsToSearch.isNotEmpty()) {
                             isScanning = true  // instant UI feedback
-                            coroutineScope.launch(Dispatchers.IO) {
+                            coroutineScope.launch(Dispatchers.Default) {
                                 searchViewModel.startSearch(itemsToSearch, selectedPower)
                             }
                             Log.d("SEARCH", "Manual SCAN started (${itemsToSearch.size}) items")
@@ -570,9 +574,19 @@ fun SearchScreen(
                 value = searchQuery,
                 onValueChange = {
                     searchQuery = it
+
+                    lastSearchItems = emptyList()
+                    lastSortedSearchItems = emptyList()
+                    filteredDbItems = emptyList()
+
                     if (isScanning) {
-                        searchViewModel.stopSearch()
                         isScanning = false
+                        coroutineScope.launch(Dispatchers.IO) {
+                            searchViewModel.stopSearch()
+                            searchViewModel.clearSearchItems()
+                        }
+                    } else {
+                        searchViewModel.clearSearchItems()
                     }
                 },
                 modifier = Modifier
@@ -583,7 +597,15 @@ fun SearchScreen(
                         top = if (isUnmatchedList) 12.dp else 4.dp,
                         bottom = 8.dp
                     ),
-                label = { Text("Enter RFID / Itemcode", fontFamily = poppins) },
+                label = {
+                    Text(
+                        text = if (selectedSearchType == SearchDataType.ORDER)
+                            "Enter RFID / CustomOrderId"
+                        else
+                            "Enter RFID / Itemcode",
+                        fontFamily = poppins
+                    )
+                },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Search)
@@ -617,9 +639,9 @@ fun SearchScreen(
             } else {
                 LazyColumn( modifier = Modifier.fillMaxSize(),
                     state = listState) {
-                    item { HeaderRow() }
+                    item { HeaderRow(selectedSearchType) }
                     itemsIndexed(filteredItems, key = { index, item -> "${item.epc}-$index" }) { index, item ->
-                        SearchItemRow(index, item)
+                        SearchItemRow(index, item, selectedSearchType)
                     }
                 }
             }
@@ -630,49 +652,49 @@ fun SearchScreen(
 
 
 @Composable
-fun HeaderRow() {
+fun HeaderRow(selectedSearchType: SearchDataType) {
+    val headers = if (selectedSearchType == SearchDataType.ORDER) {
+        listOf("Sr No", "RFID", "Progress", "Percent")
+    } else {
+        listOf("Sr No", "RFID", "Itemcode", "Progress", "Percent")
+    }
+
     Row(
-        Modifier
-            .fillMaxWidth()
-            .background(Color(0xFF3B363E))
-            .padding(vertical = 6.dp),
+        Modifier.fillMaxWidth().background(Color(0xFF3B363E)).padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
-        listOf("Sr No", "RFID", "Itemcode", "Progress", "Percent").forEach {
+        headers.forEach {
             Text(it, color = Color.White, modifier = Modifier.weight(1f), fontFamily = poppins, fontSize = 12.sp)
         }
     }
 }
 
 @Composable
-fun SearchItemRow(index: Int, item: SearchItem) {
+fun SearchItemRow(index: Int, item: SearchItem, selectedSearchType: SearchDataType) {
     val percent = item.proximityPercent.toFloat()
     val animatedPercent by animateFloatAsState(
         targetValue = percent,
-        animationSpec = tween(durationMillis = 600),
+        animationSpec = snap(),
         label = "searchProximity"
     )
-    val progressColor = getColorByPercentage(animatedPercent.toInt())
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp, horizontal = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp, horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
         Text("${index + 1}", modifier = Modifier.weight(1f), fontSize = 12.sp)
         Text(item.rfid, modifier = Modifier.weight(1f), fontSize = 12.sp)
-        Text(item.itemCode, modifier = Modifier.weight(1f), fontSize = 12.sp)
+
+        if (selectedSearchType != SearchDataType.ORDER) {
+            Text(item.itemCode, modifier = Modifier.weight(1f), fontSize = 12.sp)
+        }
 
         Box(modifier = Modifier.weight(2f)) {
             LinearProgressIndicator(
                 progress = { animatedPercent / 100f },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(10.dp)
-                    .clip(RoundedCornerShape(4.dp)),
-                color = progressColor,
+                modifier = Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(4.dp)),
+                color = getColorByPercentage(animatedPercent.toInt()),
                 trackColor = Color.LightGray
             )
         }

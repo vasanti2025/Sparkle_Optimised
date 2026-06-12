@@ -208,18 +208,11 @@ fun SearchScreen(
 
         filteredDbItems = matched
 
-        if (matched.isNotEmpty()) {
-            if (!isScanning) {
-                isScanning = true
-                withContext(Dispatchers.Default) {
-                    searchViewModel.startSearch(matched, selectedPower)
-                }
-            }
-        } else {
-            if (isScanning) {
-                searchViewModel.stopSearch()
-                isScanning = false
-            }
+        // All Items: user starts/stops scan manually (bottom bar or RFID key).
+        // Only stop if matches disappear while a scan is already running.
+        if (matched.isEmpty() && isScanning) {
+            searchViewModel.stopSearch()
+            isScanning = false
         }
     }
 

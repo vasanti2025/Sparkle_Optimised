@@ -1559,6 +1559,10 @@ fun DeliveryChalanScreen(
                     grossWt = detail.GrossWt ?: "0.000 gm",
                     stoneWt = detail.TotalStoneWeight ?: "0 gm",
                     netWt = detail.NetWt ?: "0.000 gm",
+                    stoneAmt = detail.StoneAmt?.takeIf { it.isNotBlank() }
+                        ?: detail.StoneAmount?.takeIf { it.isNotBlank() }
+                        ?: detail.TotalStoneAmount?.takeIf { it.isNotBlank() }
+                        ?: "0.00",
                     ratePerGram = detail.MetalRate ?: "0",
                     wastage = detail.FineWastageWt ?: "0%",
                     itemAmount = detail.ItemAmount ?: "0.00"

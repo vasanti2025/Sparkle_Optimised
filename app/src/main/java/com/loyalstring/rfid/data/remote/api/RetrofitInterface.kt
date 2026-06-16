@@ -39,6 +39,8 @@ import com.loyalstring.rfid.data.model.order.CustomOrderUpdateResponse
 import com.loyalstring.rfid.data.model.order.ItemCodeResponse
 import com.loyalstring.rfid.data.model.order.LastOrderNoResponse
 import com.loyalstring.rfid.data.model.order.OrderSearchRequest
+import com.loyalstring.rfid.data.model.box.BoxRfidDetailsResponse
+import com.loyalstring.rfid.data.model.box.BoxRfidSearchRequest
 import com.loyalstring.rfid.data.model.quotation.AddQuotationRequest
 import com.loyalstring.rfid.data.model.quotation.LastQuotationNoResponse
 import com.loyalstring.rfid.data.model.quotation.QuotationListRequest
@@ -230,6 +232,11 @@ interface RetrofitInterface {
 
     @POST("api/Order/GetAllOrders")
     suspend fun searchOrdersByRfid(@Body request: OrderSearchRequest): Response<List<CustomOrderResponse>>
+
+    @POST("api/BoxRfid/GetDetailsByRfidCode")
+    suspend fun getBoxDetailsByRfidCode(
+        @Body request: BoxRfidSearchRequest
+    ): Response<BoxRfidDetailsResponse>
 
     @POST("api/Order/DeleteCustomOrder")
     suspend fun deleteCustomerOrder(

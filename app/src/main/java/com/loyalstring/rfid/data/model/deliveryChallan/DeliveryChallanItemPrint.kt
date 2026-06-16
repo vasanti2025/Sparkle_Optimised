@@ -7,6 +7,7 @@ data class DeliveryChallanItemPrint(  val itemName: String,
                                       val grossWt: String,
                                       val stoneWt: String,
                                       val netWt: String,
+                                      val stoneAmt: String = "0.00",
                                       val ratePerGram: String,
                                       val wastage: String,
                                       val itemAmount: String): Serializable

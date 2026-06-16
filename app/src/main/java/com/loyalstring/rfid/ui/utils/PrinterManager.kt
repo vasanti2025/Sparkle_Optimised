@@ -127,10 +127,15 @@ class PrinterManager(private val context: Context) {
         return "━".repeat(24)
     }
 
+    private fun cleanAmount(value: String?): String {
+        val raw = value?.replace(",", "")?.trim().orEmpty()
+        val number = raw.toDoubleOrNull() ?: 0.0
+        return String.format(Locale.US, "%.2f", number)
+    }
+
     /**
-     * 58mm printer compact width
-     * total = 29 chars
-     * SNo(3) + Item(8) + PCS(4) + G.W(7) + N.W(7)
+     * 58mm printer compact width — default layout
+     * SNo(7) + Item(16) + PCS(4) + G.W(10) + N.W(10)
      */
     private fun itemRow(
         sno: String,
@@ -145,6 +150,26 @@ class PrinterManager(private val context: Context) {
             append(padLeft(pcs, 4))
             append(padLeft(grossWt, 10))
             append(padLeft(netWt, 10))
+        }
+    }
+
+    /**
+     * LS000058 layout — no PCS; show gross, net, stone amount.
+     * SNo(7) + Item(12) + G.W(8) + N.W(8) + St.Amt(8)
+     */
+    private fun itemRowWeightStone(
+        sno: String,
+        itemName: String,
+        grossWt: String,
+        netWt: String,
+        stoneAmt: String
+    ): String {
+        return buildString {
+            append(padRight(sno, 7))
+            append(padRight(fitItemName(itemName, 12), 12))
+            append(padLeft(grossWt, 8))
+            append(padLeft(netWt, 8))
+            append(padLeft(stoneAmt, 8))
         }
     }
 
@@ -168,11 +193,34 @@ class PrinterManager(private val context: Context) {
         }
     }
 
+    private fun summaryRowWeightStone(
+        sno: String,
+        itemName: String,
+        totalGrossWt: String,
+        totalNetWt: String,
+        totalStoneAmt: String
+    ): String {
+        return buildString {
+            append(padRight(sno, 7))
+            append(padRight(fitItemName(itemName, 12), 12))
+            append(padLeft(totalGrossWt, 8))
+            append(padLeft(totalNetWt, 8))
+            append(padLeft(totalStoneAmt, 8))
+        }
+    }
+
     private data class SummaryData(
         val itemName: String,
         val totalPcs: Int,
         val totalGrossWt: Double,
         val totalNetWt: Double
+    )
+
+    private data class SummaryDataWeightStone(
+        val itemName: String,
+        val totalGrossWt: Double,
+        val totalNetWt: Double,
+        val totalStoneAmt: Double
     )
 
     private fun buildSummary(items: List<DeliveryChallanItemPrint>): List<SummaryData> {
@@ -192,9 +240,29 @@ class PrinterManager(private val context: Context) {
             }
     }
 
+    private fun buildSummaryWeightStone(items: List<DeliveryChallanItemPrint>): List<SummaryDataWeightStone> {
+        return items
+            .groupBy { safe(it.itemName, "-") }
+            .map { (itemName, groupedItems) ->
+                SummaryDataWeightStone(
+                    itemName = itemName,
+                    totalGrossWt = groupedItems.sumOf {
+                        cleanWeight(it.grossWt).toDoubleOrNull() ?: 0.0
+                    },
+                    totalNetWt = groupedItems.sumOf {
+                        cleanWeight(it.netWt).toDoubleOrNull() ?: 0.0
+                    },
+                    totalStoneAmt = groupedItems.sumOf {
+                        cleanAmount(it.stoneAmt).toDoubleOrNull() ?: 0.0
+                    }
+                )
+            }
+    }
+
     fun printDeliveryChallanCompact(
         data: DeliveryChallanPrintData,
         companyName: String,
+        clientCode: String? = null,
         onResult: ((Boolean, String) -> Unit)? = null
     ) {
         val printer = posPrinter
@@ -210,6 +278,8 @@ class PrinterManager(private val context: Context) {
         }
 
         val summaryList = buildSummary(items)
+        val summaryWeightStoneList = buildSummaryWeightStone(items)
+        val useWeightStoneLayout = usesLs000058PrintLayout(clientCode)
         val dateText = formatDate(data.createdDateTime)
         val phoneText = safe(data.phone, "-")
         val nameText = safe(data.customerName, "-")
@@ -263,13 +333,25 @@ class PrinterManager(private val context: Context) {
                 )
 
             // Main header
+            chain = if (useWeightStoneLayout) {
+                chain
+                    .printText(
+                        itemRowWeightStone("Sr No", "Item Name", "G.W", "N.W", "St.Amt") + "\n",
+                        POSConst.ALIGNMENT_LEFT,
+                        POSConst.TXT_1WIDTH,
+                        POSConst.TXT_1HEIGHT
+                    )
+            } else {
+                chain
+                    .printText(
+                        itemRow("Sr No", "Item Name", "PCS", "G.W", "N.W") + "\n",
+                        POSConst.ALIGNMENT_LEFT,
+                        POSConst.TXT_1WIDTH,
+                        POSConst.TXT_1HEIGHT
+                    )
+            }
+
             chain = chain
-                .printText(
-                    itemRow("Sr No", "Item Name", "PCS", "G.W", "N.W") + "\n",
-                    POSConst.ALIGNMENT_LEFT,
-                    POSConst.TXT_1WIDTH,
-                    POSConst.TXT_1HEIGHT
-                )
                 .printText(
                     divider() + "\n",
                     POSConst.ALIGNMENT_LEFT,
@@ -280,13 +362,23 @@ class PrinterManager(private val context: Context) {
             // Main rows
             items.forEachIndexed { index, item ->
                 chain = chain.printText(
-                    itemRow(
-                        sno = (index + 1).toString(),
-                        itemName = safe(item.itemName, "-"),
-                        pcs = item.pcs.toString(),
-                        grossWt = cleanWeight(item.grossWt),
-                        netWt = cleanWeight(item.netWt)
-                    ) + "\n",
+                    if (useWeightStoneLayout) {
+                        itemRowWeightStone(
+                            sno = (index + 1).toString(),
+                            itemName = safe(item.itemName, "-"),
+                            grossWt = cleanWeight(item.grossWt),
+                            netWt = cleanWeight(item.netWt),
+                            stoneAmt = cleanAmount(item.stoneAmt)
+                        )
+                    } else {
+                        itemRow(
+                            sno = (index + 1).toString(),
+                            itemName = safe(item.itemName, "-"),
+                            pcs = item.pcs.toString(),
+                            grossWt = cleanWeight(item.grossWt),
+                            netWt = cleanWeight(item.netWt)
+                        )
+                    } + "\n",
                     POSConst.ALIGNMENT_LEFT,
                     POSConst.TXT_1WIDTH,
                     POSConst.TXT_1HEIGHT
@@ -303,13 +395,25 @@ class PrinterManager(private val context: Context) {
                 .feedLine()
 
             // Summary header
+            chain = if (useWeightStoneLayout) {
+                chain
+                    .printText(
+                        summaryRowWeightStone("Sr No", "Item Name", "T.G.W", "T.N.W", "T.St.A") + "\n",
+                        POSConst.ALIGNMENT_LEFT,
+                        POSConst.TXT_1WIDTH,
+                        POSConst.TXT_1HEIGHT
+                    )
+            } else {
+                chain
+                    .printText(
+                        summaryRow("Sr No", "Item Name", "T.P", "T.G.W", "T.N.W") + "\n",
+                        POSConst.ALIGNMENT_LEFT,
+                        POSConst.TXT_1WIDTH,
+                        POSConst.TXT_1HEIGHT
+                    )
+            }
+
             chain = chain
-                .printText(
-                    summaryRow("Sr No", "Item Name", "T.P", "T.G.W", "T.N.W")+ "\n",
-                    POSConst.ALIGNMENT_LEFT,
-                    POSConst.TXT_1WIDTH,
-                    POSConst.TXT_1HEIGHT
-                )
                 .printText(
                     divider() + "\n",
                     POSConst.ALIGNMENT_LEFT,
@@ -318,19 +422,36 @@ class PrinterManager(private val context: Context) {
                 )
 
             // Summary rows
-            summaryList.forEachIndexed { index, summary ->
-                chain = chain.printText(
-                    summaryRow(
-                        sno = (index + 1).toString(),
-                        itemName = summary.itemName,
-                        totalPcs = summary.totalPcs.toString(),
-                        totalGrossWt = String.format(Locale.US, "%.3f", summary.totalGrossWt),
-                        totalNetWt = String.format(Locale.US, "%.3f", summary.totalNetWt)
-                    ) + "\n",
-                    POSConst.ALIGNMENT_LEFT,
-                    POSConst.TXT_1WIDTH,
-                    POSConst.TXT_1HEIGHT
-                )
+            if (useWeightStoneLayout) {
+                summaryWeightStoneList.forEachIndexed { index, summary ->
+                    chain = chain.printText(
+                        summaryRowWeightStone(
+                            sno = (index + 1).toString(),
+                            itemName = summary.itemName,
+                            totalGrossWt = String.format(Locale.US, "%.3f", summary.totalGrossWt),
+                            totalNetWt = String.format(Locale.US, "%.3f", summary.totalNetWt),
+                            totalStoneAmt = String.format(Locale.US, "%.2f", summary.totalStoneAmt)
+                        ) + "\n",
+                        POSConst.ALIGNMENT_LEFT,
+                        POSConst.TXT_1WIDTH,
+                        POSConst.TXT_1HEIGHT
+                    )
+                }
+            } else {
+                summaryList.forEachIndexed { index, summary ->
+                    chain = chain.printText(
+                        summaryRow(
+                            sno = (index + 1).toString(),
+                            itemName = summary.itemName,
+                            totalPcs = summary.totalPcs.toString(),
+                            totalGrossWt = String.format(Locale.US, "%.3f", summary.totalGrossWt),
+                            totalNetWt = String.format(Locale.US, "%.3f", summary.totalNetWt)
+                        ) + "\n",
+                        POSConst.ALIGNMENT_LEFT,
+                        POSConst.TXT_1WIDTH,
+                        POSConst.TXT_1HEIGHT
+                    )
+                }
             }
 
             chain = chain
@@ -362,4 +483,9 @@ fun resolvePrintHeader(
     return companyName?.trim()?.takeIf { it.isNotEmpty() }
         ?: organizationName?.trim()?.takeIf { it.isNotEmpty() }
         ?: "Company"
+}
+
+/** LS000058: Bluetooth print shows G.W / N.W / Stone Amt instead of PCS. */
+fun usesLs000058PrintLayout(clientCode: String?): Boolean {
+    return clientCode.equals("LS000058", ignoreCase = true)
 }

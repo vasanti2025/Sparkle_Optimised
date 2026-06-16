@@ -78,6 +78,7 @@ fun SearchScreen(
     var selectedSearchType by remember { mutableStateOf(SearchDataType.LABEL_STOCK) }
     var searchTypeExpanded by remember { mutableStateOf(false) }
     var isOrderSearching by remember { mutableStateOf(false) }
+    var isBoxSearching by remember { mutableStateOf(false) }
 
     val clientCode = UserPreferences.getInstance(context)
         .getEmployee(Employee::class.java)?.clientCode.orEmpty()
@@ -119,17 +120,9 @@ fun SearchScreen(
         }
     }
 
-    // Initial auto-start on first composition (inputItems available immediately from savedStateHandle)
-    LaunchedEffect(isUnmatchedList, inputItems) {
-        if (isUnmatchedList && inputItems.isNotEmpty()) {
-            if (!isScanning) {
-                isScanning = true
-                withContext(Dispatchers.Default) {
-                    searchViewModel.startSearch(inputItems, selectedPower)
-                }
-                Log.d("AUTO_SCAN", "Initial auto scan started (${inputItems.size} items)")
-            }
-        } else if (!isUnmatchedList) {
+    // Both screens: scan starts/stops manually only (Scan button or RFID key).
+    LaunchedEffect(isUnmatchedList) {
+        if (!isUnmatchedList) {
             searchViewModel.clearSearchItems()
             isScanning = false
         }
@@ -165,6 +158,7 @@ fun SearchScreen(
         if (query.isEmpty()) {
             filteredDbItems = emptyList()
             isOrderSearching = false
+            isBoxSearching = false
             if (isScanning) {
                 searchViewModel.stopSearch()
                 isScanning = false
@@ -172,7 +166,7 @@ fun SearchScreen(
             return@LaunchedEffect
         }
 
-        if (selectedSearchType == SearchDataType.ORDER) {
+        if (selectedSearchType == SearchDataType.ORDER || selectedSearchType == SearchDataType.BOX) {
             delay(300)
             if (query != searchQuery.trim()) return@LaunchedEffect
         }
@@ -203,13 +197,29 @@ fun SearchScreen(
                     }
                 }
             }
-            SearchDataType.BOX -> emptyList()
+            SearchDataType.BOX -> {
+                if (clientCode.isBlank()) {
+                    Log.e("SEARCH_SCREEN", "ClientCode is empty — cannot search boxes")
+                    emptyList()
+                } else {
+                    isBoxSearching = true
+                    try {
+                        withContext(Dispatchers.IO) {
+                            searchViewModel.searchBoxesByRfid(clientCode, query)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("SEARCH_SCREEN", "Box search error", e)
+                        emptyList()
+                    } finally {
+                        isBoxSearching = false
+                    }
+                }
+            }
         }
 
         filteredDbItems = matched
 
-        // All Items: user starts/stops scan manually (bottom bar or RFID key).
-        // Only stop if matches disappear while a scan is already running.
+        // Manual scan only — stop if matches disappear while scanning.
         if (matched.isEmpty() && isScanning) {
             searchViewModel.stopSearch()
             isScanning = false
@@ -392,15 +402,6 @@ fun SearchScreen(
             when (event) {
                 Lifecycle.Event.ON_RESUME -> {
                     activity?.registerScanKeyListener(listener)
-                    // Auto-restart scan on every RESUME when unmatched items exist and not scanning.
-                    // Uses coroutineScope so the 600ms delay doesn't block the observer callback.
-                    if (isUnmatchedList && latestInputItems.isNotEmpty() && !latestIsScanning) {
-                        isScanning = true
-                        coroutineScope.launch(Dispatchers.Default) {
-                            searchViewModel.startSearch(latestInputItems, latestSelectedPower)
-                            Log.d("AUTO_SCAN", "Auto scan restarted on RESUME (${latestInputItems.size} items)")
-                        }
-                    }
                 }
                 Lifecycle.Event.ON_PAUSE -> {
                     activity?.unregisterScanKeyListener()
@@ -551,6 +552,7 @@ fun SearchScreen(
                                         searchQuery = ""
                                         filteredDbItems = emptyList()
                                         isOrderSearching = false
+                                        isBoxSearching = false
                                         searchViewModel.stopSearch()
                                         isScanning = false
                                     }
@@ -594,6 +596,8 @@ fun SearchScreen(
                     Text(
                         text = if (selectedSearchType == SearchDataType.ORDER)
                             "Enter RFID / CustomOrderId"
+                        else if (selectedSearchType == SearchDataType.BOX)
+                            "Enter RFID / Box RFID"
                         else
                             "Enter RFID / Itemcode",
                         fontFamily = poppins
@@ -604,7 +608,7 @@ fun SearchScreen(
                 keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Search)
             )
 
-            if (isOrderSearching) {
+            if (isOrderSearching || isBoxSearching) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -618,11 +622,13 @@ fun SearchScreen(
                 ) {
                     Text(
                         text = when {
-                            isUnmatchedList -> "Scanning unmatched items..."
+                            isUnmatchedList && inputItems.isEmpty() -> "No unmatched items to search"
                             selectedSearchType == SearchDataType.ORDER && clientCode.isBlank() ->
                                 "Client code not found. Please login again."
                             selectedSearchType == SearchDataType.ORDER && searchQuery.isNotBlank() ->
                                 "No order found for this RFID"
+                            selectedSearchType == SearchDataType.BOX && searchQuery.isNotBlank() ->
+                                "No box or product found for this RFID"
                             else -> "Type RFID / Itemcode to search specific items"
                         },
                         color = Color.Gray,

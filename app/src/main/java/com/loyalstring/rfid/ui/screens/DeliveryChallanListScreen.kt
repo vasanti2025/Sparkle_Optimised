@@ -547,7 +547,11 @@ fun DeliveryChallanTable(
                                                     text = localizedContext.getString(R.string.print_challan),
                                                     onClick = {
                                                         if (selectedPrintData != null) {
-                                                            printerManager.printDeliveryChallanCompact(selectedPrintData, printHeader) { _, msg ->
+                                                            printerManager.printDeliveryChallanCompact(
+                                                                selectedPrintData,
+                                                                printHeader,
+                                                                clientCode = employee?.clientCode
+                                                            ) { _, msg ->
                                                                 bluetoothStatus = msg
                                                             }
                                                         } else {
@@ -635,6 +639,9 @@ private fun DeliveryChallanResponseList.toDeliveryChallanPrintData(
             grossWt = detail.GrossWt ?: "0.000 gm",
             stoneWt = detail.TotalStoneWeight ?: "0 gm",
             netWt = detail.NetWt ?: "0.000 gm",
+            stoneAmt = detail.StoneAmount?.takeIf { it.isNotBlank() }
+                ?: detail.TotalStoneAmount?.takeIf { it.isNotBlank() }
+                ?: "0.00",
             ratePerGram = detail.MetalRate ?: "0",
             wastage = detail.FineWastageWt ?: "0%",
             itemAmount = detail.ItemAmount ?: "0.00"

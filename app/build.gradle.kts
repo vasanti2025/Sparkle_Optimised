@@ -18,8 +18,8 @@ android {
         applicationId = "com.loyalstring.rfid"
         minSdk = 26
         targetSdk = 36
-       versionCode = 110
-        versionName = "2.8"
+       versionCode = 111
+        versionName = "2.9"
         /*versionCode = 8
         versionName = "1.8"*/
 

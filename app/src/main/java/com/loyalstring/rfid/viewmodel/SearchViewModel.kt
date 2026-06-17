@@ -13,6 +13,8 @@ import com.loyalstring.rfid.data.model.order.CustomOrderItem
 import com.loyalstring.rfid.data.model.order.CustomOrderResponse
 import com.loyalstring.rfid.data.model.order.OrderSearchRequest
 import com.loyalstring.rfid.data.model.box.BoxRfidBoxInfo
+import com.loyalstring.rfid.data.model.box.BoxRfidBoxSummary
+import com.loyalstring.rfid.data.model.box.BoxRfidDetailsResponse
 import com.loyalstring.rfid.data.model.box.BoxRfidProduct
 import com.loyalstring.rfid.data.model.box.BoxRfidSearchRequest
 import com.loyalstring.rfid.data.reader.RFIDReaderManager
@@ -29,6 +31,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
+import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
@@ -58,10 +62,16 @@ class SearchViewModel @Inject constructor(
     private var blinkingJob: Job? = null
     var lastSoundTime = 0L
     private var lastSearchUiUpdate = 0L
+    private var lastSoundPlayAt = 0L
 
-    // Tracks whether this VM has actually started a scan. Avoids calling stopSearch() (which
-    // calls stopInventory() and blocks 2.5s on hardware timeout) when we haven't started anything
-    // yet — e.g. on the very first call from ScanDisplayScreen navigation.
+    // Aggressive tuning — same blink/sound/progress logic, lower latency.
+    private val searchUiUpdateNs = 16_000_000L   // ~60fps progress
+    private val soundMinIntervalMs = 15L
+    private val blinkLedVisibleMs = 50L
+    private val blinkCyclePauseMs = 200L
+    private val maxStaleDrain = 5
+
+    // Tracks whether this VM has actually started a scan.
     private var isScanActive = false
 
     init {
@@ -102,26 +112,36 @@ class SearchViewModel @Inject constructor(
             })
         }
 
-        // PERF-FIX: Build O(1) lookup map after list is populated.
-        // All three identifier fields are indexed so any of them can be matched
-        // in constant time without scanning the entire list.
+        // Index all identifiers from source items (box/order API uses TID + RFID + EPC).
         _searchItems.forEachIndexed { index, item ->
             if (item.epc.isNotBlank()) epcToIndex[item.epc.uppercase()] = index
             if (item.rfid.isNotBlank()) epcToIndex[item.rfid.uppercase()] = index
             if (item.itemCode.isNotBlank()) epcToIndex[item.itemCode.uppercase()] = index
         }
-
-        if (readerManager.initReader()) {
-            startTagScanning(power)
-            isScanActive = true
+        unmatchedItems.forEachIndexed { index, item ->
+            if (index >= _searchItems.size) return@forEachIndexed
+            item.tid?.trim()?.takeIf { it.isNotBlank() }?.uppercase()?.let { epcToIndex[it] = index }
+            item.epc?.trim()?.takeIf { it.isNotBlank() }?.uppercase()?.let { epcToIndex[it] = index }
+            item.rfid?.trim()?.takeIf { it.isNotBlank() }?.uppercase()?.let { epcToIndex[it] = index }
+            item.itemCode?.trim()?.takeIf { it.isNotBlank() }?.uppercase()?.let { epcToIndex[it] = index }
+            item.boxName?.trim()?.takeIf { it.isNotBlank() }?.uppercase()?.let { epcToIndex[it] = index }
         }
+
+        isScanActive = true
+        startTagScanning(power)
     }
 
     fun startTagScanning(power: Int) {
         currentScanPower = power
         lastSearchUiUpdate = 0L
+        lastSoundPlayAt = 0L
         scanJob?.cancel()
         scanJob = viewModelScope.launch(Dispatchers.IO) {
+            if (!readerManager.initReader()) {
+                isScanActive = false
+                return@launch
+            }
+
             readerManager.reader?.apply {
                 setTagFocus(false)
                 setFastID(false)
@@ -129,14 +149,22 @@ class SearchViewModel @Inject constructor(
             }
             readerManager.startInventoryTag(power, true)
 
-            while (readerManager.readTagFromBuffer() != null) { /* discard stale */ }
+            var drained = 0
+            while (drained < maxStaleDrain && readerManager.readTagFromBuffer() != null) {
+                drained++
+            }
 
             while (isActive) {
-                val tag = readerManager.readTagFromBuffer()
+                var tag = readerManager.readTagFromBuffer()
+                if (tag?.epc == null) {
+                    yield()
+                    tag = readerManager.readTagFromBuffer()
+                    if (tag?.epc == null) continue
+                }
 
-                if (tag?.epc != null) {
-                    val epc = tag.epc.trim()
-                    val rssi = tag.rssi
+                do {
+                    val epc = tag!!.epc?.trim()
+                    val rssi = tag!!.rssi
                     val proximity = convertRssiToProximity(rssi)
 
                     val rssiAbs = try { Math.abs(rssi.trim().toDouble()) } catch (e: Exception) { 0.0 }
@@ -148,40 +176,46 @@ class SearchViewModel @Inject constructor(
                         else -> -1
                     }
 
-                    val index = epcToIndex[epc.uppercase()]
+                    val index = epcToIndex[epc?.uppercase()]
 
                     if (index != null && index >= 0 && index < _searchItems.size) {
-                        val now = System.currentTimeMillis()
-                        if (now - lastSearchUiUpdate >= 50) {
+                        if (id != -1) {
+                            val soundNow = System.currentTimeMillis()
+                            if (id != lastSoundId || soundNow - lastSoundPlayAt >= soundMinIntervalMs) {
+                                lastSoundPlayAt = soundNow
+                                lastSoundId?.let { readerManager.stopSound(it) }
+                                lastSoundId = id
+                                readerManager.playSound(id)
+                            }
+                        }
+
+                        val blinkTarget = _searchItems[index].epc.trim()
+                            .ifBlank { epc.orEmpty() }
+
+                        if (blinkTarget.isNotBlank()) {
+                            if (proximity > 0) {
+                                if (lastBlinkEpc != blinkTarget || blinkingJob?.isActive != true) {
+                                    startContinuousBlink(blinkTarget)
+                                }
+                            } else if (lastBlinkEpc == blinkTarget) {
+                                stopBlinkingEpc()
+                            }
+                        }
+
+                        val now = System.nanoTime()
+                        if (lastSearchUiUpdate == 0L || now - lastSearchUiUpdate >= searchUiUpdateNs) {
                             lastSearchUiUpdate = now
-                            withContext(Dispatchers.Main) {
+                            Snapshot.withMutableSnapshot {
                                 _searchItems[index] = _searchItems[index].copy(
                                     rssi = rssi,
                                     proximityPercent = proximity
                                 )
-
-                                if (id != -1) {
-                                    lastSoundId?.let { readerManager.stopSound(it) }
-                                    lastSoundId = id
-                                    readerManager.playSound(id)
-                                }
-
-                                val searchedEpc = _searchItems[index].epc.trim()
-                                val epcMatched = epc.equals(searchedEpc, ignoreCase = true)
-
-                                if (epcMatched && proximity >= 40) {
-                                    if (lastBlinkEpc != epc || blinkingJob?.isActive != true) {
-                                        startContinuousBlink(epc)
-                                    }
-                                } else if (lastBlinkEpc == epc && proximity < 40) {
-                                    stopBlinkingEpc()
-                                }
                             }
                         }
                     }
-                } else {
-                    delay(50)
-                }
+
+                    tag = readerManager.readTagFromBuffer()
+                } while (tag?.epc != null && isActive)
             }
         }
     }
@@ -215,14 +249,14 @@ class SearchViewModel @Inject constructor(
                         1
                     )
 
-                    delay(120)
+                    delay(blinkLedVisibleMs)
 
                     readerManager.startInventoryTag(currentScanPower, true)
                 } catch (e: Exception) {
                     Log.e("RFID", "Blink error: ${e.message}", e)
                 }
 
-                delay(500)
+                delay(blinkCyclePauseMs)
             }
         }
     }
@@ -299,24 +333,58 @@ class SearchViewModel @Inject constructor(
                 return emptyList()
             }
 
-            val items = mutableListOf<BulkItem>()
-            body.products.orEmpty().forEach { product ->
-                runCatching { product.toSearchBulkItem() }.getOrNull()?.let { items.add(it) }
-            }
-            body.boxes.orEmpty().forEach { boxEntry ->
-                boxEntry.box?.let { box ->
-                    runCatching { box.toSearchBulkItem() }.getOrNull()?.let { items.add(it) }
-                }
-                boxEntry.products.orEmpty().forEach { product ->
-                    runCatching { product.toSearchBulkItem() }.getOrNull()?.let { items.add(it) }
-                }
-            }
-            items.filter { it.hasSearchableIdentifier() }
-                .distinctBy { (it.epc ?: it.tid ?: it.rfid ?: "").uppercase() }
+            body.toSearchBulkItems()
         } catch (e: Exception) {
             Log.e("SearchViewModel", "Box RFID search failed", e)
             emptyList()
         }
+    }
+
+    private fun BoxRfidDetailsResponse.toSearchBulkItems(): List<BulkItem> {
+        val items = mutableListOf<BulkItem>()
+        val seen = mutableSetOf<String>()
+
+        fun addUnique(item: BulkItem?) {
+            if (item == null || !item.hasSearchableIdentifier()) return
+            val key = when {
+                (item.productId ?: 0) > 0 -> "P:${item.productId}"
+                (item.boxId ?: 0) > 0 -> "B:${item.boxId}"
+                else -> listOfNotNull(item.tid, item.epc, item.rfid, item.itemCode)
+                    .joinToString("|") { it.uppercase() }
+                    .ifBlank { return }
+            }
+            if (seen.add(key)) items.add(item)
+        }
+
+        val matchType = matchType.safeStr()
+
+        when {
+            matchType.equals("Box", ignoreCase = true) -> {
+                boxes.orEmpty().forEach { entry ->
+                    addUnique(entry.box?.toSearchBulkItem(entry.summary))
+                    entry.products.orEmpty().forEach { product ->
+                        addUnique(product.toSearchBulkItem(this, entry.summary))
+                    }
+                }
+                products.orEmpty().forEach { product ->
+                    addUnique(product.toSearchBulkItem(this))
+                }
+            }
+            else -> {
+                // MatchType "Product" (or default): product first, then related box(es).
+                products.orEmpty().forEach { product ->
+                    addUnique(product.toSearchBulkItem(this))
+                }
+                boxes.orEmpty().forEach { entry ->
+                    addUnique(entry.box?.toSearchBulkItem(entry.summary))
+                    entry.products.orEmpty().forEach { product ->
+                        addUnique(product.toSearchBulkItem(this, entry.summary))
+                    }
+                }
+            }
+        }
+
+        return items
     }
 
     private suspend fun fetchOrdersForSearch(
@@ -524,12 +592,19 @@ class SearchViewModel @Inject constructor(
         )
     }
 
-    private fun BoxRfidProduct.toSearchBulkItem(): BulkItem {
-        val rfid = rfidCode.safeStr()
-        val tid = tidNumber.safeStr()
+    private fun BoxRfidProduct.toSearchBulkItem(
+        response: BoxRfidDetailsResponse? = null,
+        boxSummary: BoxRfidBoxSummary? = null
+    ): BulkItem {
+        val rfid = rfidCode.safeStr().ifBlank { response?.rfidBarcode.safeStr() }
+        val tid = tidNumber.safeStr().ifBlank { response?.tidValue.safeStr() }
         val hex = hexCode.safeStr()
         val code = itemCode.safeStr()
         val searchKey = tid.ifBlank { hex }.ifBlank { rfid }.ifBlank { code }
+        val resolvedBoxName = boxName.safeStr()
+            .ifBlank { box?.boxName.safeStr() }
+            .ifBlank { null }
+        val resolvedBoxId = boxId ?: box?.boxId
 
         return BulkItem(
             productName = productName.safeStr().ifBlank { productTitle.safeStr().ifBlank { null } },
@@ -551,18 +626,18 @@ class SearchViewModel @Inject constructor(
             diamondAmount = null,
             sku = sku.safeStr().ifBlank { null },
             tid = tid.ifBlank { null },
-            box = boxName.safeStr().ifBlank { null },
+            box = resolvedBoxName,
             designCode = null,
             productCode = null,
             imageUrl = null,
             totalQty = pieces.safeStr().toIntOrNull() ?: 1,
             pcs = pieces.safeStr().toIntOrNull(),
             matchedPcs = null,
-            totalGwt = null,
+            totalGwt = boxSummary?.totalGrossWt,
             matchGwt = null,
             totalStoneWt = null,
             matchStoneWt = null,
-            totalNetWt = null,
+            totalNetWt = boxSummary?.totalNetWt,
             matchNetWt = null,
             unmatchedQty = null,
             matchedQty = null,
@@ -570,8 +645,8 @@ class SearchViewModel @Inject constructor(
             mrp = mrp.safeStr().toDoubleOrNull() ?: 0.0,
             counterName = null,
             counterId = null,
-            boxId = boxId,
-            boxName = boxName.safeStr().ifBlank { null },
+            boxId = resolvedBoxId,
+            boxName = resolvedBoxName,
             branchId = 0,
             branchName = null,
             packetId = null,
@@ -590,21 +665,25 @@ class SearchViewModel @Inject constructor(
         )
     }
 
-    private fun BoxRfidBoxInfo.toSearchBulkItem(): BulkItem {
+    private fun BoxRfidBoxInfo.toSearchBulkItem(summary: BoxRfidBoxSummary? = null): BulkItem {
         val rfid = rfidCode.safeStr()
         val tid = tidNumber.safeStr()
         val hex = hexCode.safeStr()
         val searchKey = tid.ifBlank { hex }.ifBlank { rfid }
+        val grossWeight = summary?.totalGrossWt?.let { formatWeight(it) }
+            ?: emptyWeight.safeStr().ifBlank { null }
+        val netWeight = summary?.totalNetWt?.let { formatWeight(it) }
+            ?: emptyWeight.safeStr().ifBlank { null }
 
         return BulkItem(
             productName = boxName.safeStr().ifBlank { null },
             itemCode = null,
             rfid = rfid.ifBlank { null },
             epc = searchKey.ifBlank { null },
-            grossWeight = emptyWeight.safeStr().ifBlank { null },
+            grossWeight = grossWeight,
             stoneWeight = null,
             diamondWeight = null,
-            netWeight = emptyWeight.safeStr().ifBlank { null },
+            netWeight = netWeight,
             category = null,
             design = null,
             purity = null,
@@ -615,19 +694,19 @@ class SearchViewModel @Inject constructor(
             stoneAmount = null,
             diamondAmount = null,
             sku = null,
-            tid = tid.ifBlank { null },
+            tid = tid.ifBlank { hex.ifBlank { null } },
             box = boxName.safeStr().ifBlank { null },
             designCode = null,
             productCode = null,
             imageUrl = null,
-            totalQty = 1,
-            pcs = null,
+            totalQty = summary?.totalProducts ?: 1,
+            pcs = summary?.totalPieces,
             matchedPcs = null,
-            totalGwt = null,
+            totalGwt = summary?.totalGrossWt,
             matchGwt = null,
             totalStoneWt = null,
             matchStoneWt = null,
-            totalNetWt = null,
+            totalNetWt = summary?.totalNetWt,
             matchNetWt = null,
             unmatchedQty = null,
             matchedQty = null,
@@ -647,13 +726,16 @@ class SearchViewModel @Inject constructor(
             branchType = null,
             designId = 0,
             vendor = null,
-            totalWt = emptyWeight.safeStr().toDoubleOrNull(),
+            totalWt = summary?.grandTotalWeight ?: emptyWeight.safeStr().toDoubleOrNull(),
             CategoryWt = null,
             SKUId = null,
             purityId = 0,
             Status = null
         )
     }
+
+    private fun formatWeight(value: Double): String =
+        String.format(Locale.US, "%.3f", value)
 
     fun clearSearchItems() {
         _searchItems.clear()

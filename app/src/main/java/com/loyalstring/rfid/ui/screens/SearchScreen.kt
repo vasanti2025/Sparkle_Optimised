@@ -120,6 +120,13 @@ fun SearchScreen(
         }
     }
 
+    // Pre-warm reader for every search mode (LabelStock / Order / Box / Unmatched).
+    LaunchedEffect(selectedSearchType, isUnmatchedList) {
+        withContext(Dispatchers.IO) {
+            searchViewModel.preWarmReader()
+        }
+    }
+
     // Both screens: scan starts/stops manually only (Scan button or RFID key).
     LaunchedEffect(isUnmatchedList) {
         if (!isUnmatchedList) {
@@ -387,7 +394,7 @@ fun SearchScreen(
                     }
                     if (itemsToSearch.isNotEmpty()) {
                         isScanning = true  // instant UI feedback
-                        coroutineScope.launch(Dispatchers.Default) {
+                        coroutineScope.launch(Dispatchers.IO) {
                             searchViewModel.startSearch(itemsToSearch, latestSelectedPower)
                         }
                         Log.d("SEARCH", "RFID STARTED scanning ${itemsToSearch.size} items")
@@ -477,7 +484,7 @@ fun SearchScreen(
 
                         if (itemsToSearch.isNotEmpty()) {
                             isScanning = true  // instant UI feedback
-                            coroutineScope.launch(Dispatchers.Default) {
+                            coroutineScope.launch(Dispatchers.IO) {
                                 searchViewModel.startSearch(itemsToSearch, selectedPower)
                             }
                             Log.d("SEARCH", "Manual SCAN started (${itemsToSearch.size}) items")
@@ -703,8 +710,8 @@ fun SearchItemRow(index: Int, item: SearchItem, selectedSearchType: SearchDataTy
 }
 
 fun BulkItem.toSearchItem(): SearchItem = SearchItem(
-    epc = this.epc ?: this.rfid ?: "",
-    itemCode = this.itemCode ?: "",
+    epc = this.epc ?: this.tid ?: this.rfid ?: "",
+    itemCode = this.itemCode ?: this.boxName ?: this.productName ?: "",
     rfid = this.rfid ?: "",
     productName = this.productName ?: "",
     proximityPercent = 0
@@ -1128,8 +1135,8 @@ fun SearchItemRow(index: Int, item: SearchItem) {
 }
 
 fun BulkItem.toSearchItem(): SearchItem = SearchItem(
-    epc = this.epc ?: this.rfid ?: "",
-    itemCode = this.itemCode ?: "",
+    epc = this.epc ?: this.tid ?: this.rfid ?: "",
+    itemCode = this.itemCode ?: this.boxName ?: this.productName ?: "",
     rfid = this.rfid ?: "",
     productName = this.productName ?: "",
     proximityPercent = 0

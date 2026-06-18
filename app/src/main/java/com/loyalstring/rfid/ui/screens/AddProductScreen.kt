@@ -63,6 +63,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
@@ -197,12 +198,13 @@ fun AddProductScreen(
     val purityName = fieldValues["Purity"].orEmpty()
     val vendorName = fieldValues["Vendor"].orEmpty()
     fieldValues["SKU"].orEmpty()
-    rememberCoroutineScope()
 
     var isScanning by remember { mutableStateOf(false) }
+    val isScanningState = rememberUpdatedState(isScanning)
+    val scope = rememberCoroutineScope()
     //var showSuccessDialog by remember { mutableStateOf(false) }
 
-    val activity = LocalContext.current as MainActivity
+    val activity = LocalContext.current as? MainActivity
 
 
 
@@ -266,28 +268,55 @@ fun AddProductScreen(
 
     val isCategoryDisabled = fieldValues["SKU"].isNullOrEmpty().not()
 
-    DisposableEffect(Unit) {
-        val listener = object : ScanKeyListener {
-            override fun onBarcodeKeyPressed() {
+    DisposableEffect(activity) {
+        val act = activity
+        if (act == null) {
+            onDispose { }
+        } else {
+            val listener = object : ScanKeyListener {
+                override fun onBarcodeKeyPressed() {
+                    bulkViewModel.startBarcodeScanning(context)
+                }
 
-
-                bulkViewModel.startBarcodeScanning(context)
-            }
-
-            override fun onRfidKeyPressed() {
-                if (isScanning) {
-                    bulkViewModel.stopScanning()
-                    isScanning = false
-                } else {
-                    bulkViewModel.startSingleScan(20)
-                    isScanning = true
+                override fun onRfidKeyPressed() {
+                    if (isScanningState.value) {
+                        bulkViewModel.stopScanning()
+                        isScanning = false
+                    } else {
+                        bulkViewModel.startSingleScan(20)
+                        isScanning = true
+                    }
                 }
             }
-        }
-        activity.registerScanKeyListener(listener)
+            act.registerScanKeyListener(listener)
 
+            onDispose {
+                act.unregisterScanKeyListener()
+                bulkViewModel.stopScanning()
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        try {
+            viewModel.barcodeReader.openIfNeeded()
+        } catch (e: Exception) {
+            Log.e("AddProductScreen", "Barcode open failed: ${e.message}")
+        }
+        viewModel.barcodeReader.setOnBarcodeScanned { scanned ->
+            if (scanned.isBlank()) return@setOnBarcodeScanned
+            bulkViewModel.onBarcodeScanned(scanned)
+            bulkViewModel.setRfidForAllTags(scanned)
+            fieldValues["RFID Code"] = scanned.uppercase()
+        }
         onDispose {
-            activity.unregisterScanKeyListener()
+            bulkViewModel.stopScanning()
+            try {
+                viewModel.barcodeReader.setOnBarcodeScanned { }
+                viewModel.barcodeReader.close()
+            } catch (e: Exception) {
+                Log.e("AddProductScreen", "Barcode close failed: ${e.message}")
+            }
         }
     }
 
@@ -306,15 +335,6 @@ fun AddProductScreen(
                 "barcode" -> bulkViewModel.startBarcodeScanning(context)
             }
             bulkViewModel.clearScanTrigger()
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.barcodeReader.openIfNeeded()
-        viewModel.barcodeReader.setOnBarcodeScanned { scanned ->
-            bulkViewModel.onBarcodeScanned(scanned)
-            bulkViewModel.setRfidForAllTags(scanned)
-            updateField("RFID Code", scanned)
         }
     }
 
@@ -343,15 +363,24 @@ fun AddProductScreen(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { isGranted ->
             if (isGranted && shouldLaunchCamera.value) {
-                val uri = File(
-                    context.cacheDir,
-                    "${System.currentTimeMillis()}.jpg"
-                ).apply { createNewFile() }.let {
-                    FileProvider.getUriForFile(context, "${context.packageName}.provider", it)
+                try {
+                    val uri = File(
+                        context.cacheDir,
+                        "${System.currentTimeMillis()}.jpg"
+                    ).apply { createNewFile() }.let {
+                        FileProvider.getUriForFile(context, "${context.packageName}.provider", it)
+                    }
+                    photoUri.value = uri
+                    cameraLauncher.launch(uri)
+                } catch (e: Exception) {
+                    Log.e("AddProductScreen", "Camera launch failed: ${e.message}")
+                    Toast.makeText(
+                        context,
+                        localizedContext.getString(R.string.camera_permission_denied),
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
-                photoUri.value = uri
-                cameraLauncher.launch(uri)
-            } else {
+            } else if (!isGranted) {
                 Toast.makeText(context,
                     localizedContext.getString(R.string.camera_permission_denied), Toast.LENGTH_SHORT).show()
             }
@@ -375,14 +404,19 @@ fun AddProductScreen(
                 ) {
                     cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
                 } else {
-                    val uri = File(
-                        context.cacheDir,
-                        "${System.currentTimeMillis()}.jpg"
-                    ).apply { createNewFile() }.let {
-                        FileProvider.getUriForFile(context, "${context.packageName}.provider", it)
+                    try {
+                        val uri = File(
+                            context.cacheDir,
+                            "${System.currentTimeMillis()}.jpg"
+                        ).apply { createNewFile() }.let {
+                            FileProvider.getUriForFile(context, "${context.packageName}.provider", it)
+                        }
+                        photoUri.value = uri
+                        cameraLauncher.launch(uri)
+                    } catch (e: Exception) {
+                        Log.e("AddProductScreen", "Camera launch failed: ${e.message}")
+                        Toast.makeText(context, "Camera error", Toast.LENGTH_SHORT).show()
                     }
-                    photoUri.value = uri
-                    cameraLauncher.launch(uri)
                 }
             },
             onAttachFile = {
@@ -459,16 +493,17 @@ fun AddProductScreen(
         },
         bottomBar = {
             var isSaving by remember { mutableStateOf(false) }
-            val scope = rememberCoroutineScope()
             ScanBottomBar(
                 onSave = {
                     if (isSaving) return@ScanBottomBar
                     isSaving = true
 
+                    try {
                         viewModel.barcodeReader.close()
+                    } catch (e: Exception) {
+                        Log.e("AddProductScreen", "Barcode close failed: ${e.message}")
+                    }
 
-                        /* fun get(label: String) =
-                             formFields.firstOrNull { it.label == label }?.value.orEmpty()*/
                         fun get(label: String) = fieldValues[label].orEmpty()
 
                         get("Item Code")
@@ -484,6 +519,7 @@ fun AddProductScreen(
                         val fWastage = get("Fix Wastage")
                         val stAmt = get("Stone Amount")
                         val dAmt = get("Diamond Amount")
+                        val skuName = get("SKU")
 
                         val categoryId =
                             categoryList?.find { it.CategoryName == categoryName }?.Id ?: 0
@@ -492,7 +528,9 @@ fun AddProductScreen(
                         val vendorId = vendorList?.find { it.VendorName == vendorName }?.Id ?: 0
                         val purityId = purityList?.find { it.PurityName == purityName }?.Id ?: 0
 
-                        val sku = skuList?.firstOrNull()
+                        val sku = skuList
+                            ?.find { it.StockKeepingUnit == skuName }
+                            ?: skuList?.firstOrNull()
                         val savedClientCode = employee?.clientCode.orEmpty()
                         val savedEmployeeId = employee?.employeeId ?: 0
                         val savedBranchId = employee?.defaultBranchId ?: 0
@@ -577,45 +615,78 @@ fun AddProductScreen(
                             Status = "Active"
                         )
                         scope.launch {
-                            val isStockAdded = viewModel.insertLabelledStock(request)
-                            val apiMessage = viewModel.addProductMessage.value
+                            try {
+                                val isStockAdded = viewModel.insertLabelledStock(request)
+                                val apiMessage = viewModel.addProductMessage.value
 
-                            ToastUtils.showToast(context, apiMessage)
+                                ToastUtils.showToast(context, apiMessage)
 
-                            if (isStockAdded) {
-                                bulkViewModel.syncItems(context)
+                                if (isStockAdded) {
+                                    try {
+                                        bulkViewModel.syncItems(context)
+                                    } catch (e: Exception) {
+                                        Log.e("AddProductScreen", "Sync failed: ${e.message}")
+                                    }
 
-                                updateField("Vendor", "")
-                                updateField("Product", "")
-                                updateField("Category", "")
-                                updateField("Design", "")
-                                updateField("Purity", "")
-                                updateField("SKU", "")
-                                updateField("Gross Weight", "")
-                                updateField("RFID Code", "")
-                                updateField("EPC", "")
-                                updateField("Net Weight", "")
-                                updateField("Diamond Weight", "")
-                                updateField("Making/Gram", "")
-                                updateField("Making %", "")
-                                updateField("Fix Making", "")
-                                updateField("Fix Wastage", "")
-                                updateField("Stone Amount", "")
-                                updateField("Diamond Amount", "")
-                                updateField("Stone Weight", "")
+                                    updateField("Vendor", "")
+                                    updateField("Product", "")
+                                    updateField("Category", "")
+                                    updateField("Design", "")
+                                    updateField("Purity", "")
+                                    updateField("SKU", "")
+                                    updateField("Gross Weight", "")
+                                    updateField("RFID Code", "")
+                                    updateField("EPC", "")
+                                    updateField("Net Weight", "")
+                                    updateField("Diamond Weight", "")
+                                    updateField("Making/Gram", "")
+                                    updateField("Making %", "")
+                                    updateField("Fix Making", "")
+                                    updateField("Fix Wastage", "")
+                                    updateField("Stone Amount", "")
+                                    updateField("Diamond Amount", "")
+                                    updateField("Stone Weight", "")
+                                }
+                            } catch (e: Exception) {
+                                Log.e("AddProductScreen", "Save failed: ${e.message}", e)
+                                ToastUtils.showToast(
+                                    context,
+                                    e.message ?: localizedContext.getString(R.string.something_went_wrong)
+                                )
+                            } finally {
+                                isSaving = false
+                                try {
+                                    viewModel.barcodeReader.openIfNeeded()
+                                } catch (e: Exception) {
+                                    Log.e("AddProductScreen", "Barcode reopen failed: ${e.message}")
+                                }
                             }
-
-                            isSaving = false
                         }
 
                 },
 
                 onList = { navController.navigate(Screens.ProductListScreen.route) },
                 onScan = {
-                    bulkViewModel.startSingleScan(20)
+                    if (isScanning) {
+                        bulkViewModel.stopScanning()
+                        isScanning = false
+                    } else {
+                        bulkViewModel.startSingleScan(20)
+                        isScanning = true
+                    }
                 },
-                onGscan = {},
+                onGscan = {
+                    if (isScanning) {
+                        bulkViewModel.stopScanning()
+                        isScanning = false
+                    } else {
+                        bulkViewModel.startSingleScan(20)
+                        isScanning = true
+                    }
+                },
                 onReset = {
+                    bulkViewModel.stopScanning()
+                    isScanning = false
                     updateField("Vendor", "")
                     updateField("Product", "")
                     updateField("Category", "")
@@ -638,7 +709,7 @@ fun AddProductScreen(
                 isScanning = isScanning,
                 isEditMode = isEditMode,
                 isScreen = false,
-                isBulkScanning = true
+                isBulkScanning = isScanning
             )
         }
     ) { innerPadding ->

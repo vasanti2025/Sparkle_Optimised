@@ -16,10 +16,12 @@ import com.loyalstring.rfid.ui.utils.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 @HiltViewModel
 class RfidScanToDesktopViewModel @Inject constructor(
@@ -70,9 +72,11 @@ class RfidScanToDesktopViewModel @Inject constructor(
 
                     android.util.Log.e("SCAN_DEBUG", "fullList size = ${fullList.size}")
 
-                    val filteredList = fullList.filter { item ->
-                        item.DeviceId?.trim().orEmpty()
-                            .equals(savedDeviceId, ignoreCase = true)
+                    val filteredList = withContext(Dispatchers.Default) {
+                        fullList.filter { item ->
+                            item.DeviceId?.trim().orEmpty()
+                                .equals(savedDeviceId, ignoreCase = true)
+                        }
                     }
 
                     android.util.Log.e("SCAN_DEBUG", "filteredList size = ${filteredList.size}")

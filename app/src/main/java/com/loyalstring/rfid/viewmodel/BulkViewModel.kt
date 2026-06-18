@@ -185,6 +185,7 @@ class BulkViewModel @Inject constructor(
     // Persistent seen-EPC set for O(1) duplicate checks in addTagUnique and autoFillRfidFromDb
     private val seenTagEpcSet: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet(10_000)
     private val autoFillFetchedEpcs: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet(10_000)
+    private var previousAutoFillTagCount = 0
 
     private val _matchedItems = mutableStateListOf<BulkItem>()
     val matchedItems: List<BulkItem> get() = _matchedItems
@@ -1005,6 +1006,7 @@ class BulkViewModel @Inject constructor(
             scannedEpcList.clear()
             seenTagEpcSet.clear()
             autoFillFetchedEpcs.clear()
+            previousAutoFillTagCount = 0
             existingEpcSet.clear()
             allScannedTagEpcSet.clear()
             duplicateEpcSet.clear()
@@ -1024,6 +1026,7 @@ class BulkViewModel @Inject constructor(
             scannedEpcList.clear()
             seenTagEpcSet.clear()
             autoFillFetchedEpcs.clear()
+            previousAutoFillTagCount = 0
             _scannedKeySet.value = emptySet()
             delay(50) // Allow recomposition to process empty lists
             _matchedEpcSet.value = emptySet()
@@ -2500,7 +2503,11 @@ class BulkViewModel @Inject constructor(
             .replace("\n", "")
             .replace("\r", "")
 
-    private suspend fun resolveRfidCode(epc: String, index: Int): String {
+    private suspend fun resolveRfidCode(
+        epc: String,
+        index: Int,
+        epcLookup: Map<String, BulkItem> = emptyMap()
+    ): String {
         val manual = _rfidMap.value[index].orEmpty().trim()
         if (manual.isNotBlank() && !manual.equals("scan here", ignoreCase = true)) {
             return manual
@@ -2509,6 +2516,7 @@ class BulkViewModel @Inject constructor(
         val mapped = if (epc.startsWith("E", ignoreCase = true)) {
             _itemCodeMap.value[epc].orEmpty()
                 .ifBlank { _rfidCodeByEpcMap.value[epc].orEmpty() }
+                .ifBlank { epcLookup[epc]?.rfid?.trim().orEmpty() }
                 .ifBlank { bulkRepository.getItemCodeByEpc(epc) }
         } else {
             cleanRfid(hexToAscii(epc))
@@ -2529,14 +2537,22 @@ class BulkViewModel @Inject constructor(
             return
         }
 
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val formatted = LocalDateTime.now()
                 .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"))
             val clientCode = employee?.clientCode
 
+            val epcTags = tags.map { normalizeEpc(it.epc) }
+            val epcLookup = epcTags
+                .filter { it.isNotBlank() && it.startsWith("E", ignoreCase = true) }
+                .distinct()
+                .chunked(500)
+                .flatMap { chunk -> bulkItemDao.getItemsByEpcs(chunk) }
+                .associateBy { it.epc?.trim()?.uppercase().orEmpty() }
+
             val data = tags.mapIndexedNotNull { index, tag ->
                 val epc = normalizeEpc(tag.epc)
-                val finalCode = resolveRfidCode(epc, index)
+                val finalCode = resolveRfidCode(epc, index, epcLookup)
 
                 if (
                     epc.isBlank() ||
@@ -2567,24 +2583,30 @@ class BulkViewModel @Inject constructor(
             )
 
             if (data.isEmpty()) {
-                ToastUtils.showToast(context, "No valid RFID data found")
+                withContext(Dispatchers.Main) {
+                    ToastUtils.showToast(context, "No valid RFID data found")
+                }
                 return@launch
             }
 
             try {
                 val response = apiService.addAllScannedData(data)
 
-                if (response.isSuccessful) {
-                    ToastUtils.showToast(context, "Items Saved successfully")
-                    _reloadTrigger.value = !_reloadTrigger.value
-                    Log.d("API_SUCCESS", "Saved ${data.size} items")
-                } else {
-                    Log.e("API_ERROR", "Error: ${response.code()}")
-                    ToastUtils.showToast(context, "Failed to scan")
+                withContext(Dispatchers.Main) {
+                    if (response.isSuccessful) {
+                        ToastUtils.showToast(context, "Items Saved successfully")
+                        _reloadTrigger.value = !_reloadTrigger.value
+                        Log.d("API_SUCCESS", "Saved ${data.size} items")
+                    } else {
+                        Log.e("API_ERROR", "Error: ${response.code()}")
+                        ToastUtils.showToast(context, "Failed to scan")
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("API_EXCEPTION", "Save failed", e)
-                ToastUtils.showToast(context, "Failed to scan")
+                withContext(Dispatchers.Main) {
+                    ToastUtils.showToast(context, "Failed to scan")
+                }
             }
         }
     }
@@ -2737,17 +2759,19 @@ class BulkViewModel @Inject constructor(
             autoFillMutex.withLock {
                 if (tags.isEmpty()) {
                     _rfidMap.value = emptyMap()
+                    previousAutoFillTagCount = 0
                     return@withLock
                 }
 
                 val currentMap = _rfidMap.value.toMutableMap()
+                val prevCount = previousAutoFillTagCount.coerceAtMost(tags.size)
+                previousAutoFillTagCount = tags.size
 
-                // Only query EPCs we haven't fetched before — avoids re-querying all 15k tags each call
+                // Only query EPCs we haven't fetched before — avoids re-querying all tags each call
                 val newEpcs = tags.mapNotNull { it.epc?.trim()?.uppercase() }
                     .filter { it.isNotBlank() && autoFillFetchedEpcs.add(it) }
 
                 val byEpc = if (newEpcs.isNotEmpty()) {
-                    // Chunk to stay under SQLite's 999-variable limit
                     newEpcs.chunked(500)
                         .flatMap { chunk -> bulkItemDao.getItemsByEpcs(chunk) }
                         .associateBy { it.epc?.trim()?.uppercase().orEmpty() }
@@ -2755,24 +2779,19 @@ class BulkViewModel @Inject constructor(
                     emptyMap()
                 }
 
-                if (byEpc.isEmpty() && currentMap.isNotEmpty()) return@withLock
+                if (byEpc.isEmpty() && currentMap.isNotEmpty() && newEpcs.isEmpty()) return@withLock
 
-                // Fill rfidMap only if index empty (do not override manual barcode edits)
-                tags.forEachIndexed { index, tag ->
+                val startIndex = if (prevCount == 0) 0 else prevCount
+                for (index in startIndex until tags.size) {
                     val already = currentMap[index]
-                    if (!already.isNullOrBlank()) return@forEachIndexed
+                    if (!already.isNullOrBlank()) continue
 
-                    val key = tag.epc?.trim()?.uppercase().orEmpty()
-                    if (key.isBlank()) return@forEachIndexed
+                    val key = tags[index].epc?.trim()?.uppercase().orEmpty()
+                    if (key.isBlank()) continue
 
-                    val db = byEpc[key]
-                    val rfid = db?.rfid?.trim().orEmpty()
-
-                    if (rfid.isNotBlank()) {
-                        // avoid duplicate assignment
-                        if (!currentMap.containsValue(rfid)) {
-                            currentMap[index] = rfid
-                        }
+                    val rfid = byEpc[key]?.rfid?.trim().orEmpty()
+                    if (rfid.isNotBlank() && !currentMap.containsValue(rfid)) {
+                        currentMap[index] = rfid
                     }
                 }
 
@@ -2965,6 +2984,7 @@ class BulkViewModel @Inject constructor(
                 scannedEpcList.clear()
                 seenTagEpcSet.clear()
                 autoFillFetchedEpcs.clear()
+                previousAutoFillTagCount = 0
 
                 withContext(Dispatchers.Main) {
                     _allItems.value = emptyList()

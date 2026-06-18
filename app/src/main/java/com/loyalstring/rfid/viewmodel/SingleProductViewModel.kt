@@ -336,17 +336,19 @@ class SingleProductViewModel @Inject constructor(
                     Log.d("SingleProductViewModel", "Product" + response.body())
                 } else {
                     _purityResponse.value = Resource.Error("sku fetch failed: ${response.message()}")
-                    _purityResponse1.value = (response.body()!!)
-
-                    val localData = dropdownRepository.purity.first() // ✅ fetch from Room
+                    val localData = dropdownRepository.purity.first()
                     _purityResponse.value = Resource.Success(localData)
-                    _purityResponse1.value=localData
+                    _purityResponse1.value = localData
                 }
             } catch (e: Exception) {
                 _purityResponse.value = Resource.Error("Exception: ${e.message}")
-                val localData = dropdownRepository.purity.first() // ✅ fetch from Room
-                _purityResponse.value = Resource.Success(localData)
-                _purityResponse1.value=localData
+                try {
+                    val localData = dropdownRepository.purity.first()
+                    _purityResponse.value = Resource.Success(localData)
+                    _purityResponse1.value = localData
+                } catch (localError: Exception) {
+                    Log.e("SingleProductViewModel", "Purity local fallback failed: ${localError.message}")
+                }
               //  _purityResponse1.value = (response.body()!!)
             }
         }

@@ -41,6 +41,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,7 +72,7 @@ import fi.iki.elonen.NanoHTTPD
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.apache.poi.xssf.usermodel.XSSFWorkbook
+import org.apache.poi.xssf.streaming.SXSSFWorkbook
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -116,7 +117,6 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
     val tags by viewModel.scannedTags.collectAsState()
     val items by viewModel.scannedItems.collectAsState()
     val rfidMap by viewModel.rfidMap.collectAsState()
-    val itemCodeMap by viewModel.itemCodeMap.collectAsState()
 
     var firstPress by remember { mutableStateOf(false) }
 
@@ -146,8 +146,9 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
 
 
     var clickedIndex by remember { mutableStateOf<Int?>(null) }
-    val activity = LocalContext.current as MainActivity
+    val activity = LocalContext.current as? MainActivity
     var isScanning by remember { mutableStateOf(false) }
+    val isScanningState = rememberUpdatedState(isScanning)
     var isEditMode by remember { mutableStateOf(false) }
 
     val loading by viewModel.clearLoading.collectAsState()
@@ -165,20 +166,10 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
     val isLocalWifiMode = userPreferences.isLocalWifiModeEnabled()
     LaunchedEffect(employee?.clientCode) {
         val clientCode = employee?.clientCode
-        val deviceId = shortSerial(
-            userPreferences.getDeviceId()?.toString()
-        )
+        val deviceId = shortSerial(userPreferences.getDeviceId()?.toString())
 
         if (!clientCode.isNullOrBlank() && deviceId.isNotBlank()) {
             rfidExportViewModel.getAllScantoDesktop(clientCode, deviceId)
-            val clientCode = employee?.clientCode
-            val deviceId = shortSerial(
-                userPreferences.getDeviceId()?.toString()
-            )
-
-            if (!clientCode.isNullOrBlank() && deviceId.isNotBlank()) {
-                rfidExportViewModel.getAllScantoDesktop(clientCode, deviceId)
-            }
         }
     }
 
@@ -189,14 +180,18 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
             }
         }
 
-        DisposableEffect(Unit) {
+        DisposableEffect(activity) {
+            val act = activity
+            if (act == null) {
+                onDispose { }
+            } else {
             val listener = object : ScanKeyListener {
                 override fun onBarcodeKeyPressed() {
                     viewModel.startBarcodeScanning(context)
                 }
 
                 override fun onRfidKeyPressed() {
-                    if (isScanning) {
+                    if (isScanningState.value) {
                         viewModel.stopScanning()
                         isScanning = false
                     } else {
@@ -205,33 +200,36 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                     }
                 }
             }
-            activity.registerScanKeyListener(listener)
+            act.registerScanKeyListener(listener)
 
             onDispose {
-                activity.unregisterScanKeyListener()
+                act.unregisterScanKeyListener()
                 viewModel.stopScanning()
+            }
             }
         }
 
-        // ✅ Barcode scan callback
-        LaunchedEffect(Unit) {
-            viewModel.barcodeReader.openIfNeeded()
+        DisposableEffect(Unit) {
+            try {
+                viewModel.barcodeReader.openIfNeeded()
+            } catch (e: Exception) {
+                Log.e("ScanToDesktop", "Barcode open failed: ${e.message}")
+            }
             viewModel.barcodeReader.setOnBarcodeScanned { scanned ->
+                if (scanned.isBlank()) return@setOnBarcodeScanned
                 viewModel.onBarcodeScanned(scanned)
                 clickedIndex?.let { index ->
-                    viewModel.assignRfidCode(index, scanned) // manual override
+                    viewModel.assignRfidCode(index, scanned)
                     clickedIndex = null
                 }
             }
-        }
-
-        LaunchedEffect(tags) {
-            tags.forEach { tag ->
-                val epc = tag.epc.trim().uppercase()
-
-                // avoid duplicate DB calls
-                if (!itemCodeMap.containsKey(epc)) {
-                    viewModel.loadItemCodeForEpc(epc)
+            onDispose {
+                viewModel.stopScanning()
+                try {
+                    viewModel.barcodeReader.setOnBarcodeScanned { }
+                    viewModel.barcodeReader.close()
+                } catch (e: Exception) {
+                    Log.e("ScanToDesktop", "Barcode close failed: ${e.message}")
                 }
             }
         }
@@ -408,7 +406,11 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                         }
                     },*/
                     onSave = {
-                        viewModel.barcodeReader.close()
+                        try {
+                            viewModel.barcodeReader.close()
+                        } catch (e: Exception) {
+                            Log.e("ScanToDesktop", "Barcode close failed: ${e.message}")
+                        }
                         Log.d("save scanned items", "CLICKED ${tags.size}")
 
                         val deviceId = shortSerial(userPreferences.getDeviceId()?.toString())
@@ -513,7 +515,15 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                         viewModel.stopBarcodeScanner()
                         viewModel.resetProductScanResults()
                     },
-                    onScan = { viewModel.startSingleScan(20) },
+                    onScan = {
+                        if (isScanning) {
+                            viewModel.stopScanning()
+                            isScanning = false
+                        } else {
+                            viewModel.startSingleScan(20)
+                            isScanning = true
+                        }
+                    },
                     onGscan = {
                         if (isScanning) {
                             viewModel.stopScanning()
@@ -526,6 +536,7 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                     onReset = {
                         firstPress = false
                         isScanning = false
+                        viewModel.stopScanning()
                         viewModel.resetScanResults()
                         viewModel.stopBarcodeScanner()
                         viewModel.resetProductScanResults()
@@ -582,7 +593,10 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
                         .weight(1f)
                         .background(Color(0xFFF0F0F0))
                 ) {
-                    itemsIndexed(tags) { index, item ->
+                    itemsIndexed(
+                        items = tags,
+                        key = { _, tag -> tag.epc?.trim()?.uppercase().orEmpty().ifBlank { tag.hashCode().toString() } }
+                    ) { index, item ->
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1032,11 +1046,24 @@ fun hexToAscii(hex: String): String {
         return "A$lastTwo"
     }
 
+    private fun writeRfidExportRows(
+        list: List<RfidItem>,
+        writeRow: (index: Int, item: RfidItem) -> Unit
+    ) {
+        list.forEachIndexed { index, item ->
+            try {
+                writeRow(index, item)
+            } catch (e: Exception) {
+                Log.e("EXPORT_EXCEL", "Skipped row ${index + 1}: ${e.message}")
+            }
+        }
+    }
+
     private fun exportRfidExcelForEmail(
         context: Context,
         list: List<RfidItem>
     ): File {
-        val workbook = XSSFWorkbook()
+        val workbook = SXSSFWorkbook(100)
 
         return try {
             val sheet = workbook.createSheet("RFID Data")
@@ -1058,16 +1085,16 @@ fun hexToAscii(hex: String): String {
                 header.createCell(index).setCellValue(title)
             }
 
-            list.forEachIndexed { index, item ->
+            writeRfidExportRows(list) { index, item ->
                 val row = sheet.createRow(index + 1)
                 row.createCell(0).setCellValue((index + 1).toDouble())
-                row.createCell(1).setCellValue(item.ClientCode)
-                row.createCell(2).setCellValue(item.DeviceId)
-                row.createCell(3).setCellValue(item.TIDValue)
-                row.createCell(4).setCellValue(item.RFIDCode)
+                row.createCell(1).setCellValue(item.ClientCode.orEmpty())
+                row.createCell(2).setCellValue(item.DeviceId.orEmpty())
+                row.createCell(3).setCellValue(item.TIDValue.orEmpty())
+                row.createCell(4).setCellValue(item.RFIDCode.orEmpty())
                 row.createCell(5).setCellValue(item.Id.toDouble())
-                row.createCell(6).setCellValue(item.CreatedOn)
-                row.createCell(7).setCellValue(item.LastUpdated)
+                row.createCell(6).setCellValue(item.CreatedOn.orEmpty())
+                row.createCell(7).setCellValue(item.LastUpdated.orEmpty())
                 row.createCell(8).setCellValue(item.StatusType.toString())
             }
 
@@ -1083,7 +1110,7 @@ fun hexToAscii(hex: String): String {
             file
 
         } finally {
-            workbook.close()
+            workbook.dispose()
         }
     }
 
@@ -1091,7 +1118,7 @@ fun hexToAscii(hex: String): String {
         context: Context,
         list: List<RfidItem>
     ): File {
-        val workbook = XSSFWorkbook()
+        val workbook = SXSSFWorkbook(100)
 
         return try {
             val sheet = workbook.createSheet("RFID Data")
@@ -1113,17 +1140,17 @@ fun hexToAscii(hex: String): String {
                 header.createCell(index).setCellValue(title)
             }
 
-            list.forEachIndexed { index, item ->
+            writeRfidExportRows(list) { index, item ->
                 val row = sheet.createRow(index + 1)
 
                 row.createCell(0).setCellValue((index + 1).toDouble())
-                row.createCell(1).setCellValue(item.ClientCode)
-                row.createCell(2).setCellValue(item.DeviceId)
-                row.createCell(3).setCellValue(item.TIDValue)
-                row.createCell(4).setCellValue(item.RFIDCode)
+                row.createCell(1).setCellValue(item.ClientCode.orEmpty())
+                row.createCell(2).setCellValue(item.DeviceId.orEmpty())
+                row.createCell(3).setCellValue(item.TIDValue.orEmpty())
+                row.createCell(4).setCellValue(item.RFIDCode.orEmpty())
                 row.createCell(5).setCellValue(item.Id.toDouble())
-                row.createCell(6).setCellValue(item.CreatedOn)
-                row.createCell(7).setCellValue(item.LastUpdated)
+                row.createCell(6).setCellValue(item.CreatedOn.orEmpty())
+                row.createCell(7).setCellValue(item.LastUpdated.orEmpty())
                 row.createCell(8).setCellValue(item.StatusType.toString())
             }
 
@@ -1150,7 +1177,7 @@ fun hexToAscii(hex: String): String {
             file
 
         } finally {
-            workbook.close()
+            workbook.dispose()
         }
     }
 

@@ -20,9 +20,13 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -77,6 +81,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -1362,94 +1367,6 @@ fun FormRow(
                         fontSize = 13.sp
                     )
                 } else {
-                   /* Column {
-                        BasicTextField(
-                            value = value,
-                            onValueChange = {newValue -> onValueChange(newValue)},
-                            readOnly = true,
-                            singleLine = true,
-                            keyboardOptions = if (
-                                field.label.contains("Weight", ignoreCase = true) ||
-                                field.label.contains("Amount", ignoreCase = true) ||
-                                field.label.contains("Wastage", ignoreCase = true) ||
-                                field.label.contains("Making", ignoreCase = true)
-                            ) {
-                                KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                            } else {
-                                KeyboardOptions.Default
-                            },
-                            textStyle = TextStyle(fontSize = 14.sp, color = Color.Black),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { expanded = true },
-                            decorationBox = { innerTextField ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Box(modifier = Modifier.weight(1f)) {
-                                        if (value.isEmpty()) {
-                                            Text(
-                                                "select",
-                                                color = Color.LightGray,
-                                                fontSize = 14.sp,
-                                                fontFamily = poppins,
-                                                maxLines = 2,
-                                                lineHeight = 16.sp, // adds line spacing
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(horizontal = 2.dp)
-                                            )
-                                        }
-                                        innerTextField()
-                                    }
-
-                                    Row {
-                                        if (value.isNotEmpty()) {
-                                            Icon(
-                                                imageVector = Icons.Default.Clear,
-                                                contentDescription = "Clear",
-                                                tint = Color.Gray,
-                                                modifier = Modifier
-                                                    .padding(end = 8.dp)
-                                                    .size(20.dp)
-                                                    .clickable { onValueChange("") }
-                                            )
-                                        }
-
-                                        Icon(
-                                            imageVector = Icons.Filled.ArrowDropDown,
-                                            contentDescription = "Dropdown",
-                                            modifier = Modifier.clickable { expanded = true }
-                                        )
-                                    }
-                                }
-                            }
-                        )
-
-                        DropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false }
-                        ) {
-                            filteredOptions.forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option, fontFamily = poppins) },
-                                    onClick = {
-                                        onValueChange(option)
-                                        expanded = false
-
-                                        if (field.label == "SKU") {
-                                            skuList?.find { it.StockKeepingUnit == option }?.let {
-                                                onSkuSelected?.invoke(it)
-                                            }
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    }*/
-
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1470,6 +1387,7 @@ fun FormRow(
                                 fontSize = 14.sp,
                                 fontFamily = poppins,
                                 maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f)
                             )
 
@@ -1495,22 +1413,39 @@ fun FormRow(
 
                         DropdownMenu(
                             expanded = expanded,
-                            onDismissRequest = { expanded = false }
+                            onDismissRequest = { expanded = false },
+                            modifier = Modifier
+                                .widthIn(min = 180.dp)
+                                .heightIn(max = 240.dp)
                         ) {
-                            filteredOptions.forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option, fontFamily = poppins) },
-                                    onClick = {
-                                        onValueChange(option)
-                                        expanded = false
+                            Column(
+                                modifier = Modifier
+                                    .heightIn(max = 240.dp)
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                filteredOptions.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = option,
+                                                fontFamily = poppins,
+                                                fontSize = 13.sp,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        },
+                                        onClick = {
+                                            onValueChange(option)
+                                            expanded = false
 
-                                        if (field.label == "SKU") {
-                                            skuList?.find { it.StockKeepingUnit == option }?.let {
-                                                onSkuSelected?.invoke(it)
+                                            if (field.label == "SKU") {
+                                                skuList?.find { it.StockKeepingUnit == option }?.let {
+                                                    onSkuSelected?.invoke(it)
+                                                }
                                             }
                                         }
-                                    }
-                                )
+                                    )
+                                }
                             }
                         }
                     }

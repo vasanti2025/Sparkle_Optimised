@@ -36,10 +36,10 @@ import com.loyalstring.rfid.worker.PendingOrderSyncWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.LocalDateTime
 import java.util.UUID
 import javax.inject.Inject
@@ -124,8 +124,14 @@ class OrderViewModel @Inject constructor(
         _orderResponse.value = null
     }
 
+    fun clearLastOrderNo() {
+        _lastOrderNOResponse.value = LastOrderNoResponse()
+    }
 
-//
+    fun clearOrderItemsAsync() {
+        viewModelScope.launch { clearOrderItems() }
+    }
+
 //    fun placeOrder(request: ClientCodeRequest, order: CustomOrderRequest) {
 //        viewModelScope.launch {
 //            val response = repository.submitOrder(request, order)
@@ -247,30 +253,23 @@ class OrderViewModel @Inject constructor(
 
     fun getAllEmpList(clientCode: String) {
         viewModelScope.launch {
-            //  delay(1000)
             isEmpListLoading.value = true
+            val request = ClientCodeRequest(clientCode)
 
             try {
-                val response = repository.getAllEmpList(ClientCodeRequest(clientCode)) // API call
-
-                if (response.isSuccessful && response.body() != null && response.body()!!.isNotEmpty()) {
-                    val data = response.body()!!
-
-                    // Save to Room
-                   //  repository.clearAllEmployees()
-                   // repository.saveEmpListToRoom(data!!)
-
-                    _empListFlow.value = UiState.Success(data)
-
-                } else {
-                    // API failed => try loading from local DB
-                    val localData = repository.getAllEmpListFromRoom(ClientCodeRequest(clientCode))
-                    _empListFlow.value = UiState.Success(localData)
+                val cached = repository.getAllEmpListFromRoom(request)
+                if (cached.isNotEmpty()) {
+                    _empListFlow.value = UiState.Success(cached)
                 }
 
+                val response = repository.getAllEmpList(request)
+                if (response.isSuccessful && !response.body().isNullOrEmpty()) {
+                    _empListFlow.value = UiState.Success(response.body()!!)
+                } else if (cached.isEmpty()) {
+                    _empListFlow.value = UiState.Success(cached)
+                }
             } catch (e: Exception) {
-                // Exception (e.g., no internet) => try loading from local DB
-                val localData = repository.getAllEmpListFromRoom(ClientCodeRequest(clientCode))
+                val localData = repository.getAllEmpListFromRoom(request)
                 _empListFlow.value = UiState.Success(localData)
             } finally {
                 isEmpListLoading.value = false
@@ -329,23 +328,27 @@ class OrderViewModel @Inject constructor(
     /*get all item code list*/
     fun getAllItemCodeList(request: ClientCodeRequest) {
         viewModelScope.launch {
-            isItemCodeLoading.value = true
-            delay(2000)
+            val hadCached = _itemCodeResponse.value.isNotEmpty()
             try {
+                val localData = repository.getAllItemCodeFromRoom(request)
+                if (localData.isNotEmpty()) {
+                    _itemCodeResponse.value = localData
+                } else if (!hadCached) {
+                    isItemCodeLoading.value = true
+                }
+
                 val response = repository.getAllItemCodeList(request)
                 if (response.isSuccessful && response.body() != null) {
                     _itemCodeResponse.value = response.body()!!
-                    //Log.d("OrderViewModel", "itemcode: ${response.body()}")
                     repository.saveAllItemCodeToRoom(response.body()!!)
-                } else {
-                    val localData = repository.getAllItemCodeFromRoom(request)
+                } else if (_itemCodeResponse.value.isEmpty()) {
                     _itemCodeResponse.value = localData
                 }
             } catch (e: Exception) {
-                val localData = repository.getAllItemCodeFromRoom(request)
-                _itemCodeResponse.value = localData
-            }
-            finally {
+                if (_itemCodeResponse.value.isEmpty()) {
+                    _itemCodeResponse.value = repository.getAllItemCodeFromRoom(request)
+                }
+            } finally {
                 isItemCodeLoading.value = false
             }
         }
@@ -457,37 +460,32 @@ class OrderViewModel @Inject constructor(
 
     fun fetchAllOrderListFromApi(request: ClientCodeRequest) {
         viewModelScope.launch {
-            _isLoading.value = true
             val clientCode = request.clientcode.orEmpty()
 
             try {
-                // ✅ 1) pending(local) orders
                 val pendingLocal = getPendingOrderResponses(clientCode)
 
-                // ✅ 2) server orders (or cache)
+                val cachedServer = repository.getOrderListCache(clientCode)
+                if (pendingLocal.isNotEmpty() || cachedServer.isNotEmpty()) {
+                    _getAllOrderList.value = mergeOrders(pendingLocal, cachedServer)
+                } else {
+                    _isLoading.value = true
+                }
+
                 val serverList = try {
                     val res = repository.getAllOrderList(request)
                     if (res.isSuccessful && !res.body().isNullOrEmpty()) {
                         val list = res.body()!!
-                        repository.saveOrderListCache(clientCode, list) // server cache
+                        repository.saveOrderListCache(clientCode, list)
                         list
                     } else {
-                        repository.getOrderListCache(clientCode)
+                        cachedServer
                     }
                 } catch (e: Exception) {
-                    repository.getOrderListCache(clientCode)
+                    cachedServer
                 }
 
-
-                // ✅ 3) merge (pending always top)
-                val merged = mergeOrders(pendingLocal, serverList)
-
-                Log.d("LIST", "clientCode = $clientCode")
-                Log.d("LIST", "pendingLocal size = ${pendingLocal.size}")
-                Log.d("LIST", "serverList size = ${serverList.size}")
-                Log.d("LIST", "merged size = ${merged.size}")
-                _getAllOrderList.value = merged
-
+                _getAllOrderList.value = mergeOrders(pendingLocal, serverList)
             } finally {
                 _isLoading.value = false
             }
@@ -595,8 +593,12 @@ class OrderViewModel @Inject constructor(
             Payments = this.Payments,
             uRDPurchases = emptyList(), // You can map if needed
             Customer = this.Customer,
+            Id = this.Id,
             syncStatus = this.syncStatus,
             LastUpdated = this.LastUpdated,
+            HallmarkAmount = this.HallmarkAmount,
+            WeightCatogories = this.WeightCategories,
+            SKUId = this.SKUId,
             RfidCode = this.RfidCode,
             TidNumber = this.TidNumber
         )
@@ -615,6 +617,19 @@ class OrderViewModel @Inject constructor(
 
             } catch (e: Exception) {
                 Log.e("OrderViewModel", "Room Insert Error: ${e.message}")
+            }
+        }
+    }
+
+    fun insertOrderItemsBatch(items: List<OrderItem>) {
+        if (items.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                items.filter { !it.rfidCode.equals("null") }.forEach { item ->
+                    repository.insertOrderItems(item)
+                }
+            } catch (e: Exception) {
+                Log.e("OrderViewModel", "Room batch insert error: ${e.message}")
             }
         }
     }
@@ -736,8 +751,11 @@ class OrderViewModel @Inject constructor(
                     _orderUpdateResponse.value = response.body()!!
                     Log.d("OrderViewModel", "Custom Order: ${response.body()}")
                 } else {
-                    _orderUpdateResponse.value = response.body()// ✅ Use default object
-                    Log.e("OrderViewModel", "Custom Order Response error: ${response.code()}")
+                    _orderUpdateResponse.value = response.body()
+                    Log.e(
+                        "OrderViewModel",
+                        "Custom Order Response error: ${response.code()} ${response.errorBody()?.string()}"
+                    )
                 }
             } catch (e: Exception) {
               //  _orderUpdateResponse.value = _orderResponse.value.OrderStatus.toString()
@@ -767,8 +785,7 @@ class OrderViewModel @Inject constructor(
                     _getAllDailyRate.value = response.body()!!
                     Log.d("OrderViewModel", "Custom Order: ${response.body()}")
                 } else {
-                    _getAllDailyRate.value = response.body()!!// ✅ Use default object
-                    Log.e("OrderViewModel", "Custom Order Response error: ${response.code()}")
+                    Log.e("OrderViewModel", "Daily rate response error: ${response.code()}")
                 }
             } catch (e: Exception) {
                 //  _orderUpdateResponse.value = _orderResponse.value.OrderStatus.toString()

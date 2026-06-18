@@ -181,6 +181,7 @@
 
     <string name="sample_out_list_title">قائمة عينات الخروج</string>
     <string name="search_hint_sample_out">ابحث برقم العينة أو اسم العميل</string>
+    <string name="search_hint_sample_in">ابحث برقم عينة الدخول أو اسم العميل</string>
     <string name="error_loading_list">خطأ في تحميل القائمة</string>
 
     <string name="header_s_no">م.</string>
@@ -264,9 +265,7 @@
 
 
     <!-- Search bar -->
-    <string name="hint_search_challan_or_customer">
-        ابحث برقم السند أو اسم الزبون
-    </string>
+    <string name="hint_search_challan_or_customer">ابحث برقم السند أو اسم الزبون</string>
 
 
     <!-- Messages -->

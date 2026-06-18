@@ -4,7 +4,6 @@ import java.util.Date
 
 import java.util.TimeZone
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatDelegate
@@ -82,8 +81,7 @@ import com.loyalstring.rfid.viewmodel.SingleProductViewModel
 import com.loyalstring.rfid.viewmodel.UiState
 import com.loyalstring.rfid.worker.LocaleHelper
 import com.rscja.deviceapi.entity.UHFTAGInfo
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import androidx.compose.runtime.rememberUpdatedState
 import java.util.Locale
 import kotlin.text.orEmpty
 
@@ -134,7 +132,7 @@ fun SampleOutScreen(
     var totalWithGst by remember { mutableStateOf(0.0) }
     var pendingMatchedItem by remember { mutableStateOf<BulkItem?>(null) }
     var isSaveClicked by remember { mutableStateOf(false) }
-    var editDataLoaded by remember { mutableStateOf(false) }
+    var editPrefilled by remember(Id) { mutableStateOf(false) }
     val errorMsg by sampleOutViewModel.error.collectAsState()
     val loading by sampleOutViewModel.loading.collectAsState()
     // ✅ Success toast – sirf jab addResult non-null ho
@@ -170,20 +168,16 @@ fun SampleOutScreen(
     }
 
 
-    LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            try {
-                orderViewModel.getAllEmpList(employee?.clientCode.toString())
-                orderViewModel.getAllItemCodeList(ClientCodeRequest(employee?.clientCode.toString()))
-                singleProductViewModel.getAllBranches(ClientCodeRequest(employee?.clientCode.toString()))
-                singleProductViewModel.getAllPurity(ClientCodeRequest(employee?.clientCode.toString()))
-                singleProductViewModel.getAllSKU(ClientCodeRequest(employee?.clientCode.toString()))
-                orderViewModel.getDailyRate(ClientCodeRequest(employee?.clientCode))
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+    LaunchedEffect(employee?.clientCode) {
+        val code = employee?.clientCode ?: return@LaunchedEffect
+        orderViewModel.getAllEmpList(code)
+        orderViewModel.getAllItemCodeList(ClientCodeRequest(code))
+        singleProductViewModel.getAllBranches(ClientCodeRequest(code))
+        singleProductViewModel.getAllPurity(ClientCodeRequest(code))
+        singleProductViewModel.getAllSKU(ClientCodeRequest(code))
+        orderViewModel.getDailyRate(ClientCodeRequest(code))
     }
+    val sampleOutList by sampleOutViewModel.sampleOutList.collectAsState()
     val customerSuggestions by orderViewModel.empListFlow.collectAsState(UiState.Loading)
 
 
@@ -603,6 +597,10 @@ fun SampleOutScreen(
 
         pendingMatchedItem = null
     }
+    val processedTagEpcs = remember { mutableSetOf<String>() }
+    val latestAllItems by rememberUpdatedState(allItems)
+    val latestDailyRates by rememberUpdatedState(dailyRates)
+
 /*scan the rfid*/
     LaunchedEffect(tags, allItems, dailyRates) {
 
@@ -613,13 +611,6 @@ fun SampleOutScreen(
         }
 
         Log.d("RFIDScan", "📦 ${tags.size} tags received")
-        Log.d(
-            "RFIDScan",
-            "📚 allItems (${allItems.size}): " +
-                    allItems.joinToString(" | ") {
-                        "epc='${it.epc}', rfid='${it.rfid}', code='${it.itemCode}'"
-                    }
-        )
 
         fun safeDouble(v: String?) = v?.toDoubleOrNull() ?: 0.0
 
@@ -632,7 +623,9 @@ fun SampleOutScreen(
                 ?.replace(" ", "")
                 ?: ""
 
-            Log.d("EPC_SCAN", "Scanned EPC = '$scannedEpc'")
+            if (scannedEpc.isBlank() || scannedEpc in processedTagEpcs) {
+                return@forEach
+            }
 
             // 2️⃣ allItems me match
             val matchedItem = allItems.firstOrNull { item ->
@@ -809,6 +802,7 @@ fun SampleOutScreen(
 
             if (productList.none { it.ItemCode == productDetail.ItemCode }) {
                 productList.add(productDetail)
+                processedTagEpcs.add(scannedEpc)
                 Log.d("RFIDScan", "✅ Added ${productDetail.ItemCode} (${productDetail.RFIDCode})")
             } else {
                 Log.d("RFIDScan", "⚠️ Duplicate tag skipped: ${productDetail.RFIDCode}")
@@ -1181,37 +1175,32 @@ fun SampleOutScreen(
         }
     }*/
 
-    LaunchedEffect(Id) {
-        if (Id != null && Id != 0 && !editDataLoaded) {
-            isEditMode = true
+    LaunchedEffect(Id, sampleOutList, editPrefilled) {
+        if (Id == null || Id == 0 || editPrefilled) return@LaunchedEffect
 
-            employee?.let {
-                sampleOutViewModel.loadSampleOut(it.clientCode ?: "", "SampleOut")
-            }
-
-            sampleOutViewModel.sampleOutList.collect { challans ->
-                if (editDataLoaded) return@collect
-
-                val selected = challans.firstOrNull { it.Id == Id }
-
-                if (selected != null) {
-                    sampleOutViewModel.setSelectedSampleOut(selected)
-
-                    customerName = selected.Customer?.FirstName.orEmpty()
-                    customerId = selected.CustomerId
-
-                    productList.clear()
-                    productList.addAll(
-                        selected.IssueItems
-                            ?.filterNotNull()
-                            ?.map { it.toSampleOutDetails() }
-                            ?: emptyList()
-                    )
-
-                    editDataLoaded = true
+        val selected = sampleOutList.firstOrNull { it.Id == Id }
+        if (selected == null) {
+            if (sampleOutList.isEmpty()) {
+                employee?.let {
+                    sampleOutViewModel.loadSampleOut(it.clientCode ?: "", "SampleOut")
                 }
             }
+            return@LaunchedEffect
         }
+
+        isEditMode = true
+        sampleOutViewModel.setSelectedSampleOut(selected)
+        customerName = selected.Customer?.FirstName.orEmpty()
+        customerId = selected.CustomerId
+
+        productList.clear()
+        productList.addAll(
+            selected.IssueItems
+                ?.filterNotNull()
+                ?.map { it.toSampleOutDetails() }
+                ?: emptyList()
+        )
+        editPrefilled = true
     }
 
 
@@ -1230,8 +1219,7 @@ fun SampleOutScreen(
 
     /*scan bar code */
 
-
-    LaunchedEffect(allItems, dailyRates) {
+    LaunchedEffect(Unit) {
         viewModel.barcodeReader.openIfNeeded()
 
         fun safeDouble(v: String?) = v?.toDoubleOrNull() ?: 0.0
@@ -1242,15 +1230,10 @@ fun SampleOutScreen(
             return x.isNotBlank() && y.isNotBlank() && x == y
         }
 
-        fun showToast(message: String) {
-            (context as? Activity)?.runOnUiThread {
-                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-            }
-        }
-
         viewModel.barcodeReader.setOnBarcodeScanned { scannedRaw ->
             val scanned = normalize(scannedRaw)
-            val currentItems = allItems
+            val currentItems = latestAllItems
+            val rates = latestDailyRates
             itemCode = TextFieldValue(scanned)
 
             val matchedItem = currentItems.firstOrNull { item ->
@@ -1268,7 +1251,7 @@ fun SampleOutScreen(
             }
 
             if (matchedItem == null) {
-                showToast("Item not found")
+                Toast.makeText(context, "Item not found", Toast.LENGTH_SHORT).show()
                 Log.d("RFID Scan", "❌ No match found: $scannedRaw")
                 return@setOnBarcodeScanned
             }
@@ -1281,7 +1264,7 @@ fun SampleOutScreen(
             }
 
             if (alreadyExists) {
-                showToast("Item already exists: ${matchedItem.itemCode}")
+                Toast.makeText(context, "Item already exists: ${matchedItem.itemCode}", Toast.LENGTH_SHORT).show()
                 Log.d("RFID Scan", "⚠️ Already exists: ${matchedItem.itemCode}")
                 return@setOnBarcodeScanned
             }
@@ -1293,8 +1276,8 @@ fun SampleOutScreen(
 
             val netWt = safeDouble(matchedItem.netWeight)
 
-            val rate = if (!dailyRates.isNullOrEmpty()) {
-                dailyRates
+            val rate = if (rates.isNotEmpty()) {
+                rates
                     .firstOrNull { it.PurityName.equals(matchedItem.purity, ignoreCase = true) }
                     ?.Rate?.toDoubleOrNull() ?: 0.0
             } else 0.0

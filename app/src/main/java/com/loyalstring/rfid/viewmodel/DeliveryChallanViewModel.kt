@@ -59,18 +59,23 @@ class DeliveryChallanViewModel @Inject constructor(
 
     fun fetchAllChallans(clientCode: String, branchId: Any) {
         viewModelScope.launch {
-            _loading.value = true
+            val hasCached = _challanList.value.isNotEmpty()
+            if (!hasCached) {
+                _loading.value = true
+            }
             _error.value = null
             try {
                 val request = DeliveryChallanRequestList(clientCode, branchId as Int)
                 val response = repository.getAllDeliveryChallans(request)
                 if (response.isSuccessful && response.body() != null) {
                     _challanList.value = response.body()!!
-                } else {
+                } else if (!hasCached) {
                     _error.value = response.message()
                 }
             } catch (e: Exception) {
-                _error.value = e.message
+                if (!hasCached) {
+                    _error.value = e.message
+                }
             } finally {
                 _loading.value = false
             }
@@ -204,6 +209,8 @@ class DeliveryChallanViewModel @Inject constructor(
 
     fun clearLastChallanNo() { _lastChallanNo.value = null }
     fun clearAddChallanResponse() { _addChallanResponse.value = null }
+    fun clearUpdateChallanResponse() { _updateChallanResponse.value = null }
+    fun clearError() { _error.value = null }
 
 
 }

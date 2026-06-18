@@ -43,6 +43,7 @@ import com.loyalstring.rfid.viewmodel.SearchViewModel
 import com.rscja.deviceapi.RFIDWithUHFUART
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
+import androidx.compose.ui.text.style.TextAlign
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -617,14 +618,18 @@ fun SearchScreen(
 
             if (isOrderSearching || isBoxSearching) {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator()
                 }
             } else if (filteredItems.isEmpty() && !isScanning) {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -638,12 +643,19 @@ fun SearchScreen(
                                 "No box or product found for this RFID"
                             else -> "Type RFID / Itemcode to search specific items"
                         },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp),
+                        textAlign = TextAlign.Center,
                         color = Color.Gray,
                         fontFamily = poppins
                     )
                 }
             } else {
-                LazyColumn( modifier = Modifier.fillMaxSize(),
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
                     state = listState) {
                     item { HeaderRow(selectedSearchType) }
                     itemsIndexed(filteredItems, key = { index, item -> "${item.epc}-$index" }) { index, item ->

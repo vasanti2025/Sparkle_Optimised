@@ -674,11 +674,34 @@ private fun SetupNavigation(
                                                 }
                                             }
                                             Screens.OrderScreen.route -> {
-                                                scope.launch {
-                                                    drawerState.close()
-                                                    navController.navigate(navigationItem.route)
+                                                navController.navigate(navigationItem.route) {
+                                                    launchSingleTop = true
                                                 }
-
+                                                scope.launch { drawerState.close() }
+                                            }
+                                            Screens.DeliveryChalan.route -> {
+                                                navController.navigate(navigationItem.route) {
+                                                    launchSingleTop = true
+                                                }
+                                                scope.launch { drawerState.close() }
+                                            }
+                                            "sample_in", Screens.SampleInScreen.route -> {
+                                                navController.navigate(navigationItem.route) {
+                                                    launchSingleTop = true
+                                                }
+                                                scope.launch { drawerState.close() }
+                                            }
+                                            "sample_out", Screens.SampleOutScreen.route -> {
+                                                navController.navigate(navigationItem.route) {
+                                                    launchSingleTop = true
+                                                }
+                                                scope.launch { drawerState.close() }
+                                            }
+                                            Screens.QuotationScreen.route -> {
+                                                navController.navigate(navigationItem.route) {
+                                                    launchSingleTop = true
+                                                }
+                                                scope.launch { drawerState.close() }
                                             }
                                             Screens.SearchScreen.route -> {
                                                 scope.launch {

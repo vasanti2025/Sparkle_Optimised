@@ -84,14 +84,11 @@ import com.loyalstring.rfid.viewmodel.BulkViewModel
 import com.loyalstring.rfid.viewmodel.DeliveryChallanViewModel
 import com.loyalstring.rfid.viewmodel.OrderViewModel
 import com.loyalstring.rfid.viewmodel.ProductListViewModel
-import com.loyalstring.rfid.viewmodel.SampleInViewModel
 import com.loyalstring.rfid.viewmodel.SampleOutViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
 import com.loyalstring.rfid.viewmodel.UiState
 import com.loyalstring.rfid.worker.LocaleHelper
 import com.rscja.deviceapi.entity.UHFTAGInfo
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 @SuppressLint("UnrememberedMutableState")
 @Composable
@@ -162,28 +159,32 @@ fun SampleInScreen(
     var selectedReturnCodes by remember { mutableStateOf(setOf<String>()) }
 
     LaunchedEffect(employee?.clientCode) {
-        employee?.clientCode?.let { clientCode ->
-            withContext(Dispatchers.IO) {
-                orderViewModel.getAllEmpList(clientCode)
-                orderViewModel.getAllItemCodeList(ClientCodeRequest(clientCode))
-                singleProductViewModel.getAllBranches(ClientCodeRequest(clientCode))
-                singleProductViewModel.getAllPurity(ClientCodeRequest(clientCode))
-                singleProductViewModel.getAllSKU(ClientCodeRequest(clientCode))
-                orderViewModel.getDailyRate(ClientCodeRequest(employee?.clientCode))
-            }
-        }
+        val code = employee?.clientCode ?: return@LaunchedEffect
+        orderViewModel.getAllEmpList(code)
+        orderViewModel.getAllItemCodeList(ClientCodeRequest(code))
+        singleProductViewModel.getAllBranches(ClientCodeRequest(code))
+        singleProductViewModel.getAllPurity(ClientCodeRequest(code))
+        singleProductViewModel.getAllSKU(ClientCodeRequest(code))
+        orderViewModel.getDailyRate(ClientCodeRequest(code))
+        sampleOutViewModel.loadSampleOut(code, "SampleOut")
     }
 
 
     val errorMsg by sampleOutViewModel.error.collectAsState()
     val loading by sampleOutViewModel.loading.collectAsState()
+
+    LaunchedEffect(errorMsg) {
+        errorMsg?.let { msg ->
+            Toast.makeText(context, "Error: $msg", Toast.LENGTH_SHORT).show()
+            sampleOutViewModel.clearError()
+        }
+    }
+
     var printData by remember { mutableStateOf<SampleOutPrintData?>(null) }
     var openPdfTrigger by remember { mutableStateOf(false) }
     val customerSuggestions by orderViewModel.empListFlow.collectAsState(UiState.Loading)
 
-    val viewModelSampleIn: SampleInViewModel = hiltViewModel()
-    val viewModelSampleOut: SampleOutViewModel=hiltViewModel()
-    val challanList by viewModelSampleOut.sampleOutList.collectAsState()
+    val challanList by sampleOutViewModel.sampleOutList.collectAsState()
 
     val customerWiseChallanList by derivedStateOf {
         if (customerId == null || customerId == 0) {
@@ -277,13 +278,6 @@ fun SampleInScreen(
     }
 
 
-    // Fetch once
-    LaunchedEffect(Unit) {
-        employee?.let {
-            viewModelSampleOut.loadSampleOut(it.clientCode ?: "", "SampleOut")
-        }
-    }
-
     val filteredCustomers by derivedStateOf {
         when (customerSuggestions) {
             is UiState.Success<*> -> {
@@ -375,21 +369,9 @@ fun SampleInScreen(
 
         Log.d("ManualEntry", "Added by SampleOutNo: ${challan.SampleOutNo}")
     }*/
-    LaunchedEffect(tags.size, tags.lastOrNull()?.epc, productList.size) {
-        Log.d("RFID_DEBUG", "========== EFFECT START ==========")
-        Log.d("RFID_DEBUG", "tags.size=${tags.size}")
-        Log.d("RFID_DEBUG", "lastTag=${tags.lastOrNull()?.epc}")
-        Log.d("RFID_DEBUG", "productList.size=${productList.size}")
-
-        if (tags.isEmpty()) {
-            Log.w("RFID_DEBUG", "STOP: tags empty")
-            return@LaunchedEffect
-        }
-
-        if (productList.isEmpty()) {
-            Log.w("RFID_DEBUG", "STOP: productList empty")
-            return@LaunchedEffect
-        }
+    LaunchedEffect(tags, productList.size) {
+        if (tags.isEmpty()) return@LaunchedEffect
+        if (productList.isEmpty()) return@LaunchedEffect
 
         fun norm(v: String?) = v
             ?.trim()
@@ -399,70 +381,27 @@ fun SampleInScreen(
             ?: ""
 
         val selectedIssues = productList.flatMap { it.IssueItems.orEmpty() }
-
-        Log.d("RFID_DEBUG", "selectedIssues.size=${selectedIssues.size}")
-
-        if (selectedIssues.isEmpty()) {
-            Log.w("RFID_DEBUG", "STOP: IssueItems empty")
-            return@LaunchedEffect
-        }
+        if (selectedIssues.isEmpty()) return@LaunchedEffect
 
         val updatedScanned = scannedCodes.toMutableSet()
 
         tags.forEach { tagInfo ->
-
             val scannedCode = norm(tagInfo.getEPC())
-
-            Log.d("RFID_DEBUG", "Checking scannedCode=$scannedCode")
-
-            if (scannedCode.isEmpty()) {
-                Log.w("RFID_DEBUG", "STOP: scannedCode empty")
-                return@forEach
-            }
+            if (scannedCode.isEmpty()) return@forEach
 
             val matchedIssue = selectedIssues.firstOrNull { issue ->
-
                 val itemCode = norm(issue.ItemCode)
                 val rfidCode = norm(issue.RFIDCode)
                 val tidNumber = norm(issue.TIDNumber)
-
-                val isMatch =
-                    itemCode == scannedCode ||
-                            rfidCode == scannedCode ||
-                            tidNumber == scannedCode
-
-                Log.d(
-                    "RFID_MATCH_DEBUG",
-                    """
-                -------------------------
-                Scanned EPC : $scannedCode
-                ItemCode    : $itemCode
-                RFIDCode    : $rfidCode
-                TIDNumber   : $tidNumber
-                Final Match : $isMatch
-                -------------------------
-                """.trimIndent()
-                )
-
-                isMatch
-            }
-
-            if (matchedIssue == null) {
-                Log.w("RFID_DEBUG", "NO MATCH for scanned=$scannedCode")
-                return@forEach
-            }
+                itemCode == scannedCode || rfidCode == scannedCode || tidNumber == scannedCode
+            } ?: return@forEach
 
             updatedScanned.add(norm(matchedIssue.ItemCode))
             updatedScanned.add(norm(matchedIssue.RFIDCode))
             updatedScanned.add(norm(matchedIssue.TIDNumber))
-
-            Log.d("RFID_DEBUG", "GREEN TICK ADDED=${norm(matchedIssue.ItemCode)}")
         }
 
         scannedCodes = updatedScanned.toSet()
-
-        Log.d("RFID_DEBUG", "Final scannedCodes=$scannedCodes")
-        Log.d("RFID_DEBUG", "========== EFFECT END ==========")
     }
  /*   LaunchedEffect(tags, allItems, productList.size) {
         if (tags.isEmpty()) return@LaunchedEffect

@@ -183,6 +183,7 @@
 
     <string name="sample_out_list_title">सैंपल आउट सूची</string>
     <string name="search_hint_sample_out">सैंपल आउट नंबर या ग्राहक नाम से खोजें</string>
+    <string name="search_hint_sample_in">सैंपल इन नंबर या ग्राहक नाम से खोजें</string>
     <string name="error_loading_list">सूची लोड करने में त्रुटि</string>
 
     <string name="header_s_no">क्र.सं.</string>
@@ -268,9 +269,7 @@
 
 
     <!-- Search bar -->
-    <string name="hint_search_challan_or_customer">
-        चालान नंबर या ग्राहक नाम से खोजें
-    </string>
+    <string name="hint_search_challan_or_customer">चालान नंबर या ग्राहक नाम से खोजें</string>
 
 
     <!-- Messages -->

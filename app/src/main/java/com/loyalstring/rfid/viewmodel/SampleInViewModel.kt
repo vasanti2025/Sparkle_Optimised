@@ -32,8 +32,10 @@ class SampleInViewModel @Inject constructor(
         sampleStatus: String
     ) {
         viewModelScope.launch {
-
-            _loading.value = true   // START LOADING
+            val hasCached = _sampleInList.value.isNotEmpty()
+            if (!hasCached) {
+                _loading.value = true
+            }
 
             try {
                 val request = SampleOutListRequest(
@@ -49,16 +51,20 @@ class SampleInViewModel @Inject constructor(
                 }
 
                 result.onFailure { e ->
-                    _sampleInList.value = emptyList()
+                    if (!hasCached) {
+                        _sampleInList.value = emptyList()
+                    }
                     _error.value = e.message ?: "Something went wrong"
                 }
 
             } catch (e: Exception) {
+                if (!hasCached) {
+                    _sampleInList.value = emptyList()
+                }
                 _error.value = e.message ?: "Unexpected error"
-                _sampleInList.value = emptyList()
 
             } finally {
-                _loading.value = false  // ALWAYS STOP LOADING
+                _loading.value = false
             }
         }
     }

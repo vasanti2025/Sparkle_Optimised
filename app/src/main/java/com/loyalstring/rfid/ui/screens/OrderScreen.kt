@@ -38,6 +38,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
@@ -123,8 +124,6 @@ fun OrderScreen(
 )*/ {
     val itemId: Int? = null
     val viewModel: BulkViewModel = hiltViewModel()
-    val orderViewModel: OrderViewModel = hiltViewModel()
-    val singleProductViewModel: SingleProductViewModel = hiltViewModel()
     val deliveryChallanViewModel: DeliveryChallanViewModel = hiltViewModel()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -167,6 +166,7 @@ fun OrderScreen(
     var selectedItem by remember { mutableStateOf<ItemCodeResponse?>(null) }
     val productListViewModel: ProductListViewModel = hiltViewModel()
     var createRequested by remember { mutableStateOf(false) }
+    var editPrefilled by remember { mutableStateOf(false) }
 
     var showOrderDetailsDialog by remember { mutableStateOf(false) }
     var lastOrderDetails by remember { mutableStateOf<OrderDetails?>(null) } // ✅ optional default for scans
@@ -240,62 +240,22 @@ fun OrderScreen(
         ?.savedStateHandle
         ?.get<CustomOrderResponse>("editOrder")
 
-    LaunchedEffect(editOrder) {
-        if (editOrder != null) {
-            val firstCoItem = editOrder?.CustomOrderItem?.firstOrNull()
-            selectedItem = firstCoItem?.toItemCodeResponse()
-            selectedCustomer = editOrder.Customer.toEmployeeList()
+    LaunchedEffect(editOrder, editPrefilled) {
+        if (editOrder == null || editPrefilled) return@LaunchedEffect
 
+        val order = editOrder
+        isEditMode = true
+        Log.d("EditOrder", "Got order for edit: ${order.Customer.FirstName}")
 
-            // ✅ remove after consuming so it won’t run again
+        val firstCoItem = order.CustomOrderItem.firstOrNull()
+        selectedItem = firstCoItem?.toItemCodeResponse()
+        selectedCustomer = order.Customer.toEmployeeList()
+        customerName =
+            "${order.Customer.FirstName.orEmpty()} ${order.Customer.LastName.orEmpty()}".trim()
+        customerId = order.Customer.Id
 
-        }
-    }
-    LaunchedEffect(editOrder) {
-
-
-        if (editOrder != null) {
-            isEditMode = true
-            Log.d("EditOrder", "Got order for edit: ${editOrder.Customer.FirstName}")
-            // ✅ Prefill customer data
-            customerName =
-                "${editOrder.Customer.FirstName.orEmpty()} ${editOrder.Customer.LastName.orEmpty()}".trim()
-            customerId = editOrder.Customer.Id
-
-           /* // ✅ Prefill amounts
-            totalAmount = editOrder.TotalAmount ?: "0.0"
-            gst = editOrder.GST ?: "false"
-            gstApplied = editOrder.GSTApplied ?: "false"
-            totalNetAmt = editOrder.TotalNetAmount ?: "0"
-            totalGstAmt = editOrder.TotalGSTAmount ?: "0"
-            totalPupaseAmt = editOrder.TotalPurchaseAmount ?: "0"
-            totalStoneAmt = editOrder.TotalStoneAmount ?: "0"
-            totalStoneWt = editOrder.TotalStoneWeight ?: "0"
-            totalDiamondAMt = editOrder.TotalDiamondAmount ?: "0"
-            totalDiamondWt = editOrder.TotalDiamondWeight ?: "0"
-            totalNetWt =
-                editOrder.CustomOrderItem.sumOf { it.NetWt?.toDoubleOrNull() ?: 0.0 }.toString()
-            totalGrWt = editOrder.CustomOrderItem.sumOf { it.GrossWt?.toDoubleOrNull() ?: 0.0 }
-                .toString()
-            totalFinemetal = editOrder.TotalFineMetal ?: "0"
-
-            // ✅ Prefill product list in Room/State
-            orderViewModel.clearOrderItems()
-            gst = editOrder.GST ?: "false"
-            gstApplied = editOrder.GSTApplied ?: "false"
-
-            // ✅ Sync checkbox with saved GST
-            isGstChecked = gstApplied.equals("true", ignoreCase = true)
-
-            // ✅ Recalculate total amount if GST was applied
-            val gstPercent = 3.0
-            val taxableAmt = totalAMt
-            if (isGstChecked) {
-                val gstAmt = taxableAmt * gstPercent / 100
-                totalAMt = taxableAmt + gstAmt
-                totalGstAmt = gstAmt.toString()
-            }*/
-            editOrder.CustomOrderItem.forEach { coItem ->
+        val prefilledItems = withContext(Dispatchers.Default) {
+            order.CustomOrderItem.mapNotNull { coItem ->
                 val orderItem = OrderItem(
                     branchId = coItem.BranchId.toString(),
                     branchName = coItem.BranchName.orEmpty(),
@@ -349,39 +309,17 @@ fun OrderScreen(
                     makingFixedWastage = coItem.MakingFixedWastage,
                     makingPerGram = coItem.MakingPerGram.orEmpty(),
                     CategoryWt = coItem.WeightCategories.toString(),
-
-
                 )
-
-                if (!orderItem.itemCode.isNullOrBlank() && orderItem.itemCode != "null") {
-                    val alreadyExists = productList.any { it.itemCode == orderItem.itemCode }
-                    if (!alreadyExists) {
-                        orderViewModel.insertOrderItemToRoom(orderItem)
-                        productList.add(orderItem)
-                    }
-                }
-            }
-        }else
-        {
-            customerName = ""
-            itemCode = TextFieldValue("")
-            orderViewModel.clearOrderItems()
-            isEditMode = false
-            productList.clear()
-
+                if (!orderItem.itemCode.isNullOrBlank() && orderItem.itemCode != "null") orderItem else null
+            }.distinctBy { it.itemCode }
         }
+        productList.clear()
+        productList.addAll(prefilledItems)
+        orderViewModel.insertOrderItemsBatch(prefilledItems)
+        editPrefilled = true
     }
 
     val updateResponse by orderViewModel.orderUpdateResponse.collectAsState()
-    LaunchedEffect(editOrder) {
-        if (editOrder == null) {
-            customerName = ""
-            itemCode = TextFieldValue("")
-            productList.clear()
-            isEditMode = false
-            orderViewModel.clearOrderItems()
-        }
-    }
     LaunchedEffect(updateResponse) {
         updateResponse?.let {
             // 🔄 Reset UI state
@@ -425,19 +363,14 @@ fun OrderScreen(
     }
 
 
-    LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            try {
-                orderViewModel.getAllEmpList(employee?.clientCode.toString())
-                orderViewModel.getAllItemCodeList(ClientCodeRequest(employee?.clientCode.toString()))
-                singleProductViewModel.getAllBranches(ClientCodeRequest(employee?.clientCode.toString()))
-                singleProductViewModel.getAllPurity(ClientCodeRequest(employee?.clientCode.toString()))
-                singleProductViewModel.getAllSKU(ClientCodeRequest(employee?.clientCode.toString()))
-                orderViewModel.getDailyRate(ClientCodeRequest(employee?.clientCode))
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+    LaunchedEffect(employee?.clientCode) {
+        val code = employee?.clientCode ?: return@LaunchedEffect
+        orderViewModel.getAllEmpList(code)
+        orderViewModel.getAllItemCodeList(ClientCodeRequest(code))
+        singleProductViewModel.getAllBranches(ClientCodeRequest(code))
+        singleProductViewModel.getAllPurity(ClientCodeRequest(code))
+        singleProductViewModel.getAllSKU(ClientCodeRequest(code))
+        orderViewModel.getDailyRate(ClientCodeRequest(code))
     }
 
 
@@ -466,9 +399,11 @@ fun OrderScreen(
                     state.message ?: "Customer added successfully",
                     Toast.LENGTH_SHORT
                 ).show()
+                orderViewModel.clearAddEmpResponse()
             }
             is Resource.Error -> {
                 Toast.makeText(context, state.message ?: "Error", Toast.LENGTH_SHORT).show()
+                orderViewModel.clearAddEmpResponse()
             }
             is Resource.Loading -> {}
             null -> {}
@@ -479,17 +414,13 @@ fun OrderScreen(
 // Collect the latest rates
   //  val dailyRates by orderViewModel.getAllDailyRate.collectAsState()
 
-    LaunchedEffect(employee?.clientCode) {
-        val code = employee?.clientCode ?: return@LaunchedEffect
-        // No need for withContext here; VM already uses IO
-        singleProductViewModel.getAllBranches(ClientCodeRequest(code))
-        orderViewModel.getAllEmpList(ClientCodeRequest(code).toString())
-    }
-
-
     val tags by viewModel.scannedTags.collectAsState()
     val scanTrigger by viewModel.scanTrigger.collectAsState()
     val isOnline = NetworkUtils.isNetworkAvailable(context)
+    val latestAllItems by rememberUpdatedState(allItems)
+    val latestDailyRates by rememberUpdatedState(dailyRates)
+    val latestLastOrderDetails by rememberUpdatedState(lastOrderDetails)
+    val processedTagEpcs = remember { mutableSetOf<String>() }
 
     val customerSuggestions by orderViewModel.empListFlow.collectAsState(UiState.Loading)
 
@@ -632,8 +563,8 @@ fun OrderScreen(
                 finePer = "0.0",
                 wastage = matchedItem.makingPercent ?: "0.0",
 
-                orderDate = pickOrderDate(lastOrderDetails),
-                deliverDate = pickDeliverDate(lastOrderDetails),
+                orderDate = pickOrderDate(orderDetails),
+                deliverDate = pickDeliverDate(orderDetails),
 
                 productName = matchedItem.productName.orEmpty(),
                 itemCode = matchedItem.itemCode.orEmpty(),
@@ -863,10 +794,13 @@ fun OrderScreen(
 
 
     /*scan the rfid*/
-    LaunchedEffect(tags, allItems, dailyRates) {
+    LaunchedEffect(tags) {
 
         if (tags.isEmpty()) return@LaunchedEffect
-        if (allItems.isEmpty()) {
+        val currentItems = latestAllItems
+        val rates = latestDailyRates
+        val orderDetails = latestLastOrderDetails
+        if (currentItems.isEmpty()) {
             Log.e("RFIDScan", "❌ allItems EMPTY when tags = $tags")
             return@LaunchedEffect
         }
@@ -874,8 +808,8 @@ fun OrderScreen(
         Log.d("RFIDScan", "📦 ${tags.size} tags received")
         Log.d(
             "RFIDScan",
-            "📚 allItems (${allItems.size}): " +
-                    allItems.joinToString(" | ") {
+            "📚 allItems (${currentItems.size}): " +
+                    currentItems.joinToString(" | ") {
                         "epc='${it.epc}', rfid='${it.rfid}', code='${it.itemCode}'"
                     }
         )
@@ -891,10 +825,14 @@ fun OrderScreen(
                 ?.replace(" ", "")
                 ?: ""
 
+            if (scannedEpc.isBlank() || scannedEpc in processedTagEpcs) {
+                return@forEach
+            }
+
             Log.d("EPC_SCAN", "Scanned EPC = '$scannedEpc'")
 
             // 2️⃣ allItems me match
-            val matchedItem = allItems.firstOrNull { item ->
+            val matchedItem = currentItems.firstOrNull { item ->
                 val itemEpc = item.epc
                     ?.trim()
                     ?.uppercase()
@@ -927,8 +865,8 @@ fun OrderScreen(
             // --- Calculation block (same as before) ---
 
             val netWt = safeDouble(matchedItem.netWeight)
-            val rate = if (!dailyRates.isNullOrEmpty()) {
-                dailyRates.firstOrNull {
+            val rate = if (rates.isNotEmpty()) {
+                rates.firstOrNull {
                     it.PurityName.equals(matchedItem.purity, ignoreCase = true)
                 }?.Rate?.toDoubleOrNull() ?: 0.0
             } else 0.0
@@ -972,8 +910,8 @@ fun OrderScreen(
                 polishType = "",
                 finePer = finePercent.toString(),
                 wastage = matchedItem.makingPercent ?: "0.0",
-                orderDate = pickOrderDate(lastOrderDetails),
-                deliverDate = pickDeliverDate(lastOrderDetails),
+                orderDate = pickOrderDate(orderDetails),
+                deliverDate = pickDeliverDate(orderDetails),
                 productName = matchedItem.productName.orEmpty(),
                 itemCode = matchedItem.itemCode.orEmpty(),
                 rfidCode = matchedItem.rfid.toString(),
@@ -1020,6 +958,7 @@ fun OrderScreen(
 
             if (productList.none { it.itemCode == productDetail.itemCode }) {
                 productList.add(productDetail)
+                processedTagEpcs.add(scannedEpc)
                 Log.d("RFIDScan", "✅ Added ${productDetail.itemCode} (${productDetail.rfidCode})")
             } else {
                 Log.d("RFIDScan", "⚠️ Duplicate tag skipped: ${productDetail.rfidCode}")
@@ -1029,8 +968,7 @@ fun OrderScreen(
 
 
     /*scan bar code */
-    /* scan bar code */
-    LaunchedEffect(allItems, dailyRates) {
+    LaunchedEffect(Unit) {
         viewModel.barcodeReader.openIfNeeded()
 
         fun normalize(value: String?): String =
@@ -1052,7 +990,9 @@ fun OrderScreen(
 
         viewModel.barcodeReader.setOnBarcodeScanned { scannedRaw ->
             val scanned = normalize(scannedRaw)
-            val currentItems = allItems
+            val currentItems = latestAllItems
+            val rates = latestDailyRates
+            val orderDetails = latestLastOrderDetails
 
             itemCode = TextFieldValue(scanned)
 
@@ -1117,8 +1057,8 @@ fun OrderScreen(
 
             val netWt = safeDouble(matchedItem.netWeight)
 
-            val rate = if (!dailyRates.isNullOrEmpty()) {
-                dailyRates
+            val rate = if (rates.isNotEmpty()) {
+                rates
                     .firstOrNull {
                         it.PurityName.equals(matchedItem.purity, ignoreCase = true)
                     }
@@ -1170,8 +1110,8 @@ fun OrderScreen(
                 finePer = matchedItem.makingPerGram?.toString() ?: "0.0",
                 wastage = matchedItem.makingPercent?.toString() ?: "0.0",
 
-                orderDate = pickOrderDate(lastOrderDetails),
-                deliverDate = pickDeliverDate(lastOrderDetails),
+                orderDate = pickOrderDate(orderDetails),
+                deliverDate = pickDeliverDate(orderDetails),
 
                 productName = matchedItem.productName.orEmpty(),
                 itemCode = matchedItem.itemCode.orEmpty(),
@@ -1234,21 +1174,17 @@ fun OrderScreen(
     val lastOredrNo by orderViewModel.lastOrderNoresponse.collectAsState()
     //val nextNo by orderViewModel.nextOrderNo.collectAsState()
 
-    LaunchedEffect(lastOredrNo,createRequested) {
+    LaunchedEffect(lastOredrNo) {
 
-        // Only run when a new value is emitted
         if (!createRequested) return@LaunchedEffect
 
-        // ✅ 2) LastOrderNo must be non-empty
         val lastNoStr = lastOredrNo.LastOrderNo?.trim()
         if (lastNoStr.isNullOrBlank()) return@LaunchedEffect
 
         val clientCode = employee?.clientCode.orEmpty()
-        val branchId = employee?.defaultBranchId ?: 1   // ya jahan se bhi branchId le raha hai
+        val branchId = employee?.defaultBranchId ?: 1
         val custId = customerId ?: 0
-        createRequested=false
 
-        // ❌ 1) Client code missing → add API mat call karo
         if (clientCode.isBlank()) {
             Log.e("SampleOut", "ClientCode missing")
             Toast.makeText(
@@ -1256,11 +1192,11 @@ fun OrderScreen(
                 "Client code missing",
                 Toast.LENGTH_SHORT
             ).show()
-            // sampleOutViewModel.clearLastSampleOutNo()
+            createRequested = false
+            orderViewModel.clearLastOrderNo()
             return@LaunchedEffect
         }
 
-        // ❌ 2) Customer select nahi hua → add API mat call karo
         if (custId == 0) {
             Log.e("SampleOut", "Customer not selected")
             Toast.makeText(
@@ -1268,11 +1204,11 @@ fun OrderScreen(
                 localizedContext.getString(R.string.please_select_customer),
                 Toast.LENGTH_SHORT
             ).show()
-            //sampleOutViewModel.clearLastSampleOutNo()
+            createRequested = false
+            orderViewModel.clearLastOrderNo()
             return@LaunchedEffect
         }
 
-        // ❌ 3) Koi items hi nahi → add API mat call karo
         if (productList.isEmpty()) {
             Log.e("SampleOut", "No items in productList")
             Toast.makeText(
@@ -1280,11 +1216,12 @@ fun OrderScreen(
                 localizedContext.getString(R.string.please_add_item),
                 Toast.LENGTH_SHORT
             ).show()
-            //sampleOutViewModel.clearLastSampleOutNo()
+            createRequested = false
+            orderViewModel.clearLastOrderNo()
             return@LaunchedEffect
         }
 
-        // ✅ Sab validation pass → abhi hi number generate karo + API call
+        createRequested = false
         val lastNoInt = lastOredrNo.LastOrderNo.toString().toIntOrNull() ?: 0
         val newLastOrderNo = lastNoInt+ 1
         Log.d("@@", "newOrderNo" + newLastOrderNo)
@@ -1508,11 +1445,11 @@ fun OrderScreen(
 
                     Status = "" ?: null,
                     URDNo = null,
-                    HallmarkAmount = item.hallmarkAmt ?: null,
+                    HallmarkAmount = decimalStringOrNull(item.hallmarkAmt),
 
                     Stones = emptyList(),
                     Diamond = emptyList(),
-                    WeightCategories = item.CategoryWt?.takeIf { it.isNotBlank() && it != "null" }
+                    WeightCategories = decimalStringOrNull(item.CategoryWt)
                 )
             },
 
@@ -1570,9 +1507,11 @@ fun OrderScreen(
         if (isOnline) {
             orderViewModel.addOrderCustomer(customerObj)
         } else {
+            val currentEmployee = employee ?: run {
+                orderViewModel.clearLastOrderNo()
+                return@LaunchedEffect
+            }
             Log.d( "@@"," selectedCustomer?.Id.toString()"+selectedCustomer?.Id)
-           // orderViewModel.saveOrder(customerObj)
-          //  orderViewModel.saveOrderOffline(customerObj,context)
             val localOrderNo = "OFF-${System.currentTimeMillis()}"
 
 
@@ -1580,12 +1519,20 @@ fun OrderScreen(
                 (customerSuggestions as? UiState.Success<List<EmployeeList>>)?.data.orEmpty()
 
             val selectedCustomerObj: EmployeeList? =
-                customerList?.firstOrNull { (it.Id ?: 0) == (customerId ?: 0) }
+                customerList.firstOrNull { (it.Id ?: 0) == (customerId ?: 0) }
 
             Log.d( "@@##"," selectedCustomer?.Id.toString()"+selectedCustomerObj?.Id)
-            orderViewModel.saveOrderOffline(  buildOrderRequest(
-                orderNo = localOrderNo,
-                employee!!,productList, selectedCustomerObj,gstAmount,lastOrderDetails), context)
+            orderViewModel.saveOrderOffline(
+                buildOrderRequest(
+                    orderNo = localOrderNo,
+                    employee = currentEmployee,
+                    productList = productList,
+                    selectedCustomer = selectedCustomerObj,
+                    gstAmount = gstAmount,
+                    lastOrderDetails = lastOrderDetails
+                ),
+                context
+            )
         }
 
     }
@@ -1599,7 +1546,7 @@ fun OrderScreen(
                 Toast.makeText(context,localizedContext.getString(R.string.order_success), Toast.LENGTH_SHORT).show()
                 generateTablePdfWithImages(context, it,localizedContext)
                 //showInvoice = true
-                orderViewModel.clearOrderItems()
+                orderViewModel.clearOrderItemsAsync()
                 customerName = customerName
                 itemCode = TextFieldValue("")  // reset text field
                 productList.clear()
@@ -1715,7 +1662,7 @@ fun OrderScreen(
                            GSTApplied = isGstApplied.toString(),
                            Discount = "",
                            TotalNetAmount = taxableAmt.toString(),
-                           TotalGSTAmount = String.format("%.2f", gstAmt),
+                           TotalGSTAmount = String.format(Locale.US, "%.2f", gstAmt),
                            TotalPurchaseAmount = calculatedTotalAmount.toString(),
                            ReceivedAmount = "",
                            TotalBalanceMetal = "",
@@ -1761,14 +1708,13 @@ fun OrderScreen(
                            TaxableAmount = calculatedTotalAmount.toString(),
                            TDSAmount = null,
                            CreatedOn = "2025-07-08",
-                           //   LastUpdated = "2025-07-08",
                            StatusType = true,
                            FineMetal = "",
                            BalanceMetal = "0.0",
                            AdvanceAmt = "0",
                            PaidAmt = "25000",
                            TaxableAmt = taxableAmt.toString(),
-                           GstAmount = String.format("%.2f", gstAmt),
+                           GstAmount = String.format(Locale.US, "%.2f", gstAmt),
                            GstCheck = isGstApplied.toString(),
                            Category = "Ring",
                            TDSCheck = "false",
@@ -1779,10 +1725,9 @@ fun OrderScreen(
                            BulkOrderId = null,
 
                            CustomOrderItem = productList.map { product ->
-
                                CustomOrderItem(
                                    CustomOrderId = editOrder?.CustomOrderId?.toInt() ?: 0,
-                                   RFIDCode = product?.rfidCode.toString(),
+                                   RFIDCode = product.rfidCode.toString(),
                                    OrderDate = isoDateTimeOrNull(product.orderDate)
                                        ?: nowIsoDateTime(),
                                    DeliverDate = isoDateTimeOrNull(product.deliverDate)
@@ -1836,8 +1781,6 @@ fun OrderScreen(
                                    FinePercentage = product.finePer,
                                    ClientCode = employee?.clientCode,
                                    OrderId = "",
-                                   // CreatedOn = "",
-                                   // LastUpdated = "",
                                    StatusType = true,
                                    PackingWeight = product.packingWt,
                                    MetalAmount = "",
@@ -1859,13 +1802,12 @@ fun OrderScreen(
                                    OrderStatus = "Order Received",
                                    DueDate = "",
                                    Remark = product.remark,
-
                                    PurchaseInvoiceNo = "",
                                    Purity = product.purity,
                                    Status = "",
                                    URDNo = "",
-                                   HallmarkAmount = product.hallmarkAmt,
-                                   WeightCategories = product.CategoryWt,
+                                   HallmarkAmount = decimalStringOrNull(product.hallmarkAmt),
+                                   WeightCategories = decimalStringOrNull(product.CategoryWt),
                                    Stones = emptyList(),
                                    Diamond = emptyList()
                                )
@@ -1916,45 +1858,47 @@ fun OrderScreen(
                                LastUpdated = "2025-07-08",
                                StatusType = true,
                            ),
-                           Id = TODO(),
-                           syncStatus = TODO(),
-                           LastUpdated = TODO(),
-                           HallmarkAmount = TODO(),
-                           WeightCatogories = TODO(),
-                           SKUId = TODO(),
-                           RfidCode = TODO(),
-                           TidNumber = TODO()
+                           Id = 0,
+                           syncStatus = false,
+                           LastUpdated = null,
+                           HallmarkAmount = decimalStringOrNull(editOrder?.HallmarkAmount),
+                           WeightCatogories = decimalStringOrNull(editOrder?.WeightCategories),
+                           SKUId = editOrder?.SKUId ?: 0,
+                           RfidCode = editOrder?.RfidCode.orEmpty(),
+                           TidNumber = editOrder?.TidNumber.orEmpty()
                        )
+
+                       Log.d("OrderUpdate", Gson().toJson(request))
 
                        if (isOnline) {
                            orderViewModel.updateOrderCustomer(request)
                        } else {
                            scope.launch {
-                              // if (editOrder != null) {
-                                   // this is server order editing offline
-                                   orderViewModel.updateSyncedOrderOffline(
-                                       serverOrderId = editOrder?.CustomOrderId!!,
-                                       clientCode = employee?.clientCode.toString(),
-                                       updatedReq = request
-                                   )
-                                   Toast.makeText(context,localizedContext.getString(R.string.order_update_success), Toast.LENGTH_SHORT).show()
-                              /* } else {
-                                   // offline-created order editing
-                                   orderViewModel.updateOfflineCreatedOrder(
-                                       localId = editOrder?.CustomOrderId!!.toString(),
-                                       updatedReq = request
-                                   )
-                                   Toast.makeText(context, "Order Updated Successfully!", Toast.LENGTH_SHORT).show()
-                               }*/
+                               val serverOrderId = editOrder?.CustomOrderId ?: 0
+                               if (serverOrderId == 0) {
+                                   Toast.makeText(
+                                       context,
+                                       "Unable to update order",
+                                       Toast.LENGTH_SHORT
+                                   ).show()
+                                   return@launch
+                               }
+                               orderViewModel.updateSyncedOrderOffline(
+                                   serverOrderId = serverOrderId,
+                                   clientCode = employee?.clientCode.orEmpty(),
+                                   updatedReq = request
+                               )
+                               Toast.makeText(
+                                   context,
+                                   localizedContext.getString(R.string.order_update_success),
+                                   Toast.LENGTH_SHORT
+                               ).show()
                            }
                        }
                     } else {
-                       createRequested = true
                         val clientCode = employee?.clientCode ?: return@ScanBottomBar
-                        val branchId = employee.branchNo ?: 1
-                       val online = NetworkUtils.isNetworkAvailable(context)
+                        val online = NetworkUtils.isNetworkAvailable(context)
 
-                        // 🔹 Step 1: Fetch last item no
                        if (!online) {
 
                            // ✅ OFFLINE: local order no
@@ -2012,8 +1956,9 @@ fun OrderScreen(
                            return@ScanBottomBar
 
 
-                       }else
-                       {
+                       } else {
+                        createRequested = true
+                        orderViewModel.clearLastOrderNo()
                         orderViewModel.fetchLastOrderNo(ClientCodeRequest(clientCode))
                            }
                     }
@@ -2758,7 +2703,7 @@ fun buildOrderRequest(
 
                 Image = item.image.orEmpty(),
                 ItemCode = item.itemCode.orEmpty(),
-                CustomerId = selectedCustomer!!.Id!!.toInt(),
+                CustomerId = (selectedCustomer?.Id ?: 0).toInt(),
 
                 // ✅ REQUIRED
                 MRP = item.mrp ?: "0.0",
@@ -2819,8 +2764,8 @@ fun buildOrderRequest(
                 Purity = item.purity.orEmpty(),
                 Status = null,
                 URDNo = null,
-                HallmarkAmount = item.hallmarkAmt,
-                WeightCategories = item.CategoryWt?.takeIf { it.isNotBlank() && it != "null" },
+                HallmarkAmount = decimalStringOrNull(item.hallmarkAmt),
+                WeightCategories = decimalStringOrNull(item.CategoryWt),
 
                 Stones = emptyList(),
                 Diamond = emptyList()
@@ -3061,6 +3006,11 @@ private fun buildOrderItemFromSelectedItem(
 fun isoDateTimeOrNull(date: String?): String? {
     val d = date?.trim()
     return if (d.isNullOrEmpty() || d.equals("null", true)) null else d
+}
+
+private fun decimalStringOrNull(raw: String?): String? {
+    val s = raw?.trim()?.takeIf { it.isNotEmpty() && !it.equals("null", true) } ?: return null
+    return s.toDoubleOrNull()?.toString()
 }
 
 private fun qtyOrOne(raw: Any?): String {

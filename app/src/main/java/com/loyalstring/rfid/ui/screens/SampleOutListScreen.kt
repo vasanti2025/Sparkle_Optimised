@@ -29,6 +29,7 @@ import androidx.compose.ui.res.painterResource
 
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -401,7 +402,7 @@ fun SampleOutSearchBar(value: String, onValueChange: (String) -> Unit, localized
                 value = value,
                 onValueChange = onValueChange,
                 singleLine = true,
-                textStyle = LocalTextStyle.current.copy(color = Color.Black, fontSize = 16.sp),
+                textStyle = LocalTextStyle.current.copy(color = Color.Black, fontSize = 15.sp),
                 cursorBrush = SolidColor(Color.Gray),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -412,10 +413,13 @@ fun SampleOutSearchBar(value: String, onValueChange: (String) -> Unit, localized
                 Text(
                     text = localizedContext.getString(R.string.search_hint_sample_out),
                     color = Color.Gray,
-                    fontSize = 16.sp,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .align(Alignment.CenterStart)
-                        .padding(start = 4.dp)
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, end = 8.dp)
                 )
             }
             if (value.isNotEmpty()) {

@@ -1,7 +1,6 @@
 package com.loyalstring.rfid.ui.screens
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatDelegate
@@ -75,12 +74,25 @@ import com.loyalstring.rfid.viewmodel.QuotationViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
 import com.loyalstring.rfid.viewmodel.UiState
 import com.loyalstring.rfid.worker.LocaleHelper
+import androidx.compose.runtime.rememberUpdatedState
 import com.rscja.deviceapi.entity.UHFTAGInfo
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.withContext
 import java.util.Locale
-import kotlin.collections.forEach
+
+private fun QuotationItem.toUiQuotationItem(): QuotationItem {
+    val safeQty = qty ?: (Quantity?.toIntOrNull() ?: Pieces?.toIntOrNull() ?: 1)
+    return copy(
+        qty = safeQty,
+        MetalRate = MetalRate ?: RatePerGram ?: totayRate ?: "0.0",
+        totayRate = totayRate ?: MetalRate ?: RatePerGram ?: "0.0",
+        makingPercent = makingPercent ?: MakingPercentage ?: "0.0",
+        fixMaking = fixMaking ?: MakingFixedAmt ?: "0.0",
+        fixWastage = fixWastage ?: MakingFixedWastage ?: "0.0",
+        StoneAmt = StoneAmt ?: StoneAmount ?: TotalStoneAmount ?: "0.0",
+        DiamondWt = DiamondWt ?: TotalDiamondWeight ?: DiamondWeight ?: "0.0",
+        DiamondAmt = DiamondAmt ?: TotalDiamondAmount ?: DiamondSellAmount ?: "0.0",
+        FinePer = FinePer ?: FinePercentage ?: "0.0"
+    )
+}
 
 
 @SuppressLint("UnrememberedMutableState")
@@ -129,103 +141,70 @@ fun QuotationScreen(
     var totalWithGst by remember { mutableStateOf(0.0) }
 
     var pendingMatchedItem by remember { mutableStateOf<BulkItem?>(null) }
+    var isSaveClicked by remember { mutableStateOf(false) }
+    var editPrefilled by remember(Id, QuotationNo) { mutableStateOf(false) }
+
+    val quotationError by quotationViewModel.error.collectAsState()
+    LaunchedEffect(quotationError) {
+        quotationError?.let { msg ->
+            Toast.makeText(context, "Error: $msg", Toast.LENGTH_SHORT).show()
+            quotationViewModel.clearError()
+        }
+    }
+
+    LaunchedEffect(employee?.clientCode) {
+        val code = employee?.clientCode ?: return@LaunchedEffect
+        orderViewModel.getAllEmpList(code)
+        orderViewModel.getAllItemCodeList(ClientCodeRequest(code))
+        singleProductViewModel.getAllBranches(ClientCodeRequest(code))
+        singleProductViewModel.getAllPurity(ClientCodeRequest(code))
+        singleProductViewModel.getAllSKU(ClientCodeRequest(code))
+        orderViewModel.getDailyRate(ClientCodeRequest(code))
+    }
+
+    val quotationList by quotationViewModel.quotationList.collectAsState()
+
+    LaunchedEffect(Id, QuotationNo, quotationList, editPrefilled) {
+        val editId = Id ?: 0
+        val editNo = QuotationNo?.trim()
+        val shouldEdit = (editId != 0) || (!editNo.isNullOrBlank())
+        if (!shouldEdit || editPrefilled) return@LaunchedEffect
+
+        val clientCode = employee?.clientCode.orEmpty()
+        if (clientCode.isBlank()) return@LaunchedEffect
+
+        val selected = when {
+            editId != 0 -> quotationList.firstOrNull { it.id == editId }
+            !editNo.isNullOrBlank() -> quotationList.firstOrNull { it.quotationNo == editNo }
+            else -> null
+        }
+
+        if (selected == null) {
+            if (quotationList.isEmpty()) {
+                quotationViewModel.loadQuotationList(clientCode)
+            }
+            return@LaunchedEffect
+        }
+
+        isEditMode = true
+        quotationViewModel.setSelectedQuotation(selected)
+        customerName = selected.customer?.FirstName.orEmpty().trim()
+        customerId = selected.customerId
+        productList.clear()
+        productList.addAll(
+            selected.quotationItem
+                ?.filterNotNull()
+                ?.map { it.toUiQuotationItem() }
+                ?: emptyList()
+        )
+        editPrefilled = true
+    }
 
     val userPreferences = UserPreferences.getInstance(context)
     val savedLang = userPreferences.getAppLanguage().ifBlank { "en" }
     val currentLocales = AppCompatDelegate.getApplicationLocales()
     val currentLang = currentLocales[0]?.language ?: savedLang
     val localizedContext = LocaleHelper.applyLocale(context, currentLang)
-
-
-    LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            try {
-                orderViewModel.getAllEmpList(employee?.clientCode.toString())
-                orderViewModel.getAllItemCodeList(ClientCodeRequest(employee?.clientCode.toString()))
-                singleProductViewModel.getAllBranches(ClientCodeRequest(employee?.clientCode.toString()))
-                singleProductViewModel.getAllPurity(ClientCodeRequest(employee?.clientCode.toString()))
-                singleProductViewModel.getAllSKU(ClientCodeRequest(employee?.clientCode.toString()))
-                orderViewModel.getDailyRate(ClientCodeRequest(employee?.clientCode))
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-
-    LaunchedEffect(Id, QuotationNo) {
-
-        val editId = Id ?: 0
-        val editNo = QuotationNo?.trim()
-
-        val shouldEdit = (editId != 0) || (!editNo.isNullOrBlank())
-        if (!shouldEdit) return@LaunchedEffect
-
-        isEditMode = true
-
-        val clientCode = employee?.clientCode.orEmpty()
-        if (clientCode.isBlank()) return@LaunchedEffect
-
-        // ✅ Step 1: Load quotation list (if your VM has this)
-        quotationViewModel.loadQuotationList(clientCode)
-        // (method name agar different hai to same concept: list load karvao)
-
-        fun QuotationItem.toUiQuotationItem(): QuotationItem {
-            val safeQty = qty ?: (Quantity?.toIntOrNull() ?: Pieces?.toIntOrNull() ?: 1)
-
-            return this.copy(
-                qty = safeQty,
-
-                // rate
-                MetalRate = MetalRate ?: RatePerGram ?: totayRate ?: "0.0",
-                totayRate = totayRate ?: MetalRate ?: RatePerGram ?: "0.0",
-
-                // making
-                makingPercent = makingPercent ?: MakingPercentage ?: "0.0",
-                fixMaking = fixMaking ?: MakingFixedAmt ?: "0.0",
-                fixWastage = fixWastage ?: MakingFixedWastage ?: "0.0",
-
-                // stone/diamond safe
-                StoneAmt = StoneAmt ?: StoneAmount ?: TotalStoneAmount ?: "0.0",
-                DiamondWt = DiamondWt ?: TotalDiamondWeight ?: DiamondWeight ?: "0.0",
-                DiamondAmt = DiamondAmt ?: TotalDiamondAmount ?: DiamondSellAmount ?: "0.0",
-
-                // fine
-                FinePer = FinePer ?: FinePercentage ?: "0.0"
-            )
-        }
-
-        // ✅ Step 2: Observe list & find selected
-        quotationViewModel.quotationList.collectLatest { quotations ->
-
-            val selected = when {
-                editId != 0 -> quotations.firstOrNull { it.id == editId }
-                !editNo.isNullOrBlank() -> quotations.firstOrNull { it.quotationNo == editNo }
-                else -> null
-            }
-
-            if (selected == null) return@collectLatest
-
-            quotationViewModel.setSelectedQuotation(selected)
-
-            // ✅ Step 3: Prefill fields
-            customerName =
-                "${selected.customer?.FirstName.orEmpty()}".trim()
-
-            customerId = selected.customerId
-
-            productList.clear()
-            selected.quotationItem
-                ?.filterNotNull()
-                ?.map { it.toUiQuotationItem() }
-                ?.let { mapped ->
-                    productList.addAll(mapped)
-                }
-
-            // ✅ Important: selected mil gaya, ab collect band
-          //  currentCoroutineContext().cancel()
-        }
-    }
 
 
     val customerSuggestions by orderViewModel.empListFlow.collectAsState(UiState.Loading)
@@ -705,6 +684,10 @@ fun QuotationScreen(
         pendingMatchedItem = null
     }
 
+    val processedTagEpcs = remember { mutableSetOf<String>() }
+    val latestAllItems by rememberUpdatedState(allItems)
+    val latestDailyRates by rememberUpdatedState(dailyRates)
+
     /*scan the rfid*/
     LaunchedEffect(tags, allItems, dailyRates) {
 
@@ -715,13 +698,6 @@ fun QuotationScreen(
         }
 
         Log.d("RFIDScan", "📦 ${tags.size} tags received")
-        Log.d(
-            "RFIDScan",
-            "📚 allItems (${allItems.size}): " +
-                    allItems.joinToString(" | ") {
-                        "epc='${it.epc}', rfid='${it.rfid}', code='${it.itemCode}'"
-                    }
-        )
 
         fun safeDouble(v: String?) = v?.toDoubleOrNull() ?: 0.0
 
@@ -734,7 +710,9 @@ fun QuotationScreen(
                 ?.replace(" ", "")
                 ?: ""
 
-            Log.d("EPC_SCAN", "Scanned EPC = '$scannedEpc'")
+            if (scannedEpc.isBlank() || scannedEpc in processedTagEpcs) {
+                return@forEach
+            }
 
             // 2️⃣ allItems me match
             val matchedItem = allItems.firstOrNull { item ->
@@ -918,6 +896,7 @@ fun QuotationScreen(
 
             if (productList.none { it.ItemCode == productDetail.ItemCode }) {
                 productList.add(productDetail)
+                processedTagEpcs.add(scannedEpc)
                 Log.d("RFIDScan", "✅ Added ${productDetail.ItemCode} (${productDetail.RFIDCode})")
             } else {
                 Log.d("RFIDScan", "⚠️ Duplicate tag skipped: ${productDetail.RFIDCode}")
@@ -934,7 +913,7 @@ fun QuotationScreen(
             ?: ""
 
     /*scan bar code */
-    LaunchedEffect(allItems, dailyRates) {
+    LaunchedEffect(Unit) {
         viewModel.barcodeReader.openIfNeeded()
 
         fun safeDouble(v: String?) = v?.toDoubleOrNull() ?: 0.0
@@ -945,15 +924,10 @@ fun QuotationScreen(
             return x.isNotBlank() && y.isNotBlank() && x == y
         }
 
-        fun showToast(message: String) {
-            (context as? Activity)?.runOnUiThread {
-                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-            }
-        }
-
         viewModel.barcodeReader.setOnBarcodeScanned { scannedRaw ->
             val scanned = normalize(scannedRaw)
-            val currentItems = allItems
+            val currentItems = latestAllItems
+            val rates = latestDailyRates
             itemCode = TextFieldValue(scanned)
 
             val matchedItem = currentItems.firstOrNull { item ->
@@ -972,7 +946,7 @@ fun QuotationScreen(
 
             if (matchedItem == null) {
                 Log.d("RFID Scan", "❌ No match found: $scannedRaw")
-                showToast("Item not found")
+                Toast.makeText(context, "Item not found", Toast.LENGTH_SHORT).show()
                 return@setOnBarcodeScanned
             }
 
@@ -985,7 +959,7 @@ fun QuotationScreen(
 
             if (alreadyExists) {
                 Log.d("RFID Scan", "⚠️ Already exists: ${matchedItem.itemCode}")
-                showToast("Item already exists: ${matchedItem.itemCode}")
+                Toast.makeText(context, "Item already exists: ${matchedItem.itemCode}", Toast.LENGTH_SHORT).show()
                 return@setOnBarcodeScanned
             }
 
@@ -996,8 +970,8 @@ fun QuotationScreen(
 
             val netWt = safeDouble(matchedItem.netWeight)
 
-            val rate = if (!dailyRates.isNullOrEmpty()) {
-                dailyRates
+            val rate = if (rates.isNotEmpty()) {
+                rates
                     .firstOrNull { it.PurityName.equals(matchedItem.purity, ignoreCase = true) }
                     ?.Rate?.toDoubleOrNull() ?: 0.0
             } else 0.0
@@ -1113,8 +1087,8 @@ fun QuotationScreen(
     val lastQuotationNo by quotationViewModel.lastQuotationNo.collectAsState()
 
     LaunchedEffect(lastQuotationNo) {
+        if (!isSaveClicked) return@LaunchedEffect
 
-        // Only run when a new value is emitted
         val lastNo = lastQuotationNo ?: return@LaunchedEffect
         Log.e("SampleOut", "lastNo"+lastNo)
 
@@ -1130,7 +1104,8 @@ fun QuotationScreen(
                 localizedContext.getString(R.string.msg_client_code_missing),
                 Toast.LENGTH_SHORT
             ).show()
-           // quotationViewModel.clearLastSampleOutNo()
+            isSaveClicked = false
+            quotationViewModel.clearLastQuotationNo()
             return@LaunchedEffect
         }
 
@@ -1142,7 +1117,8 @@ fun QuotationScreen(
                 localizedContext.getString(R.string.please_select_customer),
                 Toast.LENGTH_SHORT
             ).show()
-          //  sampleOutViewModel.clearLastSampleOutNo()
+            isSaveClicked = false
+            quotationViewModel.clearLastQuotationNo()
             return@LaunchedEffect
         }
 
@@ -1155,7 +1131,8 @@ fun QuotationScreen(
 
                 Toast.LENGTH_SHORT
             ).show()
-         //   sampleOutViewModel.clearLastSampleOutNo()
+            isSaveClicked = false
+            quotationViewModel.clearLastQuotationNo()
             return@LaunchedEffect
         }
 
@@ -1231,6 +1208,8 @@ fun QuotationScreen(
 
         // ✅ Ab sirf valid state me hi API call hoga
         quotationViewModel.saveQuotation(request)
+        isSaveClicked = false
+        quotationViewModel.clearLastQuotationNo()
     }
 
     val addSampleOut by quotationViewModel.addResult.collectAsState()
@@ -1286,6 +1265,7 @@ fun QuotationScreen(
         )
 
         openPdfTrigger = true
+        quotationViewModel.clearAddResult()
         resetAllFields(   onResetCustomerName = { customerName = it },
             onResetCustomerId = { customerId = it },
             onResetSelectedCustomer = { selectedCustomer = it },
@@ -1315,7 +1295,7 @@ fun QuotationScreen(
         val result = updateSampleOut ?: return@LaunchedEffect
 
         Toast.makeText(context, localizedContext.getString(R.string.msg_quotation_updated), Toast.LENGTH_SHORT).show()
-        //sampleOutViewModel.clearUpdateResult()
+        quotationViewModel.clearUpdateResult()
     }
 
 
@@ -1410,7 +1390,7 @@ fun QuotationScreen(
                     } else {
 
                         val clientCode = employee?.clientCode ?: return@ScanBottomBar
-                        // 🔹 Step 1: Fetch last challan no
+                        isSaveClicked = true
                         quotationViewModel.clearLastQuotationNo()
                         quotationViewModel.loadLastQuotationNo(clientCode)
                    }},

@@ -179,23 +179,24 @@ class SingleProductViewModel @Inject constructor(
     fun getAllBranches(request: ClientCodeRequest) {
         viewModelScope.launch {
             try {
+                val cached = dropdownRepository.branch.first()
+                if (cached.isNotEmpty()) {
+                    branches = cached
+                }
+
                 val response = repository.getAllBranches(request)
                 if (response.isSuccessful) {
                     branches = response.body().orEmpty()
                     branches.forEach { apiBranch ->
                         dropdownRepository.addBranch(apiBranch.Id.toString(), apiBranch.BranchName)
                     }
-                } else {
-                    // Handle API error
+                } else if (cached.isEmpty()) {
                     Log.e("InventoryViewModel", "API error: ${response.code()}")
-                    val localData = dropdownRepository.branch.first() // ✅ fetch from Room
-                    branches = localData
+                    branches = cached
                 }
             } catch (e: Exception) {
-                // Handle network or unexpected error
                 Log.e("InventoryViewModel", "Exception: ${e.message}")
-                val localData = dropdownRepository.branch.first() // ✅ fetch from Room
-                branches = localData
+                branches = dropdownRepository.branch.first()
             }
         }
     }

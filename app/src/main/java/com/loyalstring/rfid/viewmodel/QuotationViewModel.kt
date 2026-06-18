@@ -49,11 +49,13 @@ class QuotationViewModel  @Inject constructor(
 
     fun loadQuotationList(clientCode: String) {
         viewModelScope.launch {
-            _loading.value = true
+            val hasCached = _quotationList.value.isNotEmpty()
+            if (!hasCached) {
+                _loading.value = true
+            }
 
             try {
                 val request = QuotationListRequest(ClientCode = clientCode)
-
                 val result = repository.getAllQuotationList(request)
 
                 result.onSuccess { list ->
@@ -62,11 +64,15 @@ class QuotationViewModel  @Inject constructor(
                 }
 
                 result.onFailure { e ->
-                    _quotationList.value = emptyList()
+                    if (!hasCached) {
+                        _quotationList.value = emptyList()
+                    }
                     _error.value = e.message ?: "Something went wrong"
                 }
             } catch (e: Exception) {
-                _quotationList.value = emptyList()
+                if (!hasCached) {
+                    _quotationList.value = emptyList()
+                }
                 _error.value = e.message ?: "Unexpected error"
             } finally {
                 _loading.value = false
@@ -100,6 +106,18 @@ class QuotationViewModel  @Inject constructor(
 
     fun clearLastQuotationNo() {
         _lastQuotationNo.value = null
+    }
+
+    fun clearAddResult() {
+        _addResult.value = null
+    }
+
+    fun clearUpdateResult() {
+        _updateResult.value = null
+    }
+
+    fun clearError() {
+        _error.value = null
     }
 
     fun loadLastQuotationNo(clientCode: String) {

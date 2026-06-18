@@ -188,6 +188,7 @@
     <!-- SampleOut list -->
     <string name="sample_out_list_title">Sample Out List</string>
     <string name="search_hint_sample_out">Search by Sample Out No or customer name</string>
+    <string name="search_hint_sample_in">Search by Sample In No or customer name</string>
     <string name="error_loading_list">Error loading list</string>
 
     <!-- Column headers -->
@@ -278,9 +279,7 @@
 
 
     <!-- Search bar -->
-    <string name="hint_search_challan_or_customer">
-        Search by challan no or customer name
-    </string>
+    <string name="hint_search_challan_or_customer">Search by challan no or customer name</string>
 
     <!-- Messages -->
     <string name="error_loading_challans">Error loading challans</string>

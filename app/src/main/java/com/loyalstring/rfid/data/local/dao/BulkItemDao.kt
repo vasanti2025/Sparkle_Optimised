@@ -111,6 +111,31 @@ interface BulkItemDao {
     @Query("SELECT COUNT(*) FROM bulk_items WHERE scannedStatus = :status")
     suspend fun getItemCountByStatus(status: String): Int
 
+    /** Fast EPC-only queries for inventory scan matching (avoids loading full BulkItem rows). */
+    @Query("SELECT UPPER(TRIM(epc)) FROM bulk_items WHERE epc IS NOT NULL AND TRIM(epc) != ''")
+    suspend fun getAllNormalizedEpcs(): List<String>
+
+    @Query("SELECT UPPER(TRIM(epc)) FROM bulk_items WHERE boxName = :value AND epc IS NOT NULL AND TRIM(epc) != ''")
+    suspend fun getEpcsByBox(value: String): List<String>
+
+    @Query("SELECT UPPER(TRIM(epc)) FROM bulk_items WHERE branchName = :value AND epc IS NOT NULL AND TRIM(epc) != ''")
+    suspend fun getEpcsByBranch(value: String): List<String>
+
+    @Query("SELECT UPPER(TRIM(epc)) FROM bulk_items WHERE counterName = :value AND epc IS NOT NULL AND TRIM(epc) != ''")
+    suspend fun getEpcsByCounter(value: String): List<String>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM bulk_items WHERE UPPER(TRIM(epc)) = :epc LIMIT 1)")
+    suspend fun epcExists(epc: String): Boolean
+
+    @Query("SELECT EXISTS(SELECT 1 FROM bulk_items WHERE UPPER(TRIM(epc)) = :epc AND boxName = :box LIMIT 1)")
+    suspend fun epcExistsInBox(epc: String, box: String): Boolean
+
+    @Query("SELECT EXISTS(SELECT 1 FROM bulk_items WHERE UPPER(TRIM(epc)) = :epc AND branchName = :branch LIMIT 1)")
+    suspend fun epcExistsInBranch(epc: String, branch: String): Boolean
+
+    @Query("SELECT EXISTS(SELECT 1 FROM bulk_items WHERE UPPER(TRIM(epc)) = :epc AND counterName = :counter LIMIT 1)")
+    suspend fun epcExistsInCounter(epc: String, counter: String): Boolean
+
 
     /*@Query("DELETE FROM bulk_items WHERE id = :id")
     suspend fun deleteById(id: Int): Int   // ✅ rows deleted*/

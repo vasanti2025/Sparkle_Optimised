@@ -40,7 +40,6 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -154,7 +153,8 @@ fun DeliveryChalanScreen(
     val salesmanList by orderViewModel.empListFlow.collectAsState()
     val touchList by deliveryChallanViewModel.customerTunchList.collectAsState()
     //var pendingItem by remember { mutableStateOf<BulkItem?>(null) }
-    val pendingItem = remember { mutableStateListOf<BulkItem>() }
+    //  val pendingItem = remember { mutableStateListOf<BulkItem>() }
+    val pendingItem = mutableListOf<BulkItem>()
     var pendingBarcodeItem by remember { mutableStateOf<BulkItem?>(null) }
     var baseTotal by remember { mutableStateOf(0.0) }
     var gstAmount by remember { mutableStateOf(0.0) }
@@ -162,59 +162,75 @@ fun DeliveryChalanScreen(
 
     LaunchedEffect(employee?.clientCode) {
         val code = employee?.clientCode ?: return@LaunchedEffect
-        orderViewModel.getAllEmpList(code)
-        orderViewModel.getAllItemCodeList(ClientCodeRequest(code))
-        singleProductViewModel.getAllBranches(ClientCodeRequest(code))
-        singleProductViewModel.getAllPurity(ClientCodeRequest(code))
-        singleProductViewModel.getAllSKU(ClientCodeRequest(code))
-        orderViewModel.getDailyRate(ClientCodeRequest(code))
+        withContext(Dispatchers.IO) {
+            try {
+                orderViewModel.getAllEmpList(code)
+                orderViewModel.getAllItemCodeList(ClientCodeRequest(code))
+                singleProductViewModel.getAllBranches(ClientCodeRequest(code))
+                singleProductViewModel.getAllPurity(ClientCodeRequest(code))
+                singleProductViewModel.getAllSKU(ClientCodeRequest(code))
+                orderViewModel.getDailyRate(ClientCodeRequest(code))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     // Collect the latest rates
     val dailyRates by orderViewModel.getAllDailyRate.collectAsState()
-    val challanList by deliveryChallanViewModel.challanList.collectAsState()
-    var editPrefilled by remember(challanId) { mutableStateOf(false) }
+
 
     val tags by viewModel.scannedTags.collectAsState()
     val scanTrigger by viewModel.scanTrigger.collectAsState()
 
-    LaunchedEffect(challanId, challanList, editPrefilled) {
-        if (challanId == null || challanId == 0 || editPrefilled) return@LaunchedEffect
+    LaunchedEffect(challanId) {
+        if (challanId != null && challanId != 0) {
+            isEditMode = true
 
-        val selected = challanList.firstOrNull { it.Id == challanId }
-        if (selected == null) {
-            if (challanList.isEmpty()) {
-                employee?.let {
-                    deliveryChallanViewModel.fetchAllChallans(it.clientCode ?: "", it.branchNo ?: 0)
+            // ✅ Step 1: Load challan list if not already loaded
+            employee?.let {
+                deliveryChallanViewModel.fetchAllChallans(it.clientCode ?: "", it.branchNo ?: 0)
+            }
+
+            // ✅ Step 2: Observe challan list and find the matching one
+            deliveryChallanViewModel.challanList.collect { challans ->
+                val selected = challans.firstOrNull { it.Id == challanId }
+                if (selected != null) {
+                    deliveryChallanViewModel.setSelectedChallan(selected)
+
+                    // ✅ Step 3: Prefill UI fields
+                    customerName = selected.CustomerName.toString()
+                    customerId = selected.CustomerId
+                    Log.d("@@","customerName"+customerName+" "+customerId)
+                    productList.clear()
+                   // selected.ChallanDetails?.let { productList.addAll(it) }
+                    selected.ChallanDetails?.forEach { item ->
+                        val newItem = item   // same object reference
+
+                        newItem.CustomerName = customerName
+                        newItem.CustomerId = customerId!!
+                        // copy other common fields if needed
+                        // newItem.BranchId = selected.BranchId
+
+                        val alreadyExists = productList.any {
+                            (!newItem.ItemCode.isNullOrBlank() &&
+                                    it.ItemCode.equals(newItem.ItemCode, ignoreCase = true)) ||
+                                    (!newItem.RFIDCode.isNullOrBlank() &&
+                                            it.RFIDCode.equals(newItem.RFIDCode, ignoreCase = true)) ||
+                                    (!newItem.tid.isNullOrBlank() &&
+                                            it.tid.equals(newItem.tid, ignoreCase = true))
+                        }
+                        if (!alreadyExists) {
+                            productList.add(newItem)
+                        } else {
+                            Toast.makeText(context, "Item already added", Toast.LENGTH_SHORT).show()
+                        }
+
+                    }
+
                 }
             }
-            return@LaunchedEffect
         }
-
-        isEditMode = true
-        deliveryChallanViewModel.setSelectedChallan(selected)
-        customerName = selected.CustomerName.orEmpty()
-        customerId = selected.CustomerId
-        Log.d("@@", "customerName$customerName $customerId")
-
-        productList.clear()
-        selected.ChallanDetails?.forEach { item ->
-            item.CustomerName = customerName
-            item.CustomerId = customerId ?: 0
-
-            val alreadyExists = productList.any {
-                (!item.ItemCode.isNullOrBlank() &&
-                        it.ItemCode.equals(item.ItemCode, ignoreCase = true)) ||
-                        (!item.RFIDCode.isNullOrBlank() &&
-                                it.RFIDCode.equals(item.RFIDCode, ignoreCase = true)) ||
-                        (!item.tid.isNullOrBlank() &&
-                                it.tid.equals(item.tid, ignoreCase = true))
-            }
-            if (!alreadyExists) {
-                productList.add(item)
-            }
-        }
-        editPrefilled = true
     }
 
     LaunchedEffect(shouldNavigateBack) {
@@ -284,7 +300,12 @@ fun DeliveryChalanScreen(
 
 
 
-    val itemCodeList by orderViewModel.itemCodeResponse.collectAsState()
+    var itemCodeList by remember { mutableStateOf<List<ItemCodeResponse>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        orderViewModel.itemCodeResponse.collect { items ->
+            itemCodeList = items   // assign collected items into your mutable state
+        }
+    }
    /* val filteredApiList = remember(itemCode.text, itemCodeList, isLoading) {
         derivedStateOf {
             val query = itemCode.text.trim()
@@ -625,13 +646,7 @@ fun DeliveryChalanScreen(
             }
         }
     }*/
-    val latestAllItems by rememberUpdatedState(allItems)
-    val latestTouchList by rememberUpdatedState(touchList)
-    val latestDailyRates by rememberUpdatedState(dailyRates)
-    val latestCustomerId by rememberUpdatedState(customerId)
-    val processedTagEpcs = remember { mutableSetOf<String>() }
-
-    LaunchedEffect(Unit) {
+    LaunchedEffect(allItems, dailyRates, touchList) {
         viewModel.barcodeReader.openIfNeeded()
 
         fun normalize(value: String?): String {
@@ -650,16 +665,18 @@ fun DeliveryChalanScreen(
             return x.isNotBlank() && y.isNotBlank() && x == y
         }
 
+        fun showToast(msg: String) {
+            (context as? Activity)?.runOnUiThread {
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            }
+        }
+
         viewModel.barcodeReader.setOnBarcodeScanned { scannedRaw ->
             val scanned = normalize(scannedRaw)
-            val items = latestAllItems
-            val touches = latestTouchList
-            val rates = latestDailyRates
-            val currentCustomerId = latestCustomerId
 
             itemCode = TextFieldValue(scanned)
 
-            val matchedItem = items.firstOrNull { item ->
+            val matchedItem = allItems.firstOrNull { item ->
                 val candidates = listOf(
                     normalize(item.itemCode),
                     normalize(item.rfid),
@@ -675,10 +692,12 @@ fun DeliveryChalanScreen(
             }
 
             if (matchedItem == null) {
-                Toast.makeText(context, "Item not found", Toast.LENGTH_SHORT).show()
+                showToast("Item not found")
                 Log.d("BarcodeScan", "❌ No item found for $scannedRaw")
                 return@setOnBarcodeScanned
             }
+
+
 
             val alreadyExists = productList.any {
                 sameCode(it.ItemCode, matchedItem.itemCode) ||
@@ -687,26 +706,27 @@ fun DeliveryChalanScreen(
             }
 
             if (alreadyExists) {
-                Toast.makeText(context, "Item already added: ${matchedItem.itemCode}", Toast.LENGTH_SHORT).show()
+                showToast("Item already added: ${matchedItem.itemCode}")
                 itemCode = TextFieldValue("")
                 return@setOnBarcodeScanned
             }
 
-            val touchMatch = touches.firstOrNull {
-                it.CustomerId == currentCustomerId &&
+            val touchMatch = touchList.firstOrNull {
+                it.CustomerId == customerId &&
                         it.StockKeepingUnit.equals(matchedItem.sku, ignoreCase = true)
             }
 
             val challanItem = buildChallanDetails(
                 matchedItem = matchedItem,
                 touchMatch = touchMatch,
-                dailyRates = rates,
+                dailyRates = dailyRates,
                 employee = employee,
                 context = context
             )
 
             productList.add(challanItem)
-            Toast.makeText(context, "Item added: ${challanItem.ItemCode}", Toast.LENGTH_SHORT).show()
+            showToast("Item added: ${challanItem.ItemCode}")
+
             itemCode = TextFieldValue("")
         }
     }
@@ -720,16 +740,25 @@ fun DeliveryChalanScreen(
             return@LaunchedEffect
         }
 
+        // 🔹 Pehle tunch load kara lo
         if (touchList.isEmpty()) {
             Log.d("RFIDScan", "⏳ Touch list empty, calling API then wait…")
             deliveryChallanViewModel.fetchCustomerTunch(
                 employee?.clientCode.orEmpty(),
                 employee?.id?.toInt() ?: 0
             )
-            return@LaunchedEffect
+           // return@LaunchedEffect   // touchList aane ke baad ye effect dubara chalega
         }
 
+
         Log.d("RFIDScan", "📦 ${tags.size} tags received")
+        Log.d(
+            "RFIDScan",
+            "📚 allItems (${allItems.size}): " +
+                    allItems.joinToString(" | ") {
+                        "epc='${it.epc}', rfid='${it.rfid}', code='${it.itemCode}'"
+                    }
+        )
 
         fun safeDouble(v: String?) = v?.toDoubleOrNull() ?: 0.0
 
@@ -742,9 +771,9 @@ fun DeliveryChalanScreen(
                 ?.replace(" ", "")
                 ?: ""
 
-            if (scannedEpc.isBlank() || scannedEpc in processedTagEpcs) {
-                return@forEach
-            }
+            Log.d("EPC_SCAN", "Scanned EPC = '$scannedEpc'")
+
+            // 2️⃣ allItems me match
             val matchedItem = allItems.firstOrNull { item ->
                 val itemEpc = item.epc
                     ?.trim()
@@ -953,7 +982,6 @@ fun DeliveryChalanScreen(
 
             if (productList.none { it.ItemCode == productDetail.ItemCode }) {
                 productList.add(productDetail)
-                processedTagEpcs.add(scannedEpc)
                 Log.d("RFIDScan", "✅ Added ${productDetail.ItemCode} (${productDetail.RFIDCode})")
             } else {
                 Log.d("RFIDScan", "⚠️ Duplicate tag skipped: ${productDetail.RFIDCode}")
@@ -1612,11 +1640,10 @@ fun DeliveryChalanScreen(
 
 
 // 🔹 Handle error messages
-    val challanError by deliveryChallanViewModel.error.collectAsState()
-    LaunchedEffect(challanError) {
-        if (!challanError.isNullOrBlank()) {
-            Toast.makeText(context, "❌ $challanError", Toast.LENGTH_SHORT).show()
-            deliveryChallanViewModel.clearError()
+    LaunchedEffect(deliveryChallanViewModel.error) {
+        val errMsg = deliveryChallanViewModel.error.value
+        if (!errMsg.isNullOrEmpty()) {
+            Toast.makeText(context, "❌ $errMsg", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1664,12 +1691,13 @@ fun DeliveryChalanScreen(
         }
     }
 
-    val updateChallanResponse by deliveryChallanViewModel.updateChallanResponse.collectAsState()
-    LaunchedEffect(updateChallanResponse) {
-        if (updateChallanResponse != null) {
-            Toast.makeText(context, localizedContext.getString(R.string.msg_challan_updated), Toast.LENGTH_SHORT).show()
-            deliveryChallanViewModel.clearUpdateChallanResponse()
-            onBack()
+    LaunchedEffect(deliveryChallanViewModel.updateChallanResponse.collectAsState().value) {
+        deliveryChallanViewModel.updateChallanResponse.collect { response ->
+            if (response != null) {
+                Toast.makeText(context, localizedContext.getString(R.string.msg_challan_updated), Toast.LENGTH_SHORT).show()
+               // deliveryChallanViewModel.fetchAllChallans(clientCode, branchId)
+                onBack()
+            }
         }
     }
     fun addItemToList(code: String) {
@@ -1959,7 +1987,41 @@ fun DeliveryChalanScreen(
         }
 
     }*/
-    // Barcode scanner is registered once above via LaunchedEffect(Unit)
+    LaunchedEffect(Unit) {
+        viewModel.barcodeReader.openIfNeeded()
+
+        viewModel.barcodeReader.setOnBarcodeScanned { scanned ->
+
+            Log.d("RFID Scan", scanned)
+            itemCode = TextFieldValue(scanned)
+
+            val matchedItem = allItems.firstOrNull {
+                it.itemCode.equals(scanned, ignoreCase = true)
+            }
+
+            if (matchedItem == null) {
+                Log.d("RFID Scan", "❌ No match found for $scanned")
+                return@setOnBarcodeScanned
+            }
+
+            // Prevent duplicates
+            if (productList.any { it.tid == matchedItem.tid }) {
+                Log.d("RFID Scan", "⚠️ Already exists: ${matchedItem.itemCode}")
+                return@setOnBarcodeScanned
+            }
+
+            // Save temporarily
+            pendingBarcodeItem = matchedItem
+
+            // Fetch Touch API only if empty
+            if (touchList.isEmpty()) {
+                deliveryChallanViewModel.fetchCustomerTunch(
+                    employee?.clientCode.orEmpty(),
+                    employee?.id?.toInt() ?: 0
+                )
+            }
+        }
+    }
 
     // Yeh helper ek baar upar composable me rakh sakta hai
     fun safeDouble(value: String?) = value?.toDoubleOrNull() ?: 0.0

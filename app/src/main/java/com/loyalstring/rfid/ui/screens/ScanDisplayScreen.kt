@@ -569,24 +569,7 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
         }
     }
     fun handleBackPress() {
-        // 🔹 CASE 1: Matched / Unmatched / Unlabelled — return to main list immediately
-        // (must match BackHandler order; toolbar was slow because drill-down ran first)
-        if (selectedMenu != MENU_ALL) {
-            selectedMenu = MENU_ALL
-            bulkViewModel.clearStickyUnmatched()
-
-            currentLevel = "Category"
-            currentCategory = null
-            currentProduct = null
-            currentDesign = null
-
-            selectedCategories.clear()
-            selectedProducts.clear()
-            selectedDesigns.clear()
-            return
-        }
-
-        // 🔹 CASE 2: Drill-down back (main inventory only)
+        // 🔹 CASE 2: Drill-down back
         when (currentLevel) {
             "DesignItems" -> {
                 currentLevel = "Design"
@@ -604,7 +587,21 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
                 return
             }
         }
+        if (selectedMenu != MENU_ALL) {
 
+            selectedMenu = MENU_ALL
+            bulkViewModel.clearStickyUnmatched()
+
+            currentLevel = "Category"
+            currentCategory = null
+            currentProduct = null
+            currentDesign = null
+
+            selectedCategories.clear()
+            selectedProducts.clear()
+            selectedDesigns.clear()
+            return
+        }
         // 🔹 CASE 3: Exit screen
         bulkViewModel.stopScanningAndCompute()
         onBack()
@@ -637,14 +634,11 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
     val _asyncDisplayItems = remember { MutableStateFlow<List<ScannedBulkItem>>(emptyList()) }
     val displayItems by _asyncDisplayItems.collectAsState()
     var isComputingDisplay by remember { mutableStateOf(false) }
-    var previousSelectedMenu by remember { mutableStateOf(selectedMenu) }
 
     LaunchedEffect(scannedItemsSequence, selectedMenu, stickyUnmatchedIds) {
-        val menuChanged = previousSelectedMenu != selectedMenu
-        previousSelectedMenu = selectedMenu
-
-        // Debounce only while scanning on main list — not when switching matched/unmatched/back
-        if (isScanning && selectedMenu == MENU_ALL && !menuChanged) {
+        // During active scanning debounce more aggressively — matchedEpcs fires every 300ms
+        // so we only recompute at most once per second while scanning
+        if (isScanning) {
             delay(700)
         }
 

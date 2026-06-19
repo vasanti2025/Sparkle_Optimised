@@ -1231,13 +1231,13 @@ fun QuotationScreen(
         // ✅ Build print data
         val items = productList.map { it ->
             QuotationPrintItem(
-                imageUrl = it.Image,
-                particulars = "${it.ProductName ?: ""} ${it.DesignName ?: ""}".trim(),
+                itemCode = it.ItemCode.orEmpty().ifBlank { "-" },
+                rfidNo = it.RFIDCode.orEmpty().ifBlank { "-" },
                 grossWt = it.GrossWt,
                 netWt = it.NetWt,
-                qty = it.qty?.toString() ?: it.Pieces ?: "1",
-                ratePerGm = it.MetalRate ?: it.totayRate,
-                makingPerGm = it.MakingPerGram ?: it.makingPercent,
+                pcs = it.Pieces ?: "1",
+                stoneWt = it.TotalStoneWeight ?: "0.000",
+                stoneAmt = it.StoneAmt ?: it.StoneAmount ?: it.TotalStoneAmount ?: "0.00",
                 amount = it.TotalItemAmount ?: it.itemAmt ?: "0.00"
             )
         }

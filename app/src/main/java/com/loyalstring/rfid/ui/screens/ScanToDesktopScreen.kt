@@ -91,6 +91,7 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
     val rfidCodeByEpcMap by viewModel.rfidCodeByEpcMap.collectAsState()
 
     LaunchedEffect(Unit) {
+       // viewModel.preWarmReader()
         viewModel.syncRFIDDataIfNeeded(context)
         viewModel.loadRfidTagMap()
     }
@@ -172,13 +173,6 @@ fun ScanToDesktopScreen(onBack: () -> Unit, navController: NavHostController) {
             rfidExportViewModel.getAllScantoDesktop(clientCode, deviceId)
         }
     }
-
-        // Trigger only when new tags arrive (size change), not on every recompose
-        LaunchedEffect(tags.size) {
-            if (tags.isNotEmpty()) {
-                viewModel.autoFillRfidFromDb(tags)
-            }
-        }
 
         DisposableEffect(activity) {
             val act = activity

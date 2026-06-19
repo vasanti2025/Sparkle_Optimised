@@ -11,6 +11,8 @@ import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.min
 
+private enum class QuotationCellAlign { LEFT, CENTER, RIGHT }
+
 fun GenerateQuotationPdf(context: Context, data: QuotationPrintData) {
     val pdfDocument = PdfDocument()
 
@@ -46,7 +48,7 @@ fun GenerateQuotationPdf(context: Context, data: QuotationPrintData) {
         style = Paint.Style.STROKE
     }
 
-    // Light grid paint like screenshot (gst box)
+    // Light grid paint for summary box
     val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#DADADA")
         strokeWidth = 1f
@@ -78,31 +80,149 @@ fun GenerateQuotationPdf(context: Context, data: QuotationPrintData) {
     }
 
     // ---------- Table columns ----------
-    // [Image | Particulars | GrossWt | NetWt | Qty | Rate/Gm | Making/Gm | Amount]
+    // [Item Code | RFID | Gr Wt | Nt Wt | Pcs | St Wt | St Amt | Amount]
     val tableX = margin
     val tableW = pageWidth - (margin * 2)
 
-    val colWidths = intArrayOf(
-        (tableW * 0.10).toInt(), // Image
-        (tableW * 0.28).toInt(), // Particulars
-        (tableW * 0.10).toInt(), // Gross
-        (tableW * 0.10).toInt(), // Net
-        (tableW * 0.08).toInt(), // Qty
-        (tableW * 0.11).toInt(), // Rate/Gm
-        (tableW * 0.12).toInt(), // Making/Gm
-        (tableW * 0.11).toInt()  // Amount
+    val columnRatios = floatArrayOf(
+        0.14f, // Item Code
+        0.10f, // RFID
+        0.10f, // Gr Wt
+        0.10f, // Nt Wt
+        0.08f, // Pcs
+        0.11f, // St Wt
+        0.13f, // St Amt
+        0.14f  // Amount
     )
 
+    val colWidths = IntArray(columnRatios.size).also { widths ->
+        var used = 0
+        for (i in columnRatios.indices) {
+            widths[i] = if (i == columnRatios.lastIndex) tableW - used
+            else (tableW * columnRatios[i]).toInt().also { used += it }
+        }
+    }
+
     val headers = listOf(
-        "Image",
-        "Particulars",
-        "Gross Wt",
-        "Net Wt",
-        "Quantity",
-        "Rate/Gm",
-        "Making/Gm",
+        "Item Code",
+        "RFID",
+        "Gr Wt",
+        "Nt Wt",
+        "Pcs",
+        "St Wt",
+        "St Amt",
         "Amount"
     )
+
+    // Text columns left-aligned; numeric columns right-aligned
+    val columnAlignments = arrayOf(
+        QuotationCellAlign.LEFT,   // Item Code
+        QuotationCellAlign.LEFT,   // RFID
+        QuotationCellAlign.RIGHT,  // Gr Wt
+        QuotationCellAlign.RIGHT,  // Nt Wt
+        QuotationCellAlign.RIGHT,  // Pcs
+        QuotationCellAlign.RIGHT,  // St Wt
+        QuotationCellAlign.RIGHT,  // St Amt
+        QuotationCellAlign.RIGHT   // Amount
+    )
+
+    val headerAlignments = arrayOf(
+        QuotationCellAlign.LEFT,
+        QuotationCellAlign.LEFT,
+        QuotationCellAlign.CENTER,
+        QuotationCellAlign.CENTER,
+        QuotationCellAlign.CENTER,
+        QuotationCellAlign.CENTER,
+        QuotationCellAlign.CENTER,
+        QuotationCellAlign.RIGHT
+    )
+
+    fun clipTextToWidth(text: String, paint: Paint, maxWidth: Float): String {
+        if (text.isEmpty() || paint.measureText(text) <= maxWidth) return text
+        val ellipsis = "…"
+        val ellipsisW = paint.measureText(ellipsis)
+        var end = text.length
+        while (end > 0 && paint.measureText(text, 0, end) + ellipsisW > maxWidth) end--
+        return if (end <= 0) ellipsis else text.take(end).trimEnd() + ellipsis
+    }
+
+    fun drawTextInCell(
+        canvas: Canvas,
+        text: String,
+        cellX: Int,
+        cellYTop: Int,
+        cellW: Int,
+        cellH: Int,
+        basePaint: Paint,
+        align: QuotationCellAlign
+    ) {
+        val paint = Paint(basePaint)
+        val padH = 5
+        val maxTextW = (cellW - padH * 2).coerceAtLeast(8).toFloat()
+        val display = clipTextToWidth(text, paint, maxTextW)
+
+        val fm = paint.fontMetrics
+        val baselineY = cellYTop + (cellH - (fm.descent - fm.ascent)) / 2f - fm.ascent
+
+        paint.textAlign = when (align) {
+            QuotationCellAlign.LEFT -> Paint.Align.LEFT
+            QuotationCellAlign.CENTER -> Paint.Align.CENTER
+            QuotationCellAlign.RIGHT -> Paint.Align.RIGHT
+        }
+
+        val textX = when (align) {
+            QuotationCellAlign.LEFT -> cellX + padH.toFloat()
+            QuotationCellAlign.CENTER -> cellX + cellW / 2f
+            QuotationCellAlign.RIGHT -> cellX + cellW - padH.toFloat()
+        }
+
+        canvas.drawText(display, textX, baselineY, paint)
+    }
+
+    fun drawTableCells(
+        canvas: Canvas,
+        rowX: Int,
+        rowYTop: Int,
+        rowHeight: Int,
+        values: List<String>,
+        paint: Paint,
+        alignments: Array<QuotationCellAlign> = columnAlignments
+    ) {
+        var cx = rowX
+        values.forEachIndexed { index, value ->
+            drawTextInCell(
+                canvas = canvas,
+                text = value,
+                cellX = cx,
+                cellYTop = rowYTop,
+                cellW = colWidths[index],
+                cellH = rowHeight,
+                basePaint = paint,
+                align = alignments[index]
+            )
+            cx += colWidths[index]
+        }
+    }
+
+    fun safeStr(s: String?): String = s?.trim().orEmpty()
+
+    fun formatWeight(value: String?): String {
+        val v = value?.replace("gm", "", ignoreCase = true)
+            ?.replace("g", "", ignoreCase = true)
+            ?.trim()
+            ?.toDoubleOrNull()
+        return if (v == null) "-" else String.format("%.3f", v)
+    }
+
+    fun formatAmount(value: String?): String {
+        val v = value?.replace(",", "")?.trim()?.toDoubleOrNull()
+        return if (v == null) "-" else String.format("%.2f", v)
+    }
+
+    fun formatInt(value: String?): String {
+        val v = value?.trim()?.toDoubleOrNull()
+        return if (v == null) "-" else String.format("%.0f", v)
+    }
 
     fun drawRowLines(canvas: Canvas, yTop: Int, rowHeight: Int) {
         var x = tableX
@@ -116,89 +236,8 @@ fun GenerateQuotationPdf(context: Context, data: QuotationPrintData) {
         }
     }
 
-    fun drawTextInCell(canvas: Canvas, text: String, x: Int, y: Int, w: Int, paint: Paint) {
-        val clipped = text.take(50)
-        canvas.drawText(clipped, (x + 6).toFloat(), y.toFloat(), paint)
-    }
-
-    fun safeStr(s: String?): String = s?.trim().orEmpty()
-    fun safeNumStr(s: String?, fallback: String = "0.00"): String {
-        val v = s?.toDoubleOrNull()
-        return if (v == null) fallback else String.format("%.3f", v)
-    }
-    fun safeIntStr(s: String?, fallback: String = "0"): String {
-        val v = s?.toDoubleOrNull()
-        return if (v == null) fallback else String.format("%.0f", v)
-    }
-
-    // ---------- GST Summary Box like screenshot ----------
-    fun drawGstSummaryBox(
-        canvas: Canvas,
-        boxX: Int,
-        boxY: Int,
-        boxW: Int,
-        rowHeights: IntArray,
-        dividerX: Int,
-        labels: List<String>,
-        values: List<String>
-    ) {
-        val labelBold = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = 12f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            color = Color.BLACK
-        }
-
-        val valueRight = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = 12f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
-            color = Color.BLACK
-            textAlign = Paint.Align.RIGHT
-        }
-
-        val boxH = rowHeights.sum()
-
-        // outer rect
-        canvas.drawRect(
-            boxX.toFloat(), boxY.toFloat(),
-            (boxX + boxW).toFloat(), (boxY + boxH).toFloat(),
-            gridPaint
-        )
-
-        // divider
-        canvas.drawLine(
-            dividerX.toFloat(), boxY.toFloat(),
-            dividerX.toFloat(), (boxY + boxH).toFloat(),
-            gridPaint
-        )
-
-        var yTop = boxY
-        for (i in rowHeights.indices) {
-            val h = rowHeights[i]
-
-            // row line (top)
-            canvas.drawLine(
-                boxX.toFloat(), yTop.toFloat(),
-                (boxX + boxW).toFloat(), yTop.toFloat(),
-                gridPaint
-            )
-
-            val textY = yTop + (h / 2) + 5
-            canvas.drawText(labels[i], (boxX + 12).toFloat(), textY.toFloat(), labelBold)
-            canvas.drawText(values[i], (boxX + boxW - 12).toFloat(), textY.toFloat(), valueRight)
-
-            yTop += h
-        }
-
-        // bottom line
-        canvas.drawLine(
-            boxX.toFloat(), (boxY + boxH).toFloat(),
-            (boxX + boxW).toFloat(), (boxY + boxH).toFloat(),
-            gridPaint
-        )
-    }
-
     // ---------- Pagination ----------
-    val itemsPerPage = 14
+    val itemsPerPage = 12
     val pages = if (data.items.isEmpty()) 1 else ((data.items.size + itemsPerPage - 1) / itemsPerPage)
 
     var itemIndex = 0
@@ -206,7 +245,9 @@ fun GenerateQuotationPdf(context: Context, data: QuotationPrintData) {
     // Precompute totals for totals row
     val totalGross = data.items.sumOf { it.grossWt?.toDoubleOrNull() ?: 0.0 }
     val totalNet = data.items.sumOf { it.netWt?.toDoubleOrNull() ?: 0.0 }
-    val totalQty = data.items.sumOf { it.qty?.toDoubleOrNull() ?: 0.0 }
+    val totalPcs = data.items.sumOf { it.pcs?.toDoubleOrNull() ?: 0.0 }
+    val totalStoneWt = data.items.sumOf { it.stoneWt?.toDoubleOrNull() ?: 0.0 }
+    val totalStoneAmt = data.items.sumOf { it.stoneAmt?.toDoubleOrNull() ?: 0.0 }
     val totalAmt = data.items.sumOf { it.amount?.toDoubleOrNull() ?: 0.0 }
 
     for (pageNo in 0 until pages) {
@@ -249,45 +290,45 @@ fun GenerateQuotationPdf(context: Context, data: QuotationPrintData) {
         y += 14
 
         // -------- Table header --------
-        val headerHeight = 24
+        val headerHeight = 28
         drawRowLines(canvas, y, headerHeight)
-        var x = tableX
-        for (i in headers.indices) {
-            drawTextInCell(canvas, headers[i], x, y + 16, colWidths[i], tableHeaderPaint)
-            x += colWidths[i]
-        }
+        drawTableCells(canvas, tableX, y, headerHeight, headers, tableHeaderPaint, headerAlignments)
         y += headerHeight
 
         // -------- Table rows --------
-        val rowHeight = 36
+        val rowHeight = 32
         val endIndex = min(itemIndex + itemsPerPage, data.items.size)
 
         if (data.items.isEmpty()) {
             drawRowLines(canvas, y, rowHeight)
-            x = tableX
-            drawTextInCell(canvas, "-", x, y + 20, colWidths[0], tableCellPaint)
-            x += colWidths[0]
-            drawTextInCell(canvas, "-", x, y + 20, colWidths[1], tableCellPaint)
+            drawTableCells(
+                canvas, tableX, y, rowHeight,
+                listOf("-", "-", "-", "-", "-", "-", "-", "-"),
+                tableCellPaint
+            )
             y += rowHeight
         } else {
             for (i in itemIndex until endIndex) {
                 val it = data.items[i]
                 drawRowLines(canvas, y, rowHeight)
 
-                var cx = tableX
-
-                // Image column left blank / "-"
-                drawTextInCell(canvas, "-", cx, y + 20, colWidths[0], tableCellPaint)
-                cx += colWidths[0]
-
-                // ✅ All columns (INCLUDING QTY) aligned
-                drawTextInCell(canvas, safeStr(it.particulars).ifBlank { "-" }, cx, y + 20, colWidths[1], tableCellPaint); cx += colWidths[1]
-                drawTextInCell(canvas, safeStr(it.grossWt).ifBlank { "-" }, cx, y + 20, colWidths[2], tableCellPaint); cx += colWidths[2]
-                drawTextInCell(canvas, safeStr(it.netWt).ifBlank { "-" }, cx, y + 20, colWidths[3], tableCellPaint); cx += colWidths[3]
-                drawTextInCell(canvas, safeStr(it.qty).ifBlank { "-" }, cx, y + 20, colWidths[4], tableCellPaint); cx += colWidths[4]
-                drawTextInCell(canvas, safeStr(it.ratePerGm).ifBlank { "-" }, cx, y + 20, colWidths[5], tableCellPaint); cx += colWidths[5]
-                drawTextInCell(canvas, safeStr(it.makingPerGm).ifBlank { "-" }, cx, y + 20, colWidths[6], tableCellPaint); cx += colWidths[6]
-                drawTextInCell(canvas, safeStr(it.amount).ifBlank { "-" }, cx, y + 20, colWidths[7], tableCellPaint)
+                drawTableCells(
+                    canvas = canvas,
+                    rowX = tableX,
+                    rowYTop = y,
+                    rowHeight = rowHeight,
+                    values = listOf(
+                        safeStr(it.itemCode).ifBlank { "-" },
+                        safeStr(it.rfidNo).ifBlank { "-" },
+                        formatWeight(it.grossWt),
+                        formatWeight(it.netWt),
+                        formatInt(it.pcs),
+                        formatWeight(it.stoneWt),
+                        formatAmount(it.stoneAmt),
+                        formatAmount(it.amount)
+                    ),
+                    paint = tableCellPaint
+                )
 
                 y += rowHeight
             }
@@ -308,58 +349,74 @@ fun GenerateQuotationPdf(context: Context, data: QuotationPrintData) {
 
             drawRowLines(canvas, y, rowHeight)
 
-            var cx = tableX
-            drawTextInCell(canvas, "-", cx, y + 20, colWidths[0], totalTextPaint); cx += colWidths[0]
-            drawTextInCell(canvas, "-", cx, y + 20, colWidths[1], totalTextPaint); cx += colWidths[1]
+            val totalAlignments = arrayOf(
+                QuotationCellAlign.LEFT,
+                QuotationCellAlign.LEFT,
+                QuotationCellAlign.RIGHT,
+                QuotationCellAlign.RIGHT,
+                QuotationCellAlign.RIGHT,
+                QuotationCellAlign.RIGHT,
+                QuotationCellAlign.RIGHT,
+                QuotationCellAlign.RIGHT
+            )
 
-            drawTextInCell(canvas, String.format("%.3f", totalGross), cx, y + 20, colWidths[2], totalTextPaint); cx += colWidths[2]
-            drawTextInCell(canvas, String.format("%.3f", totalNet), cx, y + 20, colWidths[3], totalTextPaint); cx += colWidths[3]
-            drawTextInCell(canvas, String.format("%.0f", totalQty), cx, y + 20, colWidths[4], totalTextPaint); cx += colWidths[4]
-
-            // Rate/Making blank like screenshot
-            drawTextInCell(canvas, "", cx, y + 20, colWidths[5], totalTextPaint); cx += colWidths[5]
-            drawTextInCell(canvas, "", cx, y + 20, colWidths[6], totalTextPaint); cx += colWidths[6]
-
-            drawTextInCell(canvas, String.format("%.3f", totalAmt), cx, y + 20, colWidths[7], totalTextPaint)
+            drawTableCells(
+                canvas = canvas,
+                rowX = tableX,
+                rowYTop = y,
+                rowHeight = rowHeight,
+                values = listOf(
+                    "Total",
+                    "",
+                    String.format("%.3f", totalGross),
+                    String.format("%.3f", totalNet),
+                    String.format("%.0f", totalPcs),
+                    String.format("%.3f", totalStoneWt),
+                    String.format("%.2f", totalStoneAmt),
+                    String.format("%.2f", totalAmt)
+                ),
+                paint = totalTextPaint,
+                alignments = totalAlignments
+            )
 
             y += rowHeight
         }
 
-        // -------- Bottom-right Summary box like screenshot (only last page) --------
+        // -------- Bottom-right total (no GST breakdown) --------
         if (pageNo == pages - 1) {
-            val cgstVal = data.cgst.toDoubleOrNull() ?: 0.0
-            val sgstVal = data.sgst.toDoubleOrNull() ?: 0.0
-            val igstVal = data.igst.toDoubleOrNull() ?: 0.0
+            val finalTotal = data.totalAmount.toDoubleOrNull() ?: totalAmt
 
-            val baseTotal = data.totalAmount.toDoubleOrNull() ?: totalAmt
-            val afterGst = baseTotal + cgstVal + sgstVal + igstVal
-
-            val boxW = 420
-            val rowHeights = intArrayOf(34, 34, 34, 34, 44)
-            val boxH = rowHeights.sum()
-
+            val boxW = 260
+            val boxH = 44
             val boxX = pageWidth - margin - boxW
             val boxY = pageHeight - margin - boxH - 40
-            val dividerX = boxX + (boxW * 0.40).toInt()
 
-            drawGstSummaryBox(
-                canvas = canvas,
-                boxX = boxX,
-                boxY = boxY,
-                boxW = boxW,
-                rowHeights = rowHeights,
-                dividerX = dividerX,
-                labels = listOf("CGST:", "SGST:", "IGST:", "After GST:", "Total Amount:"),
-                values = listOf(
-                    String.format("%.2f", cgstVal),
-                    String.format("%.2f", sgstVal),
-                    String.format("%.2f", igstVal),
-                    String.format("%.2f", afterGst),
-                    String.format("%.2f", afterGst)
-                )
+            canvas.drawRect(
+                boxX.toFloat(), boxY.toFloat(),
+                (boxX + boxW).toFloat(), (boxY + boxH).toFloat(),
+                gridPaint
             )
 
-            // Footer texts (like screenshot)
+            val valueRight = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                textSize = 12f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                color = Color.BLACK
+                textAlign = Paint.Align.RIGHT
+            }
+
+            canvas.drawText(
+                "Total Amount:",
+                (boxX + 12).toFloat(),
+                (boxY + 28).toFloat(),
+                labelPaint
+            )
+            canvas.drawText(
+                String.format("%.2f", finalTotal),
+                (boxX + boxW - 12).toFloat(),
+                (boxY + 28).toFloat(),
+                valueRight
+            )
+
             canvas.drawText("Customer Sign:", margin.toFloat(), (pageHeight - margin).toFloat(), labelPaint)
             canvas.drawText("For VT", (pageWidth - margin - 60).toFloat(), (pageHeight - margin).toFloat(), labelPaint)
         }

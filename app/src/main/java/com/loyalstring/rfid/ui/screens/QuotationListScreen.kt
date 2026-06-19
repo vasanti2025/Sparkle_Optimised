@@ -369,13 +369,13 @@ fun QuotationListResponse.toQuotationPrintData(context: Context): QuotationPrint
         (this.quotationItem ?: emptyList()).filterNotNull().map { itItem ->
 
             QuotationPrintItem(
-                imageUrl = itItem.Image ?: "",
-                particulars = "${itItem.ProductName.orEmpty()} ${itItem.DesignName.orEmpty()}".trim(),
+                itemCode = itItem.ItemCode.orEmpty().ifBlank { "-" },
+                rfidNo = itItem.RFIDCode.orEmpty().ifBlank { "-" },
                 grossWt = itItem.GrossWt ?: "0.0",
                 netWt = itItem.NetWt ?: "0.0",
-                qty = (itItem.qty ?: itItem.Quantity?.toIntOrNull() ?: 1).toString(),
-                ratePerGm = itItem.MetalRate ?: itItem.totayRate ?: "0.0",
-                makingPerGm = itItem.MakingPerGram ?: itItem.makingPercent ?: "0.0",
+                pcs = itItem.Pieces ?: "1",
+                stoneWt = itItem.TotalStoneWeight ?: "0.000",
+                stoneAmt = itItem.StoneAmt ?: itItem.StoneAmount ?: itItem.TotalStoneAmount ?: "0.00",
                 amount = itItem.TotalItemAmount ?: itItem.itemAmt ?: itItem.TotalAmount ?: "0.00"
             )
         }

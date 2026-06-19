@@ -10,6 +10,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.loyalstring.rfid.ui.utils.UserPreferences
+import com.loyalstring.rfid.ui.utils.GradientButton
 import com.loyalstring.rfid.viewmodel.OrderViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
 import com.loyalstring.rfid.worker.LocaleHelper
@@ -44,6 +46,7 @@ fun DeliveryChallanItemListTable(
     var selectedItem by remember { mutableStateOf<ChallanDetails?>(null) }
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
     var showDialog by remember { mutableStateOf(false) }
+    var deleteIndex by remember { mutableStateOf<Int?>(null) }
     val orderViewModel: OrderViewModel = hiltViewModel()
     val singleProductViewModel: SingleProductViewModel = hiltViewModel()
 
@@ -77,39 +80,59 @@ fun DeliveryChallanItemListTable(
             .background(Color.White)
             .padding(bottom = 5.dp)
     ) {
-        // 🔹 Scrollable content (Header + Data)
-        Row(modifier = Modifier.weight(1f)) {
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .horizontalScroll(horizontalScroll)
-            ) {
-                LazyColumn {
-                    item {
-                        Row(
-                            modifier = Modifier
-                                .background(Color(0xFF2E2E2E))
-                                .padding(vertical = 4.dp)
-                        ) {
-                            headerTitles.forEach { title ->
-                                Text(
-                                    text = title,
-                                    modifier = Modifier.width(cellWidth).padding(horizontal = 2.dp),
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
+        // Single vertical scroll for header + rows; middle columns scroll horizontally.
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF2E2E2E))
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .horizontalScroll(horizontalScroll)
+                    ) {
+                        headerTitles.forEach { title ->
+                            Text(
+                                text = title,
+                                modifier = Modifier.width(cellWidth).padding(horizontal = 2.dp),
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                     }
 
-                    items(productList.size) { index ->
-                        val item = productList[index]
+                    Text(
+                        text = localizedContext.getString(R.string.action),
+                        modifier = Modifier.width(cellWidth),
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            items(productList.size) { index ->
+                    val item = productList[index]
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(if (index % 2 == 0) Color(0xFFF4F4F4) else Color.White)
+                            .padding(vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Row(
                             modifier = Modifier
-                                .background(if (index % 2 == 0) Color(0xFFF4F4F4) else Color.White)
-                                .padding(vertical = 3.dp)
+                                .weight(1f)
+                                .horizontalScroll(horizontalScroll)
                                 .clickable {
                                     selectedItem = item
                                     selectedIndex = index
@@ -137,44 +160,21 @@ fun DeliveryChallanItemListTable(
                                 )
                             }
                         }
-                    }
-                }
-            }
 
-            LazyColumn(modifier = Modifier.width(cellWidth)) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .width(cellWidth)
-                            .background(Color(0xFF2E2E2E))
-                            .padding(vertical = 4.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = localizedContext.getString(R.string.action),
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
-                items(productList.size) { index ->
-                    Box(
-                        modifier = Modifier
-                            .width(cellWidth)
-                            .height(30.dp)
-                            .background(if (index % 2 == 0) Color(0xFFF4F4F4) else Color.White),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        IconButton(onClick = { onDeleteItem(index) }) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_delete),
-                                contentDescription = "Delete",
-                                tint = Color.Red,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                        Box(
+                            modifier = Modifier
+                                .width(cellWidth)
+                                .height(30.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            IconButton(onClick = { deleteIndex = index }) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_delete),
+                                    contentDescription = "Delete",
+                                    tint = Color.Red,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                     }
                 }
             }
@@ -238,6 +238,39 @@ fun DeliveryChallanItemListTable(
                 )
             }
             */
+
+            if (deleteIndex != null) {
+                AlertDialog(
+                    onDismissRequest = { deleteIndex = null },
+                    title = {
+                        Text(localizedContext.getString(R.string.confirm_delete))
+                    },
+                    text = {
+                        Text(localizedContext.getString(R.string.delete_confirmation_message))
+                    },
+                    confirmButton = {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            GradientButton(
+                                text = localizedContext.getString(R.string.cancel),
+                                onClick = { deleteIndex = null },
+                                modifier = Modifier.weight(1f)
+                            )
+                            GradientButton(
+                                text = localizedContext.getString(R.string.yes),
+                                onClick = {
+                                    deleteIndex?.let { onDeleteItem(it) }
+                                    deleteIndex = null
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                )
+            }
 
             if (showDialog && selectedItem != null && selectedIndex != null) {
                 DeliveryChallanDialogEditAndDisplay(

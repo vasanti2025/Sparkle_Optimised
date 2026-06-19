@@ -423,6 +423,7 @@
 
     <string name="no_data">لا توجد بيانات</string>
     <string name="no_matched_items">لا توجد عناصر مطابقة</string>
+    <string name="no_unmatched_items">لا توجد عناصر غير مطابقة</string>
 
     <string name="filter">تصفية</string>
     <string name="from_date">من تاريخ</string>

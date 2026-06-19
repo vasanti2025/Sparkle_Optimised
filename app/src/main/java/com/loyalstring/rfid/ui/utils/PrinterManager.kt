@@ -133,6 +133,23 @@ class PrinterManager(private val context: Context) {
         return String.format(Locale.US, "%.2f", number)
     }
 
+    /** Bottom total line — label left, amount right (58mm thermal width). */
+    private fun totalAmountRow(amount: String): String {
+        val label = "Total Amount:"
+        val value = cleanAmount(amount)
+        val lineWidth = 32
+        val gap = (lineWidth - label.length - value.length).coerceAtLeast(1)
+        return label + " ".repeat(gap) + value
+    }
+
+    private fun resolvePrintTotalAmount(
+        data: DeliveryChallanPrintData,
+        items: List<DeliveryChallanItemPrint>
+    ): Double {
+        return data.totalNetAmount.toDoubleOrNull()?.takeIf { it > 0.0 }
+            ?: items.sumOf { cleanAmount(it.itemAmount).toDoubleOrNull() ?: 0.0 }
+    }
+
     /**
      * 58mm printer compact width — default layout
      * SNo(7) + Item(16) + PCS(4) + G.W(10) + N.W(10)
@@ -392,6 +409,48 @@ class PrinterManager(private val context: Context) {
                     POSConst.TXT_1WIDTH,
                     POSConst.TXT_1HEIGHT
                 )
+
+            // Grand total across all line items
+            val grandTotalPcs = items.sumOf { it.pcs }
+            val grandTotalGross = items.sumOf { cleanWeight(it.grossWt).toDoubleOrNull() ?: 0.0 }
+            val grandTotalNet = items.sumOf { cleanWeight(it.netWt).toDoubleOrNull() ?: 0.0 }
+            val grandTotalStoneAmt = items.sumOf { cleanAmount(it.stoneAmt).toDoubleOrNull() ?: 0.0 }
+
+            chain = if (useWeightStoneLayout) {
+                chain.printText(
+                    summaryRowWeightStone(
+                        sno = "Total",
+                        itemName = "",
+                        totalGrossWt = String.format(Locale.US, "%.3f", grandTotalGross),
+                        totalNetWt = String.format(Locale.US, "%.3f", grandTotalNet),
+                        totalStoneAmt = String.format(Locale.US, "%.2f", grandTotalStoneAmt)
+                    ) + "\n",
+                    POSConst.ALIGNMENT_LEFT,
+                    POSConst.TXT_1WIDTH,
+                    POSConst.TXT_1HEIGHT
+                )
+            } else {
+                chain.printText(
+                    summaryRow(
+                        sno = "Total",
+                        itemName = "",
+                        totalPcs = grandTotalPcs.toString(),
+                        totalGrossWt = String.format(Locale.US, "%.3f", grandTotalGross),
+                        totalNetWt = String.format(Locale.US, "%.3f", grandTotalNet)
+                    ) + "\n",
+                    POSConst.ALIGNMENT_LEFT,
+                    POSConst.TXT_1WIDTH,
+                    POSConst.TXT_1HEIGHT
+                )
+            }
+
+            chain = chain
+                .printText(
+                    divider() + "\n",
+                    POSConst.ALIGNMENT_LEFT,
+                    POSConst.TXT_1WIDTH,
+                    POSConst.TXT_1HEIGHT
+                )
                 .feedLine()
 
             // Summary header
@@ -437,6 +496,30 @@ class PrinterManager(private val context: Context) {
                         POSConst.TXT_1HEIGHT
                     )
                 }
+
+                val summaryGrandGross = summaryWeightStoneList.sumOf { it.totalGrossWt }
+                val summaryGrandNet = summaryWeightStoneList.sumOf { it.totalNetWt }
+                val summaryGrandStone = summaryWeightStoneList.sumOf { it.totalStoneAmt }
+
+                chain = chain
+                    .printText(
+                        divider() + "\n",
+                        POSConst.ALIGNMENT_LEFT,
+                        POSConst.TXT_1WIDTH,
+                        POSConst.TXT_1HEIGHT
+                    )
+                    .printText(
+                        summaryRowWeightStone(
+                            sno = "Total",
+                            itemName = "",
+                            totalGrossWt = String.format(Locale.US, "%.3f", summaryGrandGross),
+                            totalNetWt = String.format(Locale.US, "%.3f", summaryGrandNet),
+                            totalStoneAmt = String.format(Locale.US, "%.2f", summaryGrandStone)
+                        ) + "\n",
+                        POSConst.ALIGNMENT_LEFT,
+                        POSConst.TXT_1WIDTH,
+                        POSConst.TXT_1HEIGHT
+                    )
             } else {
                 summaryList.forEachIndexed { index, summary ->
                     chain = chain.printText(
@@ -452,6 +535,30 @@ class PrinterManager(private val context: Context) {
                         POSConst.TXT_1HEIGHT
                     )
                 }
+
+                val summaryGrandPcs = summaryList.sumOf { it.totalPcs }
+                val summaryGrandGross = summaryList.sumOf { it.totalGrossWt }
+                val summaryGrandNet = summaryList.sumOf { it.totalNetWt }
+
+                chain = chain
+                    .printText(
+                        divider() + "\n",
+                        POSConst.ALIGNMENT_LEFT,
+                        POSConst.TXT_1WIDTH,
+                        POSConst.TXT_1HEIGHT
+                    )
+                    .printText(
+                        summaryRow(
+                            sno = "Total",
+                            itemName = "",
+                            totalPcs = summaryGrandPcs.toString(),
+                            totalGrossWt = String.format(Locale.US, "%.3f", summaryGrandGross),
+                            totalNetWt = String.format(Locale.US, "%.3f", summaryGrandNet)
+                        ) + "\n",
+                        POSConst.ALIGNMENT_LEFT,
+                        POSConst.TXT_1WIDTH,
+                        POSConst.TXT_1HEIGHT
+                    )
             }
 
             chain = chain
@@ -461,7 +568,27 @@ class PrinterManager(private val context: Context) {
                     POSConst.TXT_1WIDTH,
                     POSConst.TXT_1HEIGHT
                 )
-                .feedLine(3)
+
+            // LS000058 only — bottom Total Amount row (same idea as quotation PDF footer)
+            if (useWeightStoneLayout) {
+                val totalAmountValue = resolvePrintTotalAmount(data, items)
+                chain = chain
+                    .feedLine()
+                    .printText(
+                        totalAmountRow(String.format(Locale.US, "%.2f", totalAmountValue)) + "\n",
+                        POSConst.ALIGNMENT_LEFT,
+                        POSConst.FNT_DEFAULT,
+                        POSConst.TXT_1WIDTH or POSConst.TXT_1HEIGHT
+                    )
+                    .printText(
+                        divider() + "\n",
+                        POSConst.ALIGNMENT_LEFT,
+                        POSConst.TXT_1WIDTH,
+                        POSConst.TXT_1HEIGHT
+                    )
+            }
+
+            chain = chain.feedLine(3)
 
             onResult?.invoke(true, "Printed successfully")
         } catch (e: Exception) {

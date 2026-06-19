@@ -61,12 +61,59 @@ class RFIDReaderManager @Inject constructor(
     }
 
     fun readTagFromBuffer(): UHFTAGInfo? {
-        return _reader?.readTagFromBuffer()
+        return try {
+            _reader?.readTagFromBuffer()
+        } catch (e: Exception) {
+            Log.w("RFID", "readTagFromBuffer failed: ${e.message}")
+            null
+        }
+    }
+
+    /** Discard stale tags left in the hardware buffer before a new inventory session. */
+    fun drainStaleBuffer(maxDrain: Int = 64) {
+        var drained = 0
+        while (drained < maxDrain) {
+            val tag = readTagFromBuffer() ?: break
+            if (tag.epc.isNullOrBlank()) break
+            drained++
+        }
+        if (drained > 0) {
+            Log.d("RFID", "Drained $drained stale tag(s) from buffer")
+        }
+    }
+
+    /** Read up to [maxTags] tags in one pass to reduce JNI round-trips during high-volume scans. */
+    fun readTagsFromBuffer(maxTags: Int = 32): List<UHFTAGInfo> {
+        val tags = ArrayList<UHFTAGInfo>(maxTags)
+        repeat(maxTags) {
+            val tag = readTagFromBuffer() ?: return tags
+            if (tag.epc.isNullOrBlank()) return tags
+            tags.add(tag)
+        }
+        return tags
+    }
+
+    /** Pre-create looping scan audio so the first inventory start is not blocked on MediaPlayer.create(). */
+    fun prepareInventorySound() {
+        soundPlayer.prepareLoopingSound()
+    }
+
+    private fun configureReaderForInventory() {
+        try {
+            _reader?.apply {
+                setTagFocus(false)
+                setFastID(false)
+                setDynamicDistance(0)
+            }
+        } catch (e: Exception) {
+            Log.w("RFID", "configureReaderForInventory failed: ${e.message}")
+        }
     }
 
     fun startInventoryTag(selectedPower: Int, search: Boolean): Boolean {
         _reader?.setPower(selectedPower)
-        if(!search) {
+        if (!search) {
+            configureReaderForInventory()
             soundPlayer.startLoopingSound()
         }
         val started = _reader?.startInventoryTag() ?: false
@@ -174,12 +221,18 @@ class RFIDReaderManager @Inject constructor(
 class SoundPlayer(private val context: Context) {
     private var mediaPlayer: MediaPlayer? = null
 
-    fun startLoopingSound() {
+    fun prepareLoopingSound() {
         if (mediaPlayer == null) {
             mediaPlayer = MediaPlayer.create(context, R.raw.barcodebeep)
             mediaPlayer?.isLooping = true
         }
-        mediaPlayer?.start()
+    }
+
+    fun startLoopingSound() {
+        prepareLoopingSound()
+        if (mediaPlayer?.isPlaying != true) {
+            mediaPlayer?.start()
+        }
     }
 
     fun stopSound() {

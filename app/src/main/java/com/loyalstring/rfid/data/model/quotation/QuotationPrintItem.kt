@@ -1,14 +1,14 @@
 package com.loyalstring.rfid.data.model.quotation
 
 data class QuotationPrintItem(
-    val imageUrl: String? = null,
-    val particulars: String,
-    val grossWt: String?,
-    val netWt: String?,
-    val qty: String?,
-    val ratePerGm: String?,
-    val makingPerGm: String?,
-    val amount: String?
+    val itemCode: String? = null,
+    val rfidNo: String? = null,
+    val grossWt: String? = null,
+    val netWt: String? = null,
+    val pcs: String? = null,
+    val stoneWt: String? = null,
+    val stoneAmt: String? = null,
+    val amount: String? = null
 )
 
 data class QuotationPrintData(

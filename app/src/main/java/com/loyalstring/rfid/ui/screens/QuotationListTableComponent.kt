@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -93,6 +94,31 @@ fun QuotationListTableComponent(
         50.dp, // Qty
         50.dp  // Pcs
     )
+
+    fun columnAlignment(index: Int): TextAlign = when (index) {
+        0 -> TextAlign.Start
+        else -> TextAlign.End
+    }
+
+    @Composable
+    fun TableCellText(
+        text: String,
+        columnIndex: Int,
+        color: Color,
+        fontWeight: FontWeight = FontWeight.Normal
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier
+                .width(columnWidths[columnIndex])
+                .padding(horizontal = 4.dp),
+            fontSize = 11.sp,
+            fontWeight = fontWeight,
+            color = color,
+            maxLines = 1,
+            textAlign = columnAlignment(columnIndex)
+        )
+    }
     // ⚠️ headerTitles.size == columnWidths.size == 9
 
     Column(
@@ -128,15 +154,11 @@ fun QuotationListTableComponent(
                     .horizontalScroll(horizontalScroll)
             ) {
                 headerTitles.forEachIndexed { index, title ->
-                    Text(
+                    TableCellText(
                         text = title,
-                        modifier = Modifier
-                            .width(columnWidths[index])
-                            .padding(horizontal = 2.dp),
+                        columnIndex = index,
                         color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
@@ -210,14 +232,10 @@ fun QuotationListTableComponent(
                         // ⚠️ values.size MUST be 9
 
                         values.forEachIndexed { i, value ->
-                            Text(
+                            TableCellText(
                                 text = value,
-                                modifier = Modifier
-                                    .width(columnWidths[i])
-                                    .padding(horizontal = 2.dp),
-                                fontSize = 11.sp,
-                                color = Color.DarkGray,
-                                maxLines = 1
+                                columnIndex = i,
+                                color = Color.DarkGray
                             )
                         }
                     }
@@ -296,15 +314,11 @@ fun QuotationListTableComponent(
                     // ⚠️ totals.size == columnWidths.size == 9
 
                     totals.forEachIndexed { i, total ->
-                        Text(
+                        TableCellText(
                             text = total,
-                            modifier = Modifier
-                                .width(columnWidths[i])
-                                .padding(horizontal = 2.dp),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
+                            columnIndex = i,
                             color = Color.White,
-                            maxLines = 1
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }

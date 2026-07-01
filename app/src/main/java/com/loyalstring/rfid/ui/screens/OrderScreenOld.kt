@@ -106,6 +106,8 @@ import com.loyalstring.rfid.ui.utils.GradientButtonIcon
 import com.loyalstring.rfid.ui.utils.NetworkUtils
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
+import com.loyalstring.rfid.ui.utils.resolveImagePathToUrl
+import com.loyalstring.rfid.ui.utils.resolveProductImageUrl
 import com.loyalstring.rfid.viewmodel.BulkViewModel
 import com.loyalstring.rfid.viewmodel.OrderViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
@@ -919,12 +921,7 @@ fun OrderScreenContent(
                             Log.d("existingProduct", "Item: ${matchedItem.ItemCode}")
                             // If the product doesn't exist, create a new product
                             selectedItem = matchedItem
-                            val baseUrl =
-                                "https://rrgold.loyalstring.co.in/" // Base URL for images
-                            val imageString = selectedItem?.Images.toString()
-                            val lastImagePath =
-                                imageString.split(",").lastOrNull()?.trim()
-                            "$baseUrl$lastImagePath"
+                            val finalImageUrl = resolveProductImageUrl(selectedItem?.Images).orEmpty()
 
                             val netWt: Double = (selectedItem?.GrossWt?.toDoubleOrNull()
                                 ?: 0.0) - (selectedItem?.TotalStoneWeight?.toDoubleOrNull()
@@ -997,7 +994,7 @@ fun OrderScreenContent(
                                 qty = selectedItem?.ClipQuantity.toString(),
                                 hallmarkAmt = selectedItem?.HallmarkAmount.toString(),
                                 mrp = selectedItem?.MRP.toString(),
-                                image = lastImagePath.toString(),
+                                image = finalImageUrl,
                                 netAmt = "",
                                 diamondAmt = selectedItem?.TotalDiamondAmount.toString(),
                                 categoryId = selectedItem?.CategoryId,
@@ -1086,12 +1083,7 @@ fun OrderScreenContent(
         selectedItem = matchedItem
         if (itemCode.text.isNotEmpty()) {
 
-            val baseUrl =
-                "https://rrgold.loyalstring.co.in/" // Base URL for images
-            val imageString = selectedItem?.Images.toString()
-            val lastImagePath =
-                imageString.split(",").lastOrNull()?.trim()
-            "$baseUrl$lastImagePath"
+            val finalImageUrl = resolveProductImageUrl(selectedItem?.Images).orEmpty()
             val newProduct = OrderItem(
                 branchId = selectedItem?.BranchId.toString(),
                 branchName = selectedItem?.BranchName.toString(),
@@ -1123,7 +1115,7 @@ fun OrderScreenContent(
                 qty = selectedItem?.ClipQuantity.toString(),
                 hallmarkAmt = selectedItem?.HallmarkAmount.toString(),
                 mrp = selectedItem?.MRP.toString(),
-                image = lastImagePath.toString(),
+                image = finalImageUrl,
                 netAmt = "",
                 diamondAmt = selectedItem?.TotalDiamondAmount.toString(),
                 categoryId = selectedItem?.CategoryId,
@@ -1249,12 +1241,7 @@ fun OrderScreenContent(
                         val rate = dailyRates.find { it.PurityName.equals(selectedItem?.PurityName, ignoreCase = true) }?.Rate?.toDoubleOrNull() ?: 0.0
 
                         val itemAmt: Double = (selectedItem?.NetWt?.toDoubleOrNull() ?: 0.0) * rate
-                        val baseUrl =
-                            "https://rrgold.loyalstring.co.in/" // Replace with actual base URL
-                        val imageString = selectedItem?.Images.toString()
-                        val lastImagePath =
-                            imageString.split(",").lastOrNull()?.trim()
-                        "$baseUrl$lastImagePath"
+                        val finalImageUrl = resolveProductImageUrl(selectedItem?.Images).orEmpty()
                         // If the product doesn't exist in productList, add it and insert into database
                         val newProduct = OrderItem(
                             branchId = selectedItem?.BranchId.toString(),
@@ -1287,7 +1274,7 @@ fun OrderScreenContent(
                             qty = selectedItem?.ClipQuantity.toString(),
                             hallmarkAmt = selectedItem?.HallmarkAmount.toString(),
                             mrp = selectedItem?.MRP.toString(),
-                            image = lastImagePath.toString(),
+                            image = finalImageUrl,
                             netAmt = "",
                             diamondAmt = selectedItem?.TotalDiamondAmount.toString(),
                             categoryId = selectedItem?.CategoryId,
@@ -3616,7 +3603,7 @@ fun Modifier.gradientBorderBox(
         val imageBitmaps = mutableListOf<Bitmap?>()
         for (item in order.CustomOrderItem) {
             Log.d("@@","image@@"+item.Image)
-            val bitmap = loadBitmapFromUrl("https://rrgold.loyalstring.co.in/"+item.Image ?: "")
+            val bitmap = loadBitmapFromUrl(resolveProductImageUrl(item.Image).orEmpty())
             imageBitmaps.add(bitmap)
         }
 
@@ -3841,7 +3828,7 @@ suspend fun loadImageBytesFromUrl(urlString: String): ByteArray? = withContext(D
         doc.add(infoTable)
         doc.add(Paragraph("\n"))
         // Big Image Below
-        val imgBytes = loadImageBytesFromUrl("https://rrgold.loyalstring.co.in/" + item.Image)
+        val imgBytes = loadImageBytesFromUrl(resolveProductImageUrl(item.Image).orEmpty())
         if (imgBytes != null) {
             val imgData = ImageDataFactory.create(imgBytes)
             val img = Image(imgData)

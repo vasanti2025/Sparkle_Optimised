@@ -132,13 +132,17 @@ class SearchViewModel @Inject constructor(
     }
 
     fun startTagScanning(power: Int) {
+        if (!isScanActive) return
         currentScanPower = power
         lastSearchUiUpdate = 0L
         lastSoundPlayAt = 0L
         scanJob?.cancel()
+        readerManager.prepareForScan()
         scanJob = viewModelScope.launch(Dispatchers.IO) {
+            if (!isScanActive) return@launch
             if (!readerManager.initReader()) {
                 isScanActive = false
+                readerManager.haltScan()
                 return@launch
             }
 
@@ -147,14 +151,18 @@ class SearchViewModel @Inject constructor(
                 setFastID(false)
                 setDynamicDistance(0)
             }
-            readerManager.startInventoryTag(power, true)
+            if (!isScanActive) return@launch
+            if (!readerManager.startInventoryTag(power, true)) {
+                isScanActive = false
+                return@launch
+            }
 
             var drained = 0
             while (drained < maxStaleDrain && readerManager.readTagFromBuffer() != null) {
                 drained++
             }
 
-            while (isActive) {
+            while (isActive && isScanActive) {
                 var tag = readerManager.readTagFromBuffer()
                 if (tag?.epc == null) {
                     yield()
@@ -233,10 +241,10 @@ class SearchViewModel @Inject constructor(
             val filterPtr = 32
             val filterCnt = epc.length * 4
 
-            while (isActive && lastBlinkEpc == epc) {
+            while (isActive && isScanActive && lastBlinkEpc == epc) {
                 try {
                     readerManager.stopInventory()
-                    if (!isActive) break
+                    if (!isActive || !isScanActive) break
 
                     reader.readData(
                         "00000000",
@@ -250,6 +258,7 @@ class SearchViewModel @Inject constructor(
                     )
 
                     delay(blinkLedVisibleMs)
+                    if (!isActive || !isScanActive) break
 
                     readerManager.startInventoryTag(currentScanPower, true)
                 } catch (e: Exception) {
@@ -750,7 +759,10 @@ class SearchViewModel @Inject constructor(
         blinkingJob?.cancel()
         blinkingJob = null
 
-        readerManager.releaseScanning()
+        readerManager.haltScan()
+        viewModelScope.launch(Dispatchers.IO) {
+            readerManager.stopHardwareInventory()
+        }
 
         lastSoundId?.let { readerManager.stopSound(it) }
         lastSoundId = null

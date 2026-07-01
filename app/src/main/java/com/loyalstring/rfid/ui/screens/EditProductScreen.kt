@@ -73,7 +73,10 @@ import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.ui.utils.GradientButton
 import com.loyalstring.rfid.ui.utils.UserPreferences
+import com.loyalstring.rfid.ui.utils.getLocalProductImageFile
 import com.loyalstring.rfid.ui.utils.poppins
+import com.loyalstring.rfid.ui.utils.resolveImagePathToUrl
+import com.loyalstring.rfid.ui.utils.resolveProductImageUrl
 import com.loyalstring.rfid.viewmodel.BulkViewModel
 import com.loyalstring.rfid.viewmodel.EditProductViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
@@ -644,8 +647,8 @@ fun EditProductScreen(
 
             // Build your displayImageSource:
             val baseUrl = "https://rrgold.loyalstring.co.in/"
-            val localItemImage = remember(item.itemCode, localPath) {
-                getProductImageFile(context, item.itemCode)
+            val localItemImage = remember(item.itemCode, item.design, localPath) {
+                getLocalProductImageFile(context, item.itemCode, item.design)
             }
 
             val displayImageSource: Any? = when {
@@ -664,12 +667,7 @@ fun EditProductScreen(
                         }
 
                         else -> {
-                            stored.split(",")
-                                .map { it.trim() }
-                                .filter { it.isNotEmpty() }
-                                .lastOrNull()
-                                ?.let { "$baseUrl$it" }
-                                ?: localItemImage
+                            resolveProductImageUrl(stored, baseUrl) ?: localItemImage
                         }
                     }
                 }
@@ -928,23 +926,11 @@ fun InputField(
     )
 }
 
-fun getProductImageFile(context: Context, itemCode: String?): File? {
-    if (itemCode.isNullOrBlank()) return null
-
-    val imageDir = File(context.getExternalFilesDir(null), "product_images")
-    if (!imageDir.exists()) {
-        imageDir.mkdirs()
-    }
-
-    val cleanItemCode = itemCode.trim()
-
-    return listOf(
-        File(imageDir, "$cleanItemCode.jpg"),
-        File(imageDir, "$cleanItemCode.jpeg"),
-        File(imageDir, "$cleanItemCode.png"),
-        File(imageDir, "$cleanItemCode.webp")
-    ).firstOrNull { it.exists() }
-}
+fun getProductImageFile(
+    context: Context,
+    itemCode: String?,
+    designName: String? = null,
+): File? = getLocalProductImageFile(context, itemCode, designName)
 
 fun saveBitmapToProductImages(
     context: Context,

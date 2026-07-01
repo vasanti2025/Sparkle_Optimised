@@ -85,6 +85,9 @@ import com.loyalstring.rfid.data.remote.resource.Resource
 import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.ui.utils.UserPreferences
+import com.loyalstring.rfid.ui.utils.isBulkItemAlreadyInChallanList
+import com.loyalstring.rfid.ui.utils.isDuplicateProductIdentity
+import com.loyalstring.rfid.ui.utils.resolveProductImageUrl
 import com.loyalstring.rfid.viewmodel.BulkViewModel
 import com.loyalstring.rfid.viewmodel.DeliveryChallanViewModel
 import com.loyalstring.rfid.viewmodel.OrderViewModel
@@ -627,7 +630,7 @@ fun DeliveryChalanScreen(
             }
 
             // prevent duplicates
-            if (productList.any { it.RFIDCode == matchedItem.rfid }) {
+            if (isBulkItemAlreadyInChallanList(productList, matchedItem)) {
                 Log.d("RFIDScan", "⚠️ Duplicate RFID skipped: ${matchedItem.rfid}")
                 return@forEach
             }
@@ -699,11 +702,7 @@ fun DeliveryChalanScreen(
 
 
 
-            val alreadyExists = productList.any {
-                sameCode(it.ItemCode, matchedItem.itemCode) ||
-                        sameCode(it.RFIDCode, matchedItem.rfid) ||
-                        sameCode(it.tid, matchedItem.tid)
-            }
+            val alreadyExists = isBulkItemAlreadyInChallanList(productList, matchedItem)
 
             if (alreadyExists) {
                 showToast("Item already added: ${matchedItem.itemCode}")
@@ -791,7 +790,7 @@ fun DeliveryChalanScreen(
             }
 
             // 3️⃣ Duplicate skip
-            if (productList.any { it.tid == matchedItem.tid }) {
+            if (isBulkItemAlreadyInChallanList(productList, matchedItem)) {
                 Log.d("RFIDScan", "⚠️ Duplicate RFID skipped: ${matchedItem.rfid}")
                 return@forEach
             }
@@ -1718,7 +1717,7 @@ fun DeliveryChalanScreen(
         }
 
         // duplicate check
-        if (productList.any { it.tid == matchedItem.tid }) {
+        if (isBulkItemAlreadyInChallanList(productList, matchedItem)) {
             Log.d("DropdownSelect", "⚠️ Duplicate item skipped ${matchedItem.itemCode}")
             return
         }
@@ -1734,14 +1733,7 @@ fun DeliveryChalanScreen(
         // clear first, so touchList/recomposition se dobara add na ho
         pendingMatchedItem = null
 
-        val alreadyExists = productList.any {
-            (!item.itemCode.isNullOrBlank() &&
-                    it.ItemCode.equals(item.itemCode, ignoreCase = true)) ||
-                    (!item.rfid.isNullOrBlank() &&
-                            it.RFIDCode.equals(item.rfid, ignoreCase = true)) ||
-                    (!item.tid.isNullOrBlank() &&
-                            it.tid.equals(item.tid, ignoreCase = true))
-        }
+        val alreadyExists = isBulkItemAlreadyInChallanList(productList, item)
 
         if (alreadyExists) {
             Toast.makeText(context, "Item already added", Toast.LENGTH_SHORT).show()
@@ -1867,12 +1859,6 @@ fun DeliveryChalanScreen(
                         val rate = 100*//*dailyRates.find { it.PurityName.equals(selectedItem?.PurityName, ignoreCase = true) }?.Rate?.toDoubleOrNull() ?: 0.0*//*
 
                         val itemAmt: Double = (selectedItem?.NetWt?.toDoubleOrNull() ?: 0.0) * rate
-                        val baseUrl =
-                            "https://rrgold.loyalstring.co.in/" // Replace with actual base URL
-                        val imageString = selectedItem?.Images.toString()
-                        val lastImagePath =
-                            imageString.split(",").lastOrNull()?.trim()
-                        "$baseUrl$lastImagePath"
                         // If the product doesn't exist in productList, add it and insert into database
                         val newProduct = ChallanDetails(
                             ChallanId = 0,
@@ -2005,7 +1991,7 @@ fun DeliveryChalanScreen(
             }
 
             // Prevent duplicates
-            if (productList.any { it.tid == matchedItem.tid }) {
+            if (isBulkItemAlreadyInChallanList(productList, matchedItem)) {
                 Log.d("RFID Scan", "⚠️ Already exists: ${matchedItem.itemCode}")
                 return@setOnBarcodeScanned
             }
@@ -2105,10 +2091,7 @@ MakingPerGram=${touchMatch.MakingPerGram}
         // Item Amount = Stone + Diamond + Metal + Making
         val itemAmt = stoneAmt + diamondAmt + metalAmt + makingAmt
 
-        val baseUrl = "https://rrgold.loyalstring.co.in/"
-        val imageString = matchedItem.imageUrl.orEmpty()
-        val lastImagePath = imageString.split(",").lastOrNull()?.trim()
-        val finalImageUrl = if (!lastImagePath.isNullOrBlank()) "$baseUrl$lastImagePath" else ""
+        val finalImageUrl = resolveProductImageUrl(matchedItem.imageUrl).orEmpty()
         val fixedWastage = (makingFixedWastage?.toDoubleOrNull() ?: 0.0)
         val net = netWt?.toDouble() ?: 0.0
         fun fmt3(v: Double): String = String.format(Locale.getDefault(), "%.3f", v)

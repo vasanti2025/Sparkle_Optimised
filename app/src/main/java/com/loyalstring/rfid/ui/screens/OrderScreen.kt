@@ -86,6 +86,13 @@ import com.loyalstring.rfid.data.remote.resource.Resource
 import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.ui.utils.NetworkUtils
 import com.loyalstring.rfid.ui.utils.UserPreferences
+import com.loyalstring.rfid.ui.utils.resolveImagePathToUrl
+import com.loyalstring.rfid.ui.utils.resolveProductImageUrl
+import com.loyalstring.rfid.ui.utils.isBulkItemAlreadyInOrderList
+import com.loyalstring.rfid.ui.utils.isDuplicateProductIdentity
+import com.loyalstring.rfid.ui.utils.isSameProductCode
+import com.loyalstring.rfid.ui.utils.stopBulkScan
+import com.loyalstring.rfid.ui.utils.toggleBulkScan
 import com.loyalstring.rfid.viewmodel.BulkViewModel
 import com.loyalstring.rfid.viewmodel.DeliveryChallanViewModel
 import com.loyalstring.rfid.viewmodel.OrderViewModel
@@ -199,19 +206,14 @@ fun OrderScreen(
             }
 
             override fun onRfidKeyPressed() {
-                if (isScanning) {
-                    viewModel.stopScanning()
-                    isScanning = false
-                } else {
-                    viewModel.startScanning(selectedPower)
-                    isScanning = true
-                }
+                toggleBulkScan(viewModel, selectedPower) { isScanning = it }
             }
         }
         activity.registerScanKeyListener(listener)
 
         onDispose {
             activity.unregisterScanKeyListener()
+            stopBulkScan(viewModel) { isScanning = it }
         }
     }
 
@@ -455,7 +457,7 @@ fun OrderScreen(
     LaunchedEffect(scanTrigger) {
         scanTrigger?.let { type ->
             when (type) {
-                "scan" -> if (productList.size != 1) viewModel.startScanning(30)
+                "scan" -> toggleBulkScan(viewModel, selectedPower) { isScanning = it }
                 "barcode" -> viewModel.startBarcodeScanning(context)
             }
             viewModel.clearScanTrigger()
@@ -776,11 +778,7 @@ fun OrderScreen(
 
             )
 
-        val alreadyExists = productList.any {
-            matchedItem.itemCode.equals(challanItem.itemCode, ignoreCase = true) ||
-                    matchedItem.rfid.equals(challanItem.rfidCode, ignoreCase = true) ||
-                    matchedItem.tid.equals(challanItem.tid, ignoreCase = true)
-        }
+        val alreadyExists = isBulkItemAlreadyInOrderList(productList, matchedItem)
 
         if (!alreadyExists) {
             productList.add(challanItem)
@@ -849,7 +847,7 @@ fun OrderScreen(
             }
 
             // 3️⃣ Duplicate skip
-            if (productList.any { it.tid == matchedItem.tid }) {
+            if (isBulkItemAlreadyInOrderList(productList, matchedItem)) {
                 Log.d("RFIDScan", "⚠️ Duplicate RFID skipped: ${matchedItem.rfid}")
                 return@forEach
             }
@@ -1032,13 +1030,7 @@ fun OrderScreen(
                 return@setOnBarcodeScanned
             }
 
-            val alreadyExists = productList.any { existing ->
-                sameCode(existing.tid, matchedItem.tid) ||
-                        sameCode(existing.epc, matchedItem.tid) ||
-                        sameCode(existing.rfidCode, matchedItem.rfid) ||
-                        sameCode(existing.itemCode, matchedItem.itemCode) ||
-                        sameCode(existing.productCode, matchedItem.productCode)
-            }
+            val alreadyExists = isBulkItemAlreadyInOrderList(productList, matchedItem)
 
             if (alreadyExists) {
                 Log.d("RFID Scan", "⚠️ Item already exists: ${matchedItem.itemCode}")
@@ -1085,11 +1077,7 @@ fun OrderScreen(
 
             val itemAmt = stoneAmt + diamondAmt + metalAmt + makingAmt
 
-            val baseUrl = "https://rrgold.loyalstring.co.in/"
-            val imageString = matchedItem.imageUrl.orEmpty()
-            val lastImagePath = imageString.split(",").lastOrNull()?.trim()
-            val finalImageUrl =
-                if (!lastImagePath.isNullOrBlank()) "$baseUrl$lastImagePath" else ""
+            val finalImageUrl = resolveProductImageUrl(matchedItem.imageUrl).orEmpty()
 
             selectedItem = matchedItem.toItemCodeResponse(context)
 
@@ -1968,16 +1956,7 @@ fun OrderScreen(
                     viewModel.startSingleScan(20)
                 },
                 onGscan = {
-                    if (isScanning) {
-                        viewModel.stopScanning()
-                        isScanning = false
-                    } else {
-                        viewModel.startScanning(selectedPower)
-                        isScanning = true
-                    }
-
-                    // viewModel.toggleScanning(selectedPower)
-
+                    toggleBulkScan(viewModel, selectedPower) { isScanning = it }
                 },
                 onReset = {
                     firstPress = false
@@ -2302,7 +2281,7 @@ fun addItemToList(
         return
     }
 
-    if (productList.any { it.tid == matchedItem.tid }) {
+    if (isBulkItemAlreadyInOrderList(productList, matchedItem)) {
         Log.d("DropdownSelect", "⚠️ Duplicate item skipped ${matchedItem.itemCode}")
         return
     }
@@ -2432,10 +2411,7 @@ suspend fun generateTablePdfWithImages1(context: Context, order: CustomOrderRequ
             ?.filter { it.isNotEmpty() }
             ?.lastOrNull()
 
-        val imgUrl = last?.let {
-            if (it.startsWith("http", true)) it
-            else "https://rrgold.loyalstring.co.in/$it"
-        }
+        val imgUrl = last?.let { resolveImagePathToUrl(it) }
 
 
 
@@ -3109,10 +3085,7 @@ suspend fun generateTablePdfWithImages(context: Context, order: CustomOrderRespo
             ?.filter { it.isNotEmpty() }
             ?.lastOrNull()
 
-        val imgUrl = last?.let {
-            if (it.startsWith("http", true)) it
-            else "https://rrgold.loyalstring.co.in/$it"
-        }
+        val imgUrl = last?.let { resolveImagePathToUrl(it) }
         Log.d("@@","item.Image"+imgUrl)
         val imgBytes = loadImageBytesFromUrl(imgUrl.toString())
         if (imgBytes != null) {

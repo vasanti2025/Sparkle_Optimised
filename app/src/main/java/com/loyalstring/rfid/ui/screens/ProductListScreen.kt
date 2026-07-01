@@ -93,9 +93,12 @@ import com.loyalstring.rfid.data.remote.data.ProductDeleteModelReq
 import com.loyalstring.rfid.data.remote.resource.Resource
 import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.navigation.Screens
+import com.loyalstring.rfid.ui.utils.DEFAULT_PRODUCT_IMAGE_BASE_URL
 import com.loyalstring.rfid.ui.utils.GradientButton
 import com.loyalstring.rfid.ui.utils.UserPreferences
+import com.loyalstring.rfid.ui.utils.getLocalProductImageFile
 import com.loyalstring.rfid.ui.utils.poppins
+import com.loyalstring.rfid.ui.utils.resolveProductImageUrl
 import com.loyalstring.rfid.viewmodel.BulkViewModel
 import com.loyalstring.rfid.viewmodel.ProductListViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
@@ -126,7 +129,7 @@ fun ProductListScreen(
     val context = LocalContext.current
     val employee = UserPreferences.getInstance(context).getEmployee(Employee::class.java)
     var showConfirmDelete by remember { mutableStateOf(false) }
-    val baseUrl = "https://rrgold.loyalstring.co.in/"
+    val baseUrl = DEFAULT_PRODUCT_IMAGE_BASE_URL
     //var deletingItemId by remember { mutableStateOf<Int?>(null) }
     var isEditMode by remember { mutableStateOf(false) }
     val deleteResponse by singleproductViewModel.productDeleetResponse.observeAsState()
@@ -1078,15 +1081,15 @@ fun ItemDetailsDialog(
     item: BulkItem,
     onDismiss: () -> Unit
 ) {
-    val baseUrl = "https://rrgold.loyalstring.co.in/"
+    val baseUrl = DEFAULT_PRODUCT_IMAGE_BASE_URL
     /* val imageUrl = item.imageUrl?.split(",")
          ?.lastOrNull()
          ?.trim()
          ?.let { "$baseUrl$it" }*/
 
     val context = LocalContext.current
-    val localItemImage = remember(item.itemCode) {
-        getLocalImageFileForItem(context, item.itemCode)
+    val localItemImage = remember(item.itemCode, item.design) {
+        getLocalProductImageFile(context, item.itemCode, item.design)
     }
 
     val directLocalPath = remember(item.imageUrl) {
@@ -1098,16 +1101,8 @@ fun ItemDetailsDialog(
             ?.takeIf { it.exists() }
     }
 
-    val remoteUrl = remember(item.imageUrl) {
-        item.imageUrl
-            ?.trim()
-            ?.trimEnd(',')
-            ?.takeIf { it.isNotBlank() && !it.startsWith("/") }
-            ?.split(",")
-            ?.map { it.trim() }
-            ?.filter { it.isNotEmpty() }
-            ?.lastOrNull()
-            ?.let { "$baseUrl$it" }
+    val remoteUrl = remember(item.imageUrl, baseUrl) {
+        resolveProductImageUrl(item.imageUrl, baseUrl)
     }
 
     var loadError by remember(item.itemCode, item.imageUrl) { mutableStateOf(false) }
@@ -1205,31 +1200,11 @@ fun InfoRow(label: String, value: String?) {
 }
 
 /*for local image*/
-fun getLocalImageFileForItem(context: android.content.Context, itemCode: String?): File? {
-    if (itemCode.isNullOrBlank()) return null
-
-    val cleanItemCode = itemCode.trim()
-
-    val possibleDirs = listOf(
-        File(context.filesDir, "product_images"),
-        File(context.getExternalFilesDir(null), "product_images")
-    )
-
-    possibleDirs.forEach { dir ->
-        if (dir.exists()) {
-            val file = listOf(
-                File(dir, "$cleanItemCode.jpg"),
-                File(dir, "$cleanItemCode.jpeg"),
-                File(dir, "$cleanItemCode.png"),
-                File(dir, "$cleanItemCode.webp")
-            ).firstOrNull { it.exists() }
-
-            if (file != null) return file
-        }
-    }
-
-    return null
-}
+fun getLocalImageFileForItem(
+    context: android.content.Context,
+    itemCode: String?,
+    designName: String? = null,
+): File? = getLocalProductImageFile(context, itemCode, designName)
 
 @Composable
 fun ProductImageWithFallback(
@@ -1239,9 +1214,9 @@ fun ProductImageWithFallback(
 ) {
     val context = LocalContext.current
 
-    var loadError by remember(item.itemCode, item.imageUrl) { mutableStateOf(false) }
-    var localImageFile by remember(item.itemCode, item.imageUrl) {
-        mutableStateOf<File?>(getLocalImageFileForItem(context, item.itemCode))
+    var loadError by remember(item.itemCode, item.design, item.imageUrl) { mutableStateOf(false) }
+    var localImageFile by remember(item.itemCode, item.design, item.imageUrl) {
+        mutableStateOf(getLocalProductImageFile(context, item.itemCode, item.design))
     }
 
     val directLocalPath = remember(item.imageUrl) {
@@ -1253,16 +1228,8 @@ fun ProductImageWithFallback(
             ?.takeIf { it.exists() }
     }
 
-    val remoteUrl = remember(item.imageUrl) {
-        item.imageUrl
-            ?.trim()
-            ?.trimEnd(',')
-            ?.takeIf { it.isNotBlank() && !it.startsWith("/") }
-            ?.split(",")
-            ?.map { it.trim() }
-            ?.filter { it.isNotEmpty() }
-            ?.lastOrNull()
-            ?.let { baseUrl + it }
+    val remoteUrl = remember(item.imageUrl, baseUrl) {
+        resolveProductImageUrl(item.imageUrl, baseUrl)
     }
 
     LaunchedEffect(remoteUrl, item.itemCode) {

@@ -69,6 +69,7 @@ import com.loyalstring.rfid.ui.utils.SyncProgressBar
 import com.loyalstring.rfid.ui.utils.ToastUtils
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
+import com.loyalstring.rfid.ui.utils.toggleBulkScan
 import com.loyalstring.rfid.viewmodel.BulkViewModel
 import com.loyalstring.rfid.viewmodel.ImportExcelViewModel
 import kotlinx.coroutines.Dispatchers
@@ -109,6 +110,7 @@ fun ProductManagementScreen(
         onDispose {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             viewModel.unblockTouch(context)
+            viewModel.stopScanning()
         }
     }
     val scaffoldState = rememberScaffoldState()
@@ -206,18 +208,10 @@ fun ProductManagementScreen(
 
     LaunchedEffect(scanTrigger) {
         scanTrigger?.let { type ->
-            // Do something based on the key
             when (type) {
-                "scan" -> {
-                    viewModel.startScanning(selectedPower)
-                }
-
-                "barcode" -> {
-                    viewModel.startBarcodeScanning(context)
-                }
+                "scan" -> toggleBulkScan(viewModel, selectedPower)
+                "barcode" -> viewModel.startBarcodeScanning(context)
             }
-
-            // Important: clear after handling to prevent repeated triggers
             viewModel.clearScanTrigger()
         }
     }

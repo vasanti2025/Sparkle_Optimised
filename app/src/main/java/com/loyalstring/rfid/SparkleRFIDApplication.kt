@@ -7,6 +7,9 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import coil.Coil
+import coil.ImageLoader
+import coil.decode.SvgDecoder
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.worker.LocaleHelper
 import com.rscja.deviceapi.RFIDWithUHFUART
@@ -81,6 +84,14 @@ class SparkleRFIDApplication : Application(), Configuration.Provider {
         val langCode = userPrefs.getAppLanguage().ifBlank { "en" }
         AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(langCode))
         Log.d("LocaleDebug", "Locale applied once in Application: '$langCode'")
+
+        Coil.setImageLoader(
+            ImageLoader.Builder(this)
+                .components {
+                    add(SvgDecoder.Factory())
+                }
+                .build()
+        )
 
         // PERF-FIX: Move POSConnect.init() to background thread so it does not
         // block the main thread during app startup. It is a third-party library

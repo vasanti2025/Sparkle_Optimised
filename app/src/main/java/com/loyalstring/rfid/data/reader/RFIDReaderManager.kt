@@ -32,6 +32,10 @@ class RFIDReaderManager @Inject constructor(
     // the 2.5-second hardware timeout (5 retries × 500ms) when the hardware isn't scanning.
     @Volatile private var isInventoryActive = false
 
+    // Gate that blocks startInventoryTag() after an explicit stop. Prevents cancelled coroutines
+    // from restarting hardware/sound after the user presses Stop.
+    @Volatile private var scanningPermitted = false
+
     var soundMap: HashMap<Int?, Int?> = HashMap()
     private var soundPool: SoundPool? = null
     private var volumeRatio = 0f
@@ -110,7 +114,36 @@ class RFIDReaderManager @Inject constructor(
         }
     }
 
+    fun prepareForScan() {
+        scanningPermitted = true
+    }
+
+    /** Immediately block new inventory starts and stop looping scan audio. */
+    fun haltScan() {
+        scanningPermitted = false
+        isInventoryActive = false
+        soundPlayer.stopSound()
+    }
+
+    fun isScanPermitted(): Boolean = scanningPermitted
+
+    /** Best-effort hardware inventory stop (may block briefly on some devices). */
+    fun stopHardwareInventory() {
+        isInventoryActive = false
+        try {
+            _reader?.stopInventory()
+        } catch (e: Exception) {
+            Log.w("RFID", "stopInventory failed: ${e.message}")
+        }
+        soundPlayer.stopSound()
+        Log.d("RFID", "Hardware inventory stopped")
+    }
+
     fun startInventoryTag(selectedPower: Int, search: Boolean): Boolean {
+        if (!scanningPermitted) {
+            Log.d("RFID", "startInventoryTag blocked — scanning not permitted")
+            return false
+        }
         _reader?.setPower(selectedPower)
         if (!search) {
             configureReaderForInventory()
@@ -141,8 +174,7 @@ class RFIDReaderManager @Inject constructor(
     // command — that command takes 2.5s (5 retries × 500ms) and always returns error -1 on this
     // device. The next startInventoryTag() call naturally restarts a clean inventory session.
     fun releaseScanning() {
-        isInventoryActive = false
-        soundPlayer.stopSound()
+        haltScan()
         Log.d("RFID", "Inventory released (no hardware stop)")
     }
 

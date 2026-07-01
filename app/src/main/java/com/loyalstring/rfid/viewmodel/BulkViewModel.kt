@@ -648,32 +648,35 @@ class BulkViewModel @Inject constructor(
     }
 
     fun startSingleScan(selectedPower: Int) {
-//if (!success) return
         scanJob?.cancel()
 
         scanJob = viewModelScope.launch(Dispatchers.IO) {
-            if (!ensureReader()) return@launch
-            readerManager.startInventoryTag(selectedPower, false)
+            readerManager.prepareForScan()
+            try {
+                if (!ensureReader()) return@launch
+                if (!readerManager.startInventoryTag(selectedPower, false)) return@launch
 
-            val timeoutMillis = 2000L
-            val startTime = System.currentTimeMillis()
-            var foundTag: UHFTAGInfo? = null
+                val timeoutMillis = 2000L
+                val startTime = System.currentTimeMillis()
+                var foundTag: UHFTAGInfo? = null
 
-            while (isActive && (System.currentTimeMillis() - startTime < timeoutMillis)) {
-                val tag = readerManager.readTagFromBuffer()
-                if (tag != null && !tag.epc.isNullOrBlank()) {
-                    foundTag = tag
-                    break
-                } else {
-                    delay(100)
+                while (isActive && (System.currentTimeMillis() - startTime < timeoutMillis)) {
+                    val tag = readerManager.readTagFromBuffer()
+                    if (tag != null && !tag.epc.isNullOrBlank()) {
+                        foundTag = tag
+                        break
+                    } else {
+                        delay(100)
+                    }
                 }
-            }
 
-            readerManager.stopInventory()
-
-            foundTag?.let {
-                handleScannedTag(it)   // ✅ adds to the same lists as bulk
-                readerManager.playSound(1)
+                foundTag?.let {
+                    handleScannedTag(it)
+                    readerManager.playSound(1)
+                }
+            } finally {
+                readerManager.haltScan()
+                readerManager.stopHardwareInventory()
             }
         }
     }
@@ -719,15 +722,23 @@ class BulkViewModel @Inject constructor(
         _scannedKeySet.value = emptySet()
         scanJob?.cancel()
         outerScanJob?.cancel()
+        readerManager.haltScan()
         _isScanning.value = true
+        readerManager.prepareForScan()
 
         outerScanJob = viewModelScope.launch(Dispatchers.IO) {
+            if (!isActive || !_isScanning.value) return@launch
             if (!ensureReader()) {
                 _isScanning.value = false
+                readerManager.haltScan()
                 return@launch
             }
 
-            readerManager.startInventoryTag(selectedPower, false)
+            if (!isActive || !_isScanning.value) return@launch
+            if (!readerManager.startInventoryTag(selectedPower, false)) {
+                _isScanning.value = false
+                return@launch
+            }
             readerManager.playSound(1)
 
             // Build EPC set if not already prepared
@@ -741,7 +752,7 @@ class BulkViewModel @Inject constructor(
                 val localMatchedSet = HashSet<String>(_matchedEpcSet.value)
                 var lastUiUpdate = System.currentTimeMillis()
 
-                while (isActive) {
+                while (isActive && _isScanning.value) {
                     try {
                         val tag = readerManager.readTagFromBuffer()
                         if (tag != null) {
@@ -860,19 +871,27 @@ class BulkViewModel @Inject constructor(
 
         scanJob?.cancel()
         outerScanJob?.cancel()
+        readerManager.haltScan()
         _isScanning.value = true
+        readerManager.prepareForScan()
 
         outerScanJob = viewModelScope.launch(Dispatchers.IO) {
+            if (!isActive || !_isScanning.value) return@launch
             if (!ensureReader()) {
                 Log.e("RFID", "Reader not connected.")
                 _isScanning.value = false
+                readerManager.haltScan()
                 return@launch
             }
-            readerManager.startInventoryTag(selectedPower, false)
+            if (!isActive || !_isScanning.value) return@launch
+            if (!readerManager.startInventoryTag(selectedPower, false)) {
+                _isScanning.value = false
+                return@launch
+            }
             readerManager.playSound(1, 0)
 
             scanJob = viewModelScope.launch(Dispatchers.IO) {
-                while (isActive) {
+                while (isActive && _isScanning.value) {
                     try {
                         val tag = readerManager.readTagFromBuffer()
                         if (tag != null && !tag.epc.isNullOrBlank()) {
@@ -1223,12 +1242,12 @@ class BulkViewModel @Inject constructor(
         // Flush in-memory pending tags immediately (no hardware I/O, safe on any thread)
         flushPendingTags()
 
-        // releaseScanning() resets internal state + stops sound without sending the hardware
-        // stopInventory() command. That command takes 2.5s (5 retries × 500ms) and returns
-        // error -1 every time on this device — it never actually stops the hardware.
-        // The hardware resets cleanly when the next startInventoryTag() is called (e.g. when
-        // SearchScreen opens), so we let that transition handle the hardware state.
-        readerManager.releaseScanning()
+        // Block any in-flight coroutine from calling startInventoryTag, stop audio immediately,
+        // then stop hardware on a background thread (stopInventory can block on some devices).
+        readerManager.haltScan()
+        viewModelScope.launch(Dispatchers.IO) {
+            readerManager.stopHardwareInventory()
+        }
     }
 
 

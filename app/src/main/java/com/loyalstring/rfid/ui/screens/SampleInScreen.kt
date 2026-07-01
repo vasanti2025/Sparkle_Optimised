@@ -41,6 +41,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -65,7 +66,9 @@ import androidx.navigation.NavHostController
 import com.example.sparklepos.models.loginclasses.customerBill.EmployeeList
 import com.google.gson.Gson
 import com.loyalstring.rfid.R
+import com.loyalstring.rfid.MainActivity
 import com.loyalstring.rfid.data.model.ClientCodeRequest
+import com.loyalstring.rfid.data.reader.ScanKeyListener
 import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.data.model.sampleOut.IssueItemDto
 import com.loyalstring.rfid.data.model.sampleOut.SampleOutCustomer
@@ -80,6 +83,8 @@ import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.ui.utils.GradientButtonIcon
 import com.loyalstring.rfid.ui.utils.UserPreferences
+import com.loyalstring.rfid.ui.utils.stopBulkScan
+import com.loyalstring.rfid.ui.utils.toggleBulkScan
 import com.loyalstring.rfid.viewmodel.BulkViewModel
 import com.loyalstring.rfid.viewmodel.DeliveryChallanViewModel
 import com.loyalstring.rfid.viewmodel.OrderViewModel
@@ -308,7 +313,7 @@ fun SampleInScreen(
     LaunchedEffect(scanTrigger) {
         scanTrigger?.let { type ->
             when (type) {
-                "scan" -> if (productList.size != 1) viewModel.startScanning(30)
+                "scan" -> toggleBulkScan(viewModel, selectedPower) { isScanning = it }
                 "barcode" -> viewModel.startBarcodeScanning(context)
             }
             viewModel.clearScanTrigger()
@@ -336,6 +341,7 @@ fun SampleInScreen(
 
     LaunchedEffect(shouldNavigateBack) {
         if (shouldNavigateBack) {
+            stopBulkScan(viewModel) { isScanning = it }
             kotlinx.coroutines.delay(50)
             onBack()
         }
@@ -950,6 +956,28 @@ fun SampleInScreen(
   /*  fun onScanned(itemCode: String) {
         scannedCodes = scannedCodes + itemCode
     }*/
+
+    val activity = LocalContext.current as? MainActivity
+    DisposableEffect(Unit) {
+        stopBulkScan(viewModel) { isScanning = it }
+
+        val listener = object : ScanKeyListener {
+            override fun onBarcodeKeyPressed() {
+                viewModel.startBarcodeScanning(context)
+            }
+
+            override fun onRfidKeyPressed() {
+                toggleBulkScan(viewModel, selectedPower) { isScanning = it }
+            }
+        }
+        activity?.registerScanKeyListener(listener)
+
+        onDispose {
+            activity?.unregisterScanKeyListener()
+            stopBulkScan(viewModel) { isScanning = it }
+        }
+    }
+
     Scaffold(
         topBar = {
             GradientTopBar(
@@ -1141,16 +1169,7 @@ fun SampleInScreen(
                     viewModel.startSingleScan(20)
                 },
                 onGscan = {
-                    if (isScanning) {
-                        viewModel.stopScanning()
-                        isScanning = false
-                    } else {
-                        viewModel.startScanning(selectedPower)
-                        isScanning = true
-                    }
-
-                    // viewModel.toggleScanning(selectedPower)
-
+                    toggleBulkScan(viewModel, selectedPower) { isScanning = it }
                 },
                 onReset = {
                     firstPress = false
@@ -1170,6 +1189,7 @@ fun SampleInScreen(
 
                     ) // 🧹 Clear everything in one call
                     viewModel.resetProductScanResults()
+                    viewModel.stopScanning()
                     viewModel.stopBarcodeScanner()
                 },
                 isScanning = isScanning,
@@ -1640,6 +1660,7 @@ fun resetAllFields1(
 
     // Stop scanning and clear scan data
     onResetScanning(false)
+    viewModel.stopScanning()
     viewModel.resetProductScanResults()
     viewModel.stopBarcodeScanner()
 

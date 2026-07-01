@@ -33,6 +33,7 @@ import com.loyalstring.rfid.data.model.sampleOut.SampleOutDetails
 import com.loyalstring.rfid.ui.utils.GradientButtonIcon
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
+import com.loyalstring.rfid.ui.utils.resolveProductImageUrl
 import com.loyalstring.rfid.viewmodel.OrderViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
 import com.loyalstring.rfid.viewmodel.UiState
@@ -332,7 +333,7 @@ fun SampleOutDialogEditAndDisplay(
                         horizontalArrangement = Arrangement.Center
                     ) {
                         AsyncImage(
-                            model = baseUrl + (selectedItem?.Image ?: ""),
+                            model = resolveProductImageUrl(selectedItem?.Image, baseUrl) ?: "",
                             contentDescription = localizedContext.getString(R.string.cd_product_image),
                             placeholder = painterResource(R.drawable.add_photo),
                             error = painterResource(R.drawable.add_photo),

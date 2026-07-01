@@ -18,8 +18,8 @@ android {
         applicationId = "com.loyalstring.rfid"
         minSdk = 26
         targetSdk = 36
-       versionCode = 112
-        versionName = "2.10"
+       versionCode = 114
+        versionName = "2.12"
         /*versionCode = 8
         versionName = "1.8"*/
 
@@ -112,6 +112,7 @@ dependencies {
     implementation(libs.androidx.foundation) // or latest stable
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.coil.compose)
+    implementation(libs.coil.svg)
     implementation(libs.androidx.foundation.layout) // ✅ Add this
 
 

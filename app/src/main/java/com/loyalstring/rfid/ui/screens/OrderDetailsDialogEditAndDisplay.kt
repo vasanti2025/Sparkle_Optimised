@@ -59,6 +59,7 @@ import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.ui.utils.GradientButtonIcon
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
+import com.loyalstring.rfid.ui.utils.resolveProductImageUrl
 import com.loyalstring.rfid.viewmodel.OrderViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
 import com.loyalstring.rfid.worker.LocaleHelper
@@ -443,7 +444,7 @@ fun OrderDetailsDialogEditAndDisplay(
                         horizontalArrangement = Arrangement.Center
                     ) {
                         AsyncImage(
-                            model = baseUrl + (stableItem?.image ?: ""),
+                            model = resolveProductImageUrl(stableItem?.image, baseUrl) ?: "",
                             contentDescription = "Image from URL",
                             placeholder = painterResource(R.drawable.add_photo),
                             error = painterResource(R.drawable.add_photo),
@@ -1322,6 +1323,7 @@ import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.ui.utils.GradientButtonIcon
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
+import com.loyalstring.rfid.ui.utils.resolveProductImageUrl
 import com.loyalstring.rfid.viewmodel.OrderViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
 import kotlinx.coroutines.Dispatchers
@@ -1687,7 +1689,7 @@ fun OrderDetailsDialogEditAndDisplay(
                         horizontalArrangement = Arrangement.Center
                     ) {
                         AsyncImage(
-                            model = baseUrl + (selectedItem?.image ?: ""),
+                            model = resolveProductImageUrl(selectedItem?.image, baseUrl) ?: "",
                             contentDescription = "Image from URL",
                             placeholder = painterResource(R.drawable.add_photo),
                             error = painterResource(R.drawable.add_photo),

@@ -105,6 +105,7 @@ import com.loyalstring.rfid.ui.utils.GradientButton
 import com.loyalstring.rfid.ui.utils.ToastUtils
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
+import com.loyalstring.rfid.ui.utils.toggleBulkScan
 import com.loyalstring.rfid.viewmodel.BulkViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
 import com.loyalstring.rfid.worker.LocaleHelper
@@ -331,7 +332,7 @@ fun AddProductScreen(
     LaunchedEffect(scanTrigger) {
         scanTrigger?.let { type ->
             when (type) {
-                "scan" -> if (items.size != 1) bulkViewModel.startScanning(20)
+                "scan" -> toggleBulkScan(bulkViewModel, 20) { isScanning = it }
                 "barcode" -> bulkViewModel.startBarcodeScanning(context)
             }
             bulkViewModel.clearScanTrigger()

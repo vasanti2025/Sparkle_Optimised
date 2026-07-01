@@ -81,6 +81,7 @@ androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version
 
 # Testing
 coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil-compose" }
+coil-svg = { module = "io.coil-kt:coil-svg", version.ref = "coil-compose" }
 firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebase-bom" }
 firebase-crashlytics-ndk = { module = "com.google.firebase:firebase-crashlytics-ndk" }

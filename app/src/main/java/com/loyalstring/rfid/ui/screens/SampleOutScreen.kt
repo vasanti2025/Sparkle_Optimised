@@ -72,6 +72,10 @@ import com.loyalstring.rfid.data.remote.resource.Resource
 import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.ui.utils.UserPreferences
+import com.loyalstring.rfid.ui.utils.isBulkItemAlreadyInSampleOutList
+import com.loyalstring.rfid.ui.utils.resolveProductImageUrl
+import com.loyalstring.rfid.ui.utils.stopBulkScan
+import com.loyalstring.rfid.ui.utils.toggleBulkScan
 import com.loyalstring.rfid.viewmodel.BulkViewModel
 import com.loyalstring.rfid.viewmodel.DeliveryChallanViewModel
 import com.loyalstring.rfid.viewmodel.OrderViewModel
@@ -229,7 +233,7 @@ fun SampleOutScreen(
     LaunchedEffect(scanTrigger) {
         scanTrigger?.let { type ->
             when (type) {
-                "scan" -> if (productList.size != 1) viewModel.startScanning(30)
+                "scan" -> toggleBulkScan(viewModel, selectedPower) { isScanning = it }
                 "barcode" -> viewModel.startBarcodeScanning(context)
             }
             viewModel.clearScanTrigger()
@@ -582,11 +586,7 @@ fun SampleOutScreen(
         )
 
         //productList.add(productDetail)
-        val alreadyExists = productList.any {
-            it.ItemCode.equals(productDetail.ItemCode, ignoreCase = true) ||
-                    it.RFIDCode.equals(productDetail.RFIDCode, ignoreCase = true) ||
-                    it.tid.equals(productDetail.tid, ignoreCase = true)
-        }
+        val alreadyExists = isBulkItemAlreadyInSampleOutList(productList, matchedItem)
 
         if (!alreadyExists) {
             productList.add(productDetail)
@@ -645,7 +645,7 @@ fun SampleOutScreen(
             }
 
             // 3️⃣ Duplicate skip
-            if (productList.any { it.ItemCode == matchedItem.itemCode }) {
+            if (isBulkItemAlreadyInSampleOutList(productList, matchedItem)) {
                 Log.d("RFIDScan", "⚠️ Duplicate RFID skipped: ${matchedItem.itemCode}")
                 return@forEach
             }
@@ -1256,12 +1256,7 @@ fun SampleOutScreen(
                 return@setOnBarcodeScanned
             }
 
-            val alreadyExists = productList.any { existing ->
-                sameCode(existing.RFIDCode, matchedItem.rfid) ||
-                        sameCode(existing.ItemCode, matchedItem.itemCode) ||
-                        sameCode(existing.ProductCode, matchedItem.productCode) ||
-                        sameCode(existing.tid, matchedItem.tid)
-            }
+            val alreadyExists = isBulkItemAlreadyInSampleOutList(productList, matchedItem)
 
             if (alreadyExists) {
                 Toast.makeText(context, "Item already exists: ${matchedItem.itemCode}", Toast.LENGTH_SHORT).show()
@@ -1297,11 +1292,7 @@ fun SampleOutScreen(
 
             val itemAmt = stoneAmt + diamondAmt + metalAmt + makingAmt
 
-            val baseUrl = "https://rrgold.loyalstring.co.in/"
-            val imageString = matchedItem.imageUrl.orEmpty()
-            val lastImagePath = imageString.split(",").lastOrNull()?.trim()
-            val finalImageUrl =
-                if (!lastImagePath.isNullOrBlank()) "$baseUrl$lastImagePath" else ""
+            val finalImageUrl = resolveProductImageUrl(matchedItem.imageUrl).orEmpty()
 
             val newProduct = SampleOutDetails(
                 Id = 0,
@@ -1425,19 +1416,14 @@ fun SampleOutScreen(
             }
 
             override fun onRfidKeyPressed() {
-                if (isScanning) {
-                    viewModel.stopScanning()
-                    isScanning = false
-                } else {
-                    viewModel.startScanning(selectedPower)
-                    isScanning = true
-                }
+                toggleBulkScan(viewModel, selectedPower) { isScanning = it }
             }
         }
         activity?.registerScanKeyListener(listener)
 
         onDispose {
             activity?.unregisterScanKeyListener()
+            stopBulkScan(viewModel) { isScanning = it }
         }
     }
 
@@ -1640,16 +1626,7 @@ fun SampleOutScreen(
                     viewModel.startSingleScan(20)
                 },
                 onGscan = {
-                    if (isScanning) {
-                        viewModel.stopScanning()
-                        isScanning = false
-                    } else {
-                        viewModel.startScanning(selectedPower)
-                        isScanning = true
-                    }
-
-                    // viewModel.toggleScanning(selectedPower)
-
+                    toggleBulkScan(viewModel, selectedPower) { isScanning = it }
                 },
                 onReset = {
                     firstPress = false
@@ -1870,7 +1847,7 @@ fun addItemToList(
         return
     }
 
-    if (productList.any { it.tid == matchedItem.tid }) {
+    if (isBulkItemAlreadyInSampleOutList(productList, matchedItem)) {
         Log.d("DropdownSelect", "⚠️ Duplicate item skipped ${matchedItem.itemCode}")
         return
     }

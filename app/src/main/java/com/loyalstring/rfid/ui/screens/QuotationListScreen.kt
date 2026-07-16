@@ -45,6 +45,7 @@ import com.loyalstring.rfid.data.model.quotation.QuotationPrintItem
 import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
+import com.loyalstring.rfid.ui.utils.quotationPrintWastagePercent
 import com.loyalstring.rfid.viewmodel.QuotationViewModel
 import com.loyalstring.rfid.worker.LocaleHelper
 import kotlinx.coroutines.CoroutineScope
@@ -79,7 +80,10 @@ fun QuotationListScreen(
     // Fetch once
     LaunchedEffect(Unit) {
         employee?.let {
-            viewModel.loadQuotationList(it.clientCode.toString())
+            viewModel.loadQuotationList(
+                clientCode = it.clientCode.toString(),
+                branchId = it.defaultBranchId
+            )
         }
     }
 
@@ -376,6 +380,7 @@ fun QuotationListResponse.toQuotationPrintData(context: Context): QuotationPrint
                 pcs = itItem.Pieces ?: "1",
                 stoneWt = itItem.TotalStoneWeight ?: "0.000",
                 stoneAmt = itItem.StoneAmt ?: itItem.StoneAmount ?: itItem.TotalStoneAmount ?: "0.00",
+                wastagePercent = itItem.quotationPrintWastagePercent(),
                 amount = itItem.TotalItemAmount ?: itItem.itemAmt ?: itItem.TotalAmount ?: "0.00"
             )
         }

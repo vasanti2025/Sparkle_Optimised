@@ -34,7 +34,7 @@ import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.ui.utils.GradientButtonIcon
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
-import com.loyalstring.rfid.ui.utils.resolveProductImageUrl
+import com.loyalstring.rfid.ui.utils.ProductImageWithAllFallbacks
 import com.loyalstring.rfid.viewmodel.OrderViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
 import com.loyalstring.rfid.viewmodel.UiState
@@ -341,12 +341,15 @@ fun DeliveryChallanDialogEditAndDisplay(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        AsyncImage(
-                            model = resolveProductImageUrl(selectedItem?.Image, baseUrl) ?: "",
+                        ProductImageWithAllFallbacks(
+                            imageUrl = selectedItem?.Image,
+                            itemCode = selectedItem?.ItemCode ?: itemCode,
+                            designName = selectedItem?.DesignName,
+                            baseUrl = baseUrl,
                             contentDescription = localizedContext.getString(R.string.cd_product_image),
                             placeholder = painterResource(R.drawable.add_photo),
                             error = painterResource(R.drawable.add_photo),
-                            modifier = Modifier.size(110.dp)
+                            modifier = Modifier.size(110.dp),
                         )
                     }
 

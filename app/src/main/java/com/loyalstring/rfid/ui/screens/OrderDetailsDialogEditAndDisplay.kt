@@ -50,7 +50,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
 import com.loyalstring.rfid.R
 import com.loyalstring.rfid.data.local.entity.OrderItem
 import com.loyalstring.rfid.data.model.ClientCodeRequest
@@ -59,7 +58,7 @@ import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.ui.utils.GradientButtonIcon
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
-import com.loyalstring.rfid.ui.utils.resolveProductImageUrl
+import com.loyalstring.rfid.ui.utils.ProductImageWithAllFallbacks
 import com.loyalstring.rfid.viewmodel.OrderViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
 import com.loyalstring.rfid.worker.LocaleHelper
@@ -443,12 +442,15 @@ fun OrderDetailsDialogEditAndDisplay(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        AsyncImage(
-                            model = resolveProductImageUrl(stableItem?.image, baseUrl) ?: "",
+                        ProductImageWithAllFallbacks(
+                            imageUrl = stableItem?.image,
+                            itemCode = stableItem?.itemCode ?: itemCode,
+                            designName = stableItem?.designName,
+                            baseUrl = baseUrl,
                             contentDescription = "Image from URL",
                             placeholder = painterResource(R.drawable.add_photo),
                             error = painterResource(R.drawable.add_photo),
-                            modifier = Modifier.size(100.dp)
+                            modifier = Modifier.size(100.dp),
                         )
                     }
 
@@ -1314,7 +1316,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
 import com.loyalstring.rfid.R
 import com.loyalstring.rfid.data.local.entity.OrderItem
 import com.loyalstring.rfid.data.model.ClientCodeRequest
@@ -1323,7 +1324,7 @@ import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.ui.utils.GradientButtonIcon
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
-import com.loyalstring.rfid.ui.utils.resolveProductImageUrl
+import com.loyalstring.rfid.ui.utils.ProductImageWithAllFallbacks
 import com.loyalstring.rfid.viewmodel.OrderViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
 import kotlinx.coroutines.Dispatchers
@@ -1688,12 +1689,15 @@ fun OrderDetailsDialogEditAndDisplay(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        AsyncImage(
-                            model = resolveProductImageUrl(selectedItem?.image, baseUrl) ?: "",
+                        ProductImageWithAllFallbacks(
+                            imageUrl = selectedItem?.image,
+                            itemCode = selectedItem?.itemCode ?: itemCode,
+                            designName = selectedItem?.designName,
+                            baseUrl = baseUrl,
                             contentDescription = "Image from URL",
                             placeholder = painterResource(R.drawable.add_photo),
                             error = painterResource(R.drawable.add_photo),
-                            modifier = Modifier.size(100.dp)
+                            modifier = Modifier.size(100.dp),
                         )
                     }
 

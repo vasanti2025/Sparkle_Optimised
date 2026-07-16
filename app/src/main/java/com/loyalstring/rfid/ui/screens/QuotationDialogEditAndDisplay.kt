@@ -33,7 +33,10 @@ import com.loyalstring.rfid.data.model.quotation.QuotationItem
 import com.loyalstring.rfid.ui.utils.GradientButtonIcon
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
-import com.loyalstring.rfid.ui.utils.resolveProductImageUrl
+import com.loyalstring.rfid.ui.utils.ProductImageWithAllFallbacks
+import com.loyalstring.rfid.ui.utils.calcQuotationFromItemFields
+import com.loyalstring.rfid.ui.utils.fineWastageWtFromPercent
+import com.loyalstring.rfid.ui.utils.resolveWastagePercentForCalc
 import com.loyalstring.rfid.viewmodel.OrderViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
 import com.loyalstring.rfid.viewmodel.UiState
@@ -132,10 +135,12 @@ fun QuotationDialogEditAndDisplay(
 
 
     /* ============================
-       Calculation (SAME as Delivery Challan dialog)
+       Calculation
        GrossWt = TotalWt - PackingWt   (only if TotalWt > 0)
        NetWt   = GrossWt - StoneWt - DiamondWt
-       ItemAmt = (NetWt * RatePerGram) + HallMarkAmt  (unless MRP > 0)
+       metalAmt = NetWt * RatePerGram
+       makingAmt = metalAmt * (Wastage% / 100)
+       ItemAmt = metalAmt + makingAmt + HallMark + Stone + Diamond (unless MRP > 0)
        FinePlusWt = NetWt * (Fine% + Wastage%) / 100
        ============================ */
     fun recalcAll() {
@@ -160,7 +165,7 @@ fun QuotationDialogEditAndDisplay(
         netWt = fmt3(net)
 
         val fineP = asDouble(finePercentage)
-        val wastP = asDouble(wastage)
+        val wastP = resolveWastagePercentForCalc(wastage)
         finePlusWt = fmt3((net * ((fineP + wastP) / 100.0)).coerceAtLeast(0.0))
 
         val rate = asDouble(ratePerGRam)
@@ -168,7 +173,15 @@ fun QuotationDialogEditAndDisplay(
         val stoneAmount = asDouble(stoneAmt)
         val diamondAmount = asDouble(diamondAmt)
 
-        val baseAmt = (net * rate) + hallmark + stoneAmount + diamondAmount
+        val amounts = calcQuotationFromItemFields(
+            netWt = net,
+            ratePerGram = rate,
+            wastageRaw = wastage,
+            stoneAmt = stoneAmount,
+            diamondAmt = diamondAmount,
+            hallmarkAmt = hallmark
+        )
+        val baseAmt = amounts.itemAmt
 
         val mrpVal = asDouble(mrp)
         itemAmt = if (mrpVal > 0) fmt2(mrpVal) else fmt2(baseAmt)
@@ -182,7 +195,7 @@ fun QuotationDialogEditAndDisplay(
         netWt = fmt3(net)
 
         val fineP = asDouble(finePercentage)
-        val wastP = asDouble(wastage)
+        val wastP = resolveWastagePercentForCalc(wastage)
         finePlusWt = fmt3((net * ((fineP + wastP) / 100.0)).coerceAtLeast(0.0))
 
         val rate = asDouble(ratePerGRam)
@@ -190,7 +203,15 @@ fun QuotationDialogEditAndDisplay(
         val stoneAmount = asDouble(stoneAmt)
         val diamondAmount = asDouble(diamondAmt)
 
-        val baseAmt = (net * rate) + hallmark + stoneAmount + diamondAmount
+        val amounts = calcQuotationFromItemFields(
+            netWt = net,
+            ratePerGram = rate,
+            wastageRaw = wastage,
+            stoneAmt = stoneAmount,
+            diamondAmt = diamondAmount,
+            hallmarkAmt = hallmark
+        )
+        val baseAmt = amounts.itemAmt
 
         val mrpVal = asDouble(mrp)
         itemAmt = if (mrpVal > 0) fmt2(mrpVal) else fmt2(baseAmt)
@@ -224,7 +245,10 @@ fun QuotationDialogEditAndDisplay(
 
         // Quotation fields mapping (as per your model usage)
         finePercentage = cleanStr(s.FinePercentage)
-        wastage = cleanStr(s.MakingFixedWastage)
+        val resolvedWastage = resolveWastagePercentForCalc(
+            s.MakingFixedWastage ?: s.fixWastage ?: s.FineWastageWt
+        )
+        wastage = if (resolvedWastage > 0.0) fmt2(resolvedWastage) else cleanStr(s.MakingFixedWastage)
 
         qty = s.Quantity?.toString() ?: ""
         hallMarkAmt = cleanStr(s.HallmarkAmount)
@@ -342,12 +366,15 @@ fun QuotationDialogEditAndDisplay(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        AsyncImage(
-                            model = resolveProductImageUrl(selectedItem?.Image, baseUrl) ?: "",
+                        ProductImageWithAllFallbacks(
+                            imageUrl = selectedItem?.Image,
+                            itemCode = selectedItem?.ItemCode ?: itemCode,
+                            designName = selectedItem?.DesignName,
+                            baseUrl = baseUrl,
                             contentDescription = localizedContext.getString(R.string.cd_product_image),
                             placeholder = painterResource(R.drawable.add_photo),
                             error = painterResource(R.drawable.add_photo),
-                            modifier = Modifier.size(110.dp)
+                            modifier = Modifier.size(110.dp),
                         )
                     }
 
@@ -619,6 +646,21 @@ fun QuotationDialogEditAndDisplay(
                             // final calculate before save
                             recalcAll()
 
+                            val net = asDouble(netWt)
+                            val rate = asDouble(ratePerGRam)
+                            val wastP = resolveWastagePercentForCalc(wastage)
+                            val hallmark = asDouble(hallMarkAmt)
+                            val stoneAmount = asDouble(stoneAmt)
+                            val diamondAmount = asDouble(diamondAmt)
+                            val amounts = calcQuotationFromItemFields(
+                                netWt = net,
+                                ratePerGram = rate,
+                                wastageRaw = wastage,
+                                stoneAmt = stoneAmount,
+                                diamondAmt = diamondAmount,
+                                hallmarkAmt = hallmark
+                            )
+
                             val updated = s.copy(
                                 TotalWt = totalWt,
                                 PackingWeight = packingWt,
@@ -629,6 +671,8 @@ fun QuotationDialogEditAndDisplay(
 
                                 RatePerGram = ratePerGRam,
                                 MetalRate = ratePerGRam,
+                                MetalAmount = fmt2(amounts.metalAmt),
+                                MakingCharg = fmt2(amounts.makingAmt),
 
                                 HallmarkAmount = hallMarkAmt,
                                 MRP = mrp,
@@ -640,9 +684,10 @@ fun QuotationDialogEditAndDisplay(
                                 itemAmt = itemAmt,
 
                                 // fine+wastage
-                                FineWastageWt = finePlusWt,
+                                FineWastageWt = fineWastageWtFromPercent(wastP),
                                 FinePercentage = finePercentage,
-                                MakingFixedWastage = wastage,
+                                MakingFixedWastage = fmt2(wastP),
+                                fixWastage = fmt2(wastP),
 
                                 Purity = purity,
                                 Size = size,

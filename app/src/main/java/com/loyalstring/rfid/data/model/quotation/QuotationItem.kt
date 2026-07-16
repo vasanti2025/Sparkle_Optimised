@@ -1,5 +1,9 @@
 package com.loyalstring.rfid.data.model.quotation
 
+import com.google.gson.annotations.JsonAdapter
+import com.google.gson.annotations.SerializedName
+import com.loyalstring.rfid.data.model.FlexibleNumericStringTypeAdapter
+
 data class QuotationItem(
     val QuotationItemId: Int? = null,
     val MRP: String? = null,
@@ -45,7 +49,10 @@ data class QuotationItem(
     val PurchaseInvoiceNo: String? = null,
     val HallmarkAmount: String? = null,
     val HallmarkNo: String? = null,
+    @SerializedName("MakingFixedAmt")
     val MakingFixedAmt: String? = null,
+    @JsonAdapter(FlexibleNumericStringTypeAdapter::class)
+    @SerializedName("MakingFixedWastage")
     val MakingFixedWastage: String? = null,
     val MakingPerGram: String? = null,
     val MakingPercentage: String? = null,
@@ -65,7 +72,10 @@ data class QuotationItem(
     val TotalDiamondAmount: String? = null,
 
     val SKUId: Int? = null,
+    @SerializedName("SKU")
     val SKU: String? = null,
+    @JsonAdapter(FlexibleNumericStringTypeAdapter::class)
+    @SerializedName(value = "FineWastageWt", alternate = ["fineWastageWt"])
     val FineWastageWt: String? = null,
     val TotalItemAmount: String? = null,
     val Pieces: String? = null,
@@ -126,8 +136,12 @@ data class QuotationItem(
     val qty: Int? = null,
     val tid: String? = null,
     val totayRate: String? = null,
+    @SerializedName("makingPercent")
     val makingPercent: String? = null,
+    @SerializedName("fixMaking")
     val fixMaking: String? = null,
+    @JsonAdapter(FlexibleNumericStringTypeAdapter::class)
+    @SerializedName("fixWastage")
     val fixWastage: String? = null,
     val itemAmt: String? = null,
     val ItemGSTAmount:String?=null

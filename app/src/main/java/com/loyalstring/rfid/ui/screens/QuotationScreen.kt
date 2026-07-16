@@ -66,7 +66,12 @@ import com.loyalstring.rfid.data.remote.resource.Resource
 import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.ui.utils.UserPreferences
+import com.loyalstring.rfid.ui.utils.calcQuotationFromItemFields
+import com.loyalstring.rfid.ui.utils.fineWastageWtFromPercent
 import com.loyalstring.rfid.ui.utils.isBulkItemAlreadyInQuotationList
+import com.loyalstring.rfid.ui.utils.quotationPrintWastagePercent
+import com.loyalstring.rfid.ui.utils.resolveWastagePercentForCalc
+import com.loyalstring.rfid.ui.utils.toAddQuotationApiItem
 import com.loyalstring.rfid.ui.utils.stopBulkScan
 import com.loyalstring.rfid.ui.utils.toggleBulkScan
 import com.loyalstring.rfid.ui.utils.resolveProductImageUrl
@@ -185,7 +190,10 @@ fun QuotationScreen(
 
         if (selected == null) {
             if (quotationList.isEmpty()) {
-                quotationViewModel.loadQuotationList(clientCode)
+                quotationViewModel.loadQuotationList(
+                    clientCode = clientCode,
+                    branchId = employee?.defaultBranchId
+                )
             }
             return@LaunchedEffect
         }
@@ -539,22 +547,24 @@ fun QuotationScreen(
         val netWt = safeDouble(matchedItem.netWeight)
         val stoneAmt = safeDouble(matchedItem.stoneAmount)
         val diamondAmt = safeDouble(matchedItem.diamondAmount)
+        val wastagePercent = resolveWastagePercentForCalc(makingFixedWastage)
 
-        val makingAmt =
-            safeDouble(makingPerGram) +
-                    safeDouble(makingFixedAmt) +
-                    (safeDouble(makingPercent) / 100.0 * netWt) +
-                    safeDouble(makingFixedWastage)
+        val amounts = calcQuotationFromItemFields(
+            netWt = netWt,
+            ratePerGram = rate,
+            wastageRaw = makingFixedWastage,
+            stoneAmt = stoneAmt,
+            diamondAmt = diamondAmt
+        )
+        val metalAmt = amounts.metalAmt
+        val makingAmt = amounts.makingAmt
+        val itemAmt = amounts.itemAmt
 
-        val metalAmt = netWt * rate
-        val itemAmt = stoneAmt + diamondAmt + metalAmt + makingAmt
-
-        val percent = (makingPercent?.toDoubleOrNull() ?: 0.0)
-        val fixedWastage = (makingFixedWastage?.toDoubleOrNull() ?: 0.0)
-        val net = netWt?.toDouble() ?: 0.0
+        val fixedWastage = wastagePercent
+        val net = netWt
 
         val finePlusWt = fmt3(
-            (net * ((0 + fixedWastage) / 100.0)).coerceAtLeast(0.0)
+            (net * (fixedWastage / 100.0)).coerceAtLeast(0.0)
         )
 
 
@@ -591,7 +601,7 @@ fun QuotationScreen(
         HallmarkAmount = "0.0",
         HallmarkNo = "",
         MakingFixedAmt = makingFixedAmt,
-        MakingFixedWastage = makingFixedWastage,
+        MakingFixedWastage = wastagePercent.toString(),
         MakingPerGram = makingPerGram,
         MakingPercentage = makingPercent,
         Description = "",
@@ -608,7 +618,7 @@ fun QuotationScreen(
         TotalDiamondAmount = matchedItem.diamondAmount ?: "0.0",
         SKUId = 0,
         SKU = matchedItem.sku.orEmpty(),
-        FineWastageWt = matchedItem.fixWastage ?: "0.0",
+        FineWastageWt = fineWastageWtFromPercent(wastagePercent),
         TotalItemAmount = itemAmt.toString(),
         itemAmt = itemAmt.toString(),
         ItemGSTAmount = "0.0",
@@ -663,7 +673,7 @@ fun QuotationScreen(
         totayRate = rate.toString(),
         makingPercent = makingPercent,
         fixMaking = makingFixedAmt,
-        fixWastage = makingFixedWastage
+        fixWastage = wastagePercent.toString()
         )
 
 
@@ -749,25 +759,20 @@ fun QuotationScreen(
                 }?.Rate?.toDoubleOrNull() ?: 0.0
             } else 0.0
 
-            val makingPerGramFinal = safeDouble(makingPerGram)
-            val fixMaking = safeDouble(makingFixedAmt)
-            val makingPercentFinal = safeDouble(makingPercent)
-            val fixWastage = safeDouble(makingFixedWastage)
+            val fixWastage = resolveWastagePercentForCalc(makingFixedWastage)
             val stoneAmt = safeDouble(matchedItem.stoneAmount)
             val diamondAmt = safeDouble(matchedItem.diamondAmount)
 
-            // 1. Metal Amt = NetWt * Rate
-            val metalAmt = netWt * rate
-
-            // 2. MakingAmt = makingPerGram + fixMaking + (making% * NetWt / 100) + fixWastage
-            val makingAmt =
-                makingPerGramFinal +
-                        fixMaking +
-                        ((makingPercentFinal / 100.0) * netWt) +
-                        fixWastage
-
-            // 3. ItemAmt = Stone + Diamond + Metal + Making
-            val itemAmt = stoneAmt + diamondAmt + metalAmt + makingAmt
+            val amounts = calcQuotationFromItemFields(
+                netWt = netWt,
+                ratePerGram = rate,
+                wastageRaw = makingFixedWastage,
+                stoneAmt = stoneAmt,
+                diamondAmt = diamondAmt
+            )
+            val metalAmt = amounts.metalAmt
+            val makingAmt = amounts.makingAmt
+            val itemAmt = amounts.itemAmt
 
             // 4. FineWt = NetWt * Fine% (yahi field use kar raha hun)
             val finePercent = safeDouble(matchedItem.makingPercent)
@@ -808,7 +813,7 @@ fun QuotationScreen(
                 HallmarkAmount = "0.0",
                 HallmarkNo = "",
                 MakingFixedAmt = makingFixedAmt,
-                MakingFixedWastage = makingFixedWastage,
+                MakingFixedWastage = fixWastage.toString(),
                 MakingPerGram = makingPerGram,
                 MakingPercentage = makingPercent,
                 Description = "",
@@ -827,7 +832,7 @@ fun QuotationScreen(
 
                 SKUId = 0,
                 SKU = matchedItem.sku.orEmpty(),
-                FineWastageWt = matchedItem.fixWastage ?: "0.0",
+                FineWastageWt = fineWastageWtFromPercent(fixWastage),
                 TotalItemAmount = itemAmt.toString(),
                 itemAmt = itemAmt.toString(),
                 ItemGSTAmount = "0.0",
@@ -884,7 +889,7 @@ fun QuotationScreen(
                 totayRate = rate.toString(),
                 makingPercent = makingPercent,
                 fixMaking = makingFixedAmt,
-                fixWastage = makingFixedWastage,
+                fixWastage = fixWastage.toString(),
                // TIDNumber = matchedItem.tid ?: "",
                 //CustomerName = ""
             )
@@ -969,17 +974,20 @@ fun QuotationScreen(
             val makingPerGramFinal = safeDouble(makingPerGram)
             val fixMakingFinal = safeDouble(makingFixedAmt)
             val makingPercentFinal = safeDouble(makingPercent)
-            val fixWastageFinal = safeDouble(makingFixedWastage)
+            val fixWastageFinal = resolveWastagePercentForCalc(makingFixedWastage)
             val stoneAmt = safeDouble(matchedItem.stoneAmount)
             val diamondAmt = safeDouble(matchedItem.diamondAmount)
 
-            val metalAmt = netWt * rate
-            val makingAmt =
-                (makingPerGramFinal + fixMakingFinal) +
-                        ((makingPercentFinal / 100.0) * netWt) +
-                        fixWastageFinal
-
-            val itemAmt = stoneAmt + diamondAmt + metalAmt + makingAmt
+            val amounts = calcQuotationFromItemFields(
+                netWt = netWt,
+                ratePerGram = rate,
+                wastageRaw = makingFixedWastage,
+                stoneAmt = stoneAmt,
+                diamondAmt = diamondAmt
+            )
+            val metalAmt = amounts.metalAmt
+            val makingAmt = amounts.makingAmt
+            val itemAmt = amounts.itemAmt
 
             val finalImageUrl = resolveProductImageUrl(matchedItem.imageUrl).orEmpty()
 
@@ -1007,7 +1015,7 @@ fun QuotationScreen(
                 TotalWt = matchedItem.totalGwt?.toString() ?: "0.0",
                 PackingWeight = "0.0",
                 OldGoldPurchase = false,
-                RatePerGram = makingPerGramFinal.toString(),
+                RatePerGram = rate.toString(),
                 Amount = itemAmt.toString(),
                 FinePercentage = "0.0",
                 PurchaseInvoiceNo = "",
@@ -1031,7 +1039,7 @@ fun QuotationScreen(
                 TotalDiamondAmount = matchedItem.diamondAmount ?: "0.0",
                 SKUId = 0,
                 SKU = matchedItem.sku.orEmpty(),
-                FineWastageWt = matchedItem.fixWastage ?: "0.0",
+                FineWastageWt = fineWastageWtFromPercent(fixWastageFinal),
                 ItemGSTAmount = "0.0",
                 ClientCode = employee?.clientCode ?: "",
                 DiamondWeight = matchedItem.diamondWeight ?: "0.0",
@@ -1079,7 +1087,9 @@ fun QuotationScreen(
         Log.e("SampleOut", "lastNo"+lastNo)
 
         val clientCode = employee?.clientCode.orEmpty()
-        val branchId = employee?.defaultBranchId ?: 1   // ya jahan se bhi branchId le raha hai
+        val branchId = userPreferences.getBranchID()?.takeIf { it > 0 }
+            ?: employee?.defaultBranchId?.takeIf { it > 0 }
+            ?: 0
         val custId = customerId ?: 0
 
         // ❌ 1) Client code missing → add API mat call karo
@@ -1149,45 +1159,33 @@ fun QuotationScreen(
             TotalStoneWeight = productList.sumOf { it.StoneAmt?.toDoubleOrNull() ?: 0.0 }.toString(),
            // TotalWt = productList.sumOf { it.TotalWt?.toDoubleOrNull() ?: 0.0 }.toString(),
             QuotationItem = productList.map { challan ->
-                QuotationItem(
+                challan.toAddQuotationApiItem(
+                    clientCode = clientCode,
+                    customerId = custId,
+                    branchId = branchId
+                ).copy(
                     ItemCode = challan.ItemCode,
-                    SKU = challan.SKU,
+                    SKU = challan.SKU ?: "",
                     SKUId = challan.SKUId ?: 0,
                     CategoryId = challan.CategoryId ?: 0,
                     ProductId = challan.ProductId ?: 0,
                     DesignId = challan.DesignId ?: 0,
                     PurityId = challan.PurityId ?: 0,
-                    Quantity = challan.qty.toString() ?: "1",
                     GrossWt = challan.GrossWt,
                     NetWt = challan.NetWt,
                     TotalWt = challan.TotalWt ?: challan.NetWt,
-                    FinePercentage = challan.FinePer,
-                  //  wastingPercent = challan.StoneLessPercent,
-                    //StoneWeight = challan.TotalStoneWeight ?: "0.000",
-                    DiamondWeight = challan.TotalDiamondWeight ?: "0.000",
-                    FineWastageWt = challan.FineWastageWt ?: "0.000",
-                    RatePerGram = challan.MetalRate,
-                    MetalAmount = challan.MetalAmount,
+                    FinePercentage = challan.FinePer ?: challan.FinePercentage ?: "0.0",
                     Description = challan.Description ?: "",
-                   // SampleStatus = "SampleOut",
-                    ClientCode = clientCode,
-                    StoneAmount = challan.StoneAmt ?: "0.00",
-                    //SampleOutNo = newLastSampleOutNO,
-                    DiamondAmt = challan.DiamondAmt ?: "",
-                    Pieces = challan.Pieces ?: "0",
                     CategoryName = challan.CategoryName ?: "",
                     ProductName = challan.ProductName ?: "",
-                    //PurityName = challan.Purity ?: "",
                     DesignName = challan.DesignName ?: "",
-                   // Id = challan.LabelledStockId ?: 0,
-                    CustomerId = custId,
-                    //VendorId = 0,
-                    BranchId = branchId,
                     LabelledStockId = challan.LabelledStockId ?: 0,
-                    //CustomerName = customerName,
-                   // SampleInDate = "2025-12-06",
-                    CreatedOn = "2025-12-06",
-                    //Customer = null
+                    CreatedOn = challan.CreatedOn ?: "2025-12-06",
+                    RatePerGram = challan.MetalRate ?: challan.RatePerGram ?: "0",
+                    MetalAmount = challan.MetalAmount ?: "0.00",
+                    MakingCharg = challan.MakingCharg ?: "0.00",
+                    TotalItemAmount = challan.TotalItemAmount ?: challan.itemAmt ?: "0.00",
+                    itemAmt = challan.itemAmt ?: challan.TotalItemAmount ?: "0.00"
                 )
             }
         )
@@ -1224,6 +1222,7 @@ fun QuotationScreen(
                 pcs = it.Pieces ?: "1",
                 stoneWt = it.TotalStoneWeight ?: "0.000",
                 stoneAmt = it.StoneAmt ?: it.StoneAmount ?: it.TotalStoneAmount ?: "0.00",
+                wastagePercent = it.quotationPrintWastagePercent(),
                 amount = it.TotalItemAmount ?: it.itemAmt ?: "0.00"
             )
         }

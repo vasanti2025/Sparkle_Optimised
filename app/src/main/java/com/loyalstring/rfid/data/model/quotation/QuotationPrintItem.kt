@@ -8,6 +8,7 @@ data class QuotationPrintItem(
     val pcs: String? = null,
     val stoneWt: String? = null,
     val stoneAmt: String? = null,
+    val wastagePercent: String? = null,
     val amount: String? = null
 )
 

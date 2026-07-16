@@ -80,19 +80,20 @@ fun GenerateQuotationPdf(context: Context, data: QuotationPrintData) {
     }
 
     // ---------- Table columns ----------
-    // [Item Code | RFID | Gr Wt | Nt Wt | Pcs | St Wt | St Amt | Amount]
+    // [Item Code | RFID | Gr Wt | Nt Wt | Pcs | St Wt | St Amt | Wastage% | Amount]
     val tableX = margin
     val tableW = pageWidth - (margin * 2)
 
     val columnRatios = floatArrayOf(
-        0.14f, // Item Code
+        0.16f, // Item Code
         0.10f, // RFID
         0.10f, // Gr Wt
         0.10f, // Nt Wt
         0.08f, // Pcs
-        0.11f, // St Wt
-        0.13f, // St Amt
-        0.14f  // Amount
+        0.10f, // St Wt
+        0.11f, // St Amt
+        0.09f, // Wastage%
+        0.16f  // Amount
     )
 
     val colWidths = IntArray(columnRatios.size).also { widths ->
@@ -111,6 +112,7 @@ fun GenerateQuotationPdf(context: Context, data: QuotationPrintData) {
         "Pcs",
         "St Wt",
         "St Amt",
+        "Wastage%",
         "Amount"
     )
 
@@ -123,12 +125,14 @@ fun GenerateQuotationPdf(context: Context, data: QuotationPrintData) {
         QuotationCellAlign.RIGHT,  // Pcs
         QuotationCellAlign.RIGHT,  // St Wt
         QuotationCellAlign.RIGHT,  // St Amt
+        QuotationCellAlign.RIGHT,  // Wastage%
         QuotationCellAlign.RIGHT   // Amount
     )
 
     val headerAlignments = arrayOf(
         QuotationCellAlign.LEFT,
         QuotationCellAlign.LEFT,
+        QuotationCellAlign.CENTER,
         QuotationCellAlign.CENTER,
         QuotationCellAlign.CENTER,
         QuotationCellAlign.CENTER,
@@ -224,6 +228,14 @@ fun GenerateQuotationPdf(context: Context, data: QuotationPrintData) {
         return if (v == null) "-" else String.format("%.0f", v)
     }
 
+    fun formatWastagePercent(value: String?): String {
+        val raw = value?.trim().orEmpty()
+        if (raw.isBlank()) return "-"
+        if (raw.endsWith("%")) return raw
+        val v = raw.replace(",", "").toDoubleOrNull()
+        return if (v == null) raw else String.format("%.2f%%", v)
+    }
+
     fun drawRowLines(canvas: Canvas, yTop: Int, rowHeight: Int) {
         var x = tableX
         canvas.drawLine(tableX.toFloat(), yTop.toFloat(), (tableX + tableW).toFloat(), yTop.toFloat(), linePaint)
@@ -303,7 +315,7 @@ fun GenerateQuotationPdf(context: Context, data: QuotationPrintData) {
             drawRowLines(canvas, y, rowHeight)
             drawTableCells(
                 canvas, tableX, y, rowHeight,
-                listOf("-", "-", "-", "-", "-", "-", "-", "-"),
+                listOf("-", "-", "-", "-", "-", "-", "-", "-", "-"),
                 tableCellPaint
             )
             y += rowHeight
@@ -325,6 +337,7 @@ fun GenerateQuotationPdf(context: Context, data: QuotationPrintData) {
                         formatInt(it.pcs),
                         formatWeight(it.stoneWt),
                         formatAmount(it.stoneAmt),
+                        formatWastagePercent(it.wastagePercent),
                         formatAmount(it.amount)
                     ),
                     paint = tableCellPaint
@@ -357,6 +370,7 @@ fun GenerateQuotationPdf(context: Context, data: QuotationPrintData) {
                 QuotationCellAlign.RIGHT,
                 QuotationCellAlign.RIGHT,
                 QuotationCellAlign.RIGHT,
+                QuotationCellAlign.RIGHT,
                 QuotationCellAlign.RIGHT
             )
 
@@ -373,6 +387,7 @@ fun GenerateQuotationPdf(context: Context, data: QuotationPrintData) {
                     String.format("%.0f", totalPcs),
                     String.format("%.3f", totalStoneWt),
                     String.format("%.2f", totalStoneAmt),
+                    "",
                     String.format("%.2f", totalAmt)
                 ),
                 paint = totalTextPaint,

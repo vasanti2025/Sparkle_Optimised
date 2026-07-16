@@ -2,6 +2,7 @@ package com.loyalstring.rfid.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.loyalstring.rfid.data.model.ClientCodeRequest
+import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.data.model.quotation.AddQuotationRequest
 import com.loyalstring.rfid.data.model.quotation.LastQuotationNoResponse
 import com.loyalstring.rfid.data.model.quotation.QuotationListRequest
@@ -10,6 +11,7 @@ import com.loyalstring.rfid.data.model.quotation.UpdateQuotationRequest
 import com.loyalstring.rfid.data.model.quotation.UpdateQuotationResponse
 import com.loyalstring.rfid.data.model.sampleOut.SampleOutListResponse
 import com.loyalstring.rfid.repository.QuotationRepository
+import com.loyalstring.rfid.ui.utils.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,7 +21,8 @@ import kotlinx.coroutines.launch
 
 @HiltViewModel
 class QuotationViewModel  @Inject constructor(
-    private val repository: QuotationRepository
+    private val repository: QuotationRepository,
+    private val userPreferences: UserPreferences
 ) : ViewModel() {
 
     private val _quotationList = MutableStateFlow<List<QuotationListResponse>>(emptyList())
@@ -47,7 +50,7 @@ class QuotationViewModel  @Inject constructor(
         _selectedQuotation.value = challan
     }
 
-    fun loadQuotationList(clientCode: String) {
+    fun loadQuotationList(clientCode: String, branchId: Int? = null) {
         viewModelScope.launch {
             val hasCached = _quotationList.value.isNotEmpty()
             if (!hasCached) {
@@ -55,7 +58,11 @@ class QuotationViewModel  @Inject constructor(
             }
 
             try {
-                val request = QuotationListRequest(ClientCode = clientCode)
+                val resolvedBranchId = resolveBranchId(branchId)
+                val request = QuotationListRequest(
+                    ClientCode = clientCode,
+                    BranchId = resolvedBranchId
+                )
                 val result = repository.getAllQuotationList(request)
 
                 result.onSuccess { list ->
@@ -159,6 +166,17 @@ class QuotationViewModel  @Inject constructor(
                 _loading.value = false
             }
         }
+    }
+
+
+    private fun resolveBranchId(branchId: Int?): Int {
+        if (branchId != null && branchId > 0) return branchId
+        val prefBranch = userPreferences.getBranchID() ?: 0
+        if (prefBranch > 0) return prefBranch
+        return userPreferences.getEmployee(Employee::class.java)
+            ?.defaultBranchId
+            ?.takeIf { it > 0 }
+            ?: 0
     }
 
 

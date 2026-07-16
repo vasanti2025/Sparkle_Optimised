@@ -63,7 +63,6 @@ import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
-import coil.compose.rememberAsyncImagePainter
 import com.loyalstring.rfid.R
 import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.data.model.login.Employee
@@ -73,10 +72,9 @@ import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.ui.utils.GradientButton
 import com.loyalstring.rfid.ui.utils.UserPreferences
+import com.loyalstring.rfid.ui.utils.ProductImageWithAllFallbacks
 import com.loyalstring.rfid.ui.utils.getLocalProductImageFile
 import com.loyalstring.rfid.ui.utils.poppins
-import com.loyalstring.rfid.ui.utils.resolveImagePathToUrl
-import com.loyalstring.rfid.ui.utils.resolveProductImageUrl
 import com.loyalstring.rfid.viewmodel.BulkViewModel
 import com.loyalstring.rfid.viewmodel.EditProductViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
@@ -645,43 +643,12 @@ fun EditProductScreen(
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Build your displayImageSource:
             val baseUrl = "https://rrgold.loyalstring.co.in/"
-            val localItemImage = remember(item.itemCode, item.design, localPath) {
-                getLocalProductImageFile(context, item.itemCode, item.design)
-            }
-
-            val displayImageSource: Any? = when {
-                !localPath.isNullOrBlank() -> {
-                    val file = File(localPath!!)
-                    if (file.exists()) file else localItemImage
+            val priorityLocalPaths = remember(localPath, daoState.value) {
+                buildList {
+                    localPath?.trim()?.takeIf { it.isNotBlank() }?.let { add(it) }
+                    daoState.value?.trim()?.trimEnd(',')?.takeIf { it.startsWith("/") }?.let { add(it) }
                 }
-
-                !daoState.value.isNullOrBlank() -> {
-                    val stored = daoState.value!!.trim().trimEnd(',')
-
-                    when {
-                        stored.startsWith("/") -> {
-                            val file = File(stored)
-                            if (file.exists()) file else localItemImage
-                        }
-
-                        else -> {
-                            resolveProductImageUrl(stored, baseUrl) ?: localItemImage
-                        }
-                    }
-                }
-
-                else -> localItemImage
-            }
-
-
-// Debug logging
-            if (displayImageSource == null) {
-                android.util.Log.w(
-                    "EditProductScreen",
-                    "No image to display. localPath=$localPath, daoState=${daoState.value}"
-                )
             }
 
             Box(
@@ -692,20 +659,17 @@ fun EditProductScreen(
                     .clickable(enabled = !isApiActiveItem) { showChooser = true },
                 contentAlignment = Alignment.Center
             ) {
-                if (displayImageSource != null) {
-                    Image(
-                        painter = rememberAsyncImagePainter(displayImageSource),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.PhotoCamera,
-                        contentDescription = "Pick Image",
-                        tint = Color.White,
-                        modifier = Modifier.size(40.dp)
-                    )
-                }
+                ProductImageWithAllFallbacks(
+                    imageUrl = daoState.value ?: item.imageUrl,
+                    itemCode = item.itemCode,
+                    designName = item.design,
+                    baseUrl = baseUrl,
+                    priorityLocalPaths = priorityLocalPaths,
+                    modifier = Modifier.fillMaxSize(),
+                    cacheRemoteToLocal = true,
+                    fallbackIcon = Icons.Default.PhotoCamera,
+                    fallbackIconTint = Color.White,
+                )
             }
 
 

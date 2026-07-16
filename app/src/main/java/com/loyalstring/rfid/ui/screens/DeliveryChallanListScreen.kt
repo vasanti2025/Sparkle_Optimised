@@ -25,6 +25,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -147,7 +148,7 @@ fun DeliveryChallanListScreen(
         90.dp,  // Tax Amt
         100.dp, // Total Amt
         100.dp, // Branch
-        90.dp   // Actions
+        110.dp   // Actions
     )
    // val companyDetailsState by loginViewModel.companyDetailsResponse.observeAsState()
 
@@ -276,6 +277,7 @@ fun DeliveryChallanTable(
 
     var bondedDevices by remember { mutableStateOf<List<android.bluetooth.BluetoothDevice>>(emptyList()) }
     var showDeviceList by remember { mutableStateOf(false) }
+    var challanToDelete by remember { mutableStateOf<DeliveryChallanResponseList?>(null) }
     Column(modifier = Modifier.fillMaxSize()) {
         // Header Row
         Row(
@@ -404,7 +406,7 @@ fun DeliveryChallanTable(
                                     ).show()
                                     navController.navigate("editDeliveryChallan/${challan.Id}")
                                 }
-                            }) {
+                            }, modifier = Modifier.size(26.dp)) {
                                 Icon(
                                     painter = painterResource(id = R.drawable.ic_edit_svg),
                                     contentDescription = localizedContext.getString(R.string.cd_edit_challan),
@@ -413,16 +415,28 @@ fun DeliveryChallanTable(
                                 )
                             }
 
-                            // ✏️ Print Button (right icon)
+                            // ✏️ Print Button (middle icon)
 
                             IconButton(onClick = {
                                 onSelectedPrintDataChange(challan.toDeliveryChallanPrintData(context))
                                 onShowPrintDialogChange(true)
-                            }) {
+                            }, modifier = Modifier.size(26.dp)) {
                                 Icon(
                                     painter = painterResource(id = R.drawable.print_svg),
                                     contentDescription = localizedContext.getString(R.string.cd_print_challan),
                                     tint = Color(0xFF37474F),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+
+                            // 🗑️ Delete Button (right icon)
+                            IconButton(onClick = {
+                                challanToDelete = challan
+                            }, modifier = Modifier.size(26.dp)) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = localizedContext.getString(R.string.delete),
+                                    tint = Color(0xFFD32940),
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -582,6 +596,60 @@ fun DeliveryChallanTable(
                                             Text( localizedContext.getString(R.string.cancel))
                                         }
                                     }
+                                )
+                            }
+
+                            if (challanToDelete != null) {
+                                AlertDialog(
+                                    onDismissRequest = { challanToDelete = null },
+                                    title = {
+                                        Text(
+                                            text = localizedContext.getString(R.string.delete_confirmation_title),
+                                            fontFamily = poppins
+                                        )
+                                    },
+                                    text = {
+                                        Text(
+                                            text = localizedContext.getString(R.string.delete_confirmation_message),
+                                            fontFamily = poppins
+                                        )
+                                    },
+                                    confirmButton = {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            GradientDialogButtonnew(
+                                                text = localizedContext.getString(R.string.cancel_button),
+                                                onClick = { challanToDelete = null },
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            GradientDialogButtonnew(
+                                                text = localizedContext.getString(R.string.delete_button),
+                                                onClick = {
+                                                    challanToDelete?.let { challan ->
+                                                        employee?.clientCode?.let { clientCode ->
+                                                            viewModel.deleteDeliveryChallan(
+                                                                clientCode = clientCode,
+                                                                id = challan.Id ?: 0
+                                                            ) { isSuccess ->
+                                                                Toast.makeText(
+                                                                    context,
+                                                                    if (isSuccess) localizedContext.getString(R.string.delete_success_message)
+                                                                    else localizedContext.getString(R.string.delete_failed_message),
+                                                                    Toast.LENGTH_SHORT
+                                                                ).show()
+                                                            }
+                                                        }
+                                                    }
+                                                    challanToDelete = null
+                                                },
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+                                    },
+                                    dismissButton = {}
                                 )
                             }
                          /*   IconButton(onClick = {

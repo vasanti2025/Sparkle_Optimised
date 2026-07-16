@@ -7,6 +7,8 @@ import com.loyalstring.rfid.data.model.deliveryChallan.ChallanNoRequest
 import com.loyalstring.rfid.data.model.deliveryChallan.ChallanNoResponse
 import com.loyalstring.rfid.data.model.deliveryChallan.CustomerTunchRequest
 import com.loyalstring.rfid.data.model.deliveryChallan.CustomerTunchResponse
+import com.loyalstring.rfid.data.model.deliveryChallan.DeleteDeliveryChallanRequest
+import com.loyalstring.rfid.data.model.deliveryChallan.DeleteDeliveryChallanResponse
 import com.loyalstring.rfid.data.model.deliveryChallan.DeliveryChallanRequestList
 import com.loyalstring.rfid.data.model.deliveryChallan.DeliveryChallanResponseList
 import com.loyalstring.rfid.data.model.deliveryChallan.UpdateDeliveryChallanRequest
@@ -18,6 +20,7 @@ interface DeliveryChallanRepository {
     suspend fun addDeliveryChallan(request: AddDeliveryChallanRequest): Response<AddDeliveryChallanResponse>
     suspend fun updateDeliveryChallan(request: UpdateDeliveryChallanRequest): Response<AddDeliveryChallanResponse>
     suspend fun getAllCustomerTunch(request: CustomerTunchRequest): Response<List<CustomerTunchResponse>>
+    suspend fun deleteDeliveryChallan(request: DeleteDeliveryChallanRequest): Response<DeleteDeliveryChallanResponse>
 
    // suspend fun getDeliveryChallanById(clientCode: String, challanId: Int): Response<DeliveryChallanResponseList>
 

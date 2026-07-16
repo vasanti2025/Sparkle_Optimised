@@ -25,6 +25,8 @@ import com.loyalstring.rfid.data.model.deliveryChallan.ChallanNoRequest
 import com.loyalstring.rfid.data.model.deliveryChallan.ChallanNoResponse
 import com.loyalstring.rfid.data.model.deliveryChallan.CustomerTunchRequest
 import com.loyalstring.rfid.data.model.deliveryChallan.CustomerTunchResponse
+import com.loyalstring.rfid.data.model.deliveryChallan.DeleteDeliveryChallanRequest
+import com.loyalstring.rfid.data.model.deliveryChallan.DeleteDeliveryChallanResponse
 import com.loyalstring.rfid.data.model.deliveryChallan.DeliveryChallanRequestList
 import com.loyalstring.rfid.data.model.deliveryChallan.DeliveryChallanResponseList
 import com.loyalstring.rfid.data.model.deliveryChallan.UpdateDeliveryChallanRequest
@@ -319,6 +321,9 @@ interface RetrofitInterface {
 
     @POST("/api/Invoice/UpdateDeliveryChallan")
     suspend fun updateDeliveryChallan(@Body request: UpdateDeliveryChallanRequest): Response<AddDeliveryChallanResponse>
+
+    @POST("/api/Invoice/DeleteDeliveryChallan")
+    suspend fun deleteDeliveryChallan(@Body request: DeleteDeliveryChallanRequest): Response<DeleteDeliveryChallanResponse>
 
     @POST("/api/Invoice/GetAllCustomerTounch")
     suspend fun getAllCustomerTounch(@Body request: CustomerTunchRequest): Response<List<CustomerTunchResponse>>

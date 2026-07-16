@@ -8,6 +8,8 @@ import com.loyalstring.rfid.data.model.deliveryChallan.AddDeliveryChallanRespons
 import com.loyalstring.rfid.data.model.deliveryChallan.ChallanNoRequest
 import com.loyalstring.rfid.data.model.deliveryChallan.CustomerTunchRequest
 import com.loyalstring.rfid.data.model.deliveryChallan.CustomerTunchResponse
+import com.loyalstring.rfid.data.model.deliveryChallan.DeleteDeliveryChallanRequest
+import com.loyalstring.rfid.data.model.deliveryChallan.DeleteDeliveryChallanResponse
 import com.loyalstring.rfid.data.model.deliveryChallan.DeliveryChallanItemPrint
 import com.loyalstring.rfid.data.model.deliveryChallan.DeliveryChallanPrintData
 import com.loyalstring.rfid.data.model.deliveryChallan.DeliveryChallanRequestList
@@ -169,6 +171,29 @@ class DeliveryChallanViewModel @Inject constructor(
             } catch (e: Exception) {
                 _error.value = e.localizedMessage ?: "Something went wrong"
                 _customerTunchList.value = emptyList()
+            } finally {
+                _loading.value = false
+            }
+        }
+    }
+
+    fun deleteDeliveryChallan(clientCode: String, id: Int, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            try {
+                _loading.value = true
+                val request = DeleteDeliveryChallanRequest(ClientCode = clientCode, Id = id)
+                val response = repository.deleteDeliveryChallan(request)
+                if (response.isSuccessful) {
+                    _challanList.value = _challanList.value.filterNot { it.Id == id }
+                    onResult(true)
+                } else {
+                    _error.value = "Failed: ${response.message()}"
+                    onResult(false)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _error.value = e.localizedMessage ?: "Unknown error"
+                onResult(false)
             } finally {
                 _loading.value = false
             }

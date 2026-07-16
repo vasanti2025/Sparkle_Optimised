@@ -85,7 +85,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
-import coil.compose.rememberAsyncImagePainter
 import com.loyalstring.rfid.R
 import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.data.model.login.Employee
@@ -96,9 +95,11 @@ import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.ui.utils.DEFAULT_PRODUCT_IMAGE_BASE_URL
 import com.loyalstring.rfid.ui.utils.GradientButton
 import com.loyalstring.rfid.ui.utils.UserPreferences
+import com.loyalstring.rfid.ui.utils.ProductImageWithAllFallbacks
+import com.loyalstring.rfid.ui.utils.buildDesktopProductImageUrls
+import com.loyalstring.rfid.ui.utils.extractHostFromCustomApi
 import com.loyalstring.rfid.ui.utils.getLocalProductImageFile
 import com.loyalstring.rfid.ui.utils.poppins
-import com.loyalstring.rfid.ui.utils.resolveProductImageUrl
 import com.loyalstring.rfid.viewmodel.BulkViewModel
 import com.loyalstring.rfid.viewmodel.ProductListViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
@@ -1082,36 +1083,7 @@ fun ItemDetailsDialog(
     onDismiss: () -> Unit
 ) {
     val baseUrl = DEFAULT_PRODUCT_IMAGE_BASE_URL
-    /* val imageUrl = item.imageUrl?.split(",")
-         ?.lastOrNull()
-         ?.trim()
-         ?.let { "$baseUrl$it" }*/
-
     val context = LocalContext.current
-    val localItemImage = remember(item.itemCode, item.design) {
-        getLocalProductImageFile(context, item.itemCode, item.design)
-    }
-
-    val directLocalPath = remember(item.imageUrl) {
-        item.imageUrl
-            ?.trim()
-            ?.trimEnd(',')
-            ?.takeIf { it.startsWith("/") }
-            ?.let { File(it) }
-            ?.takeIf { it.exists() }
-    }
-
-    val remoteUrl = remember(item.imageUrl, baseUrl) {
-        resolveProductImageUrl(item.imageUrl, baseUrl)
-    }
-
-    var loadError by remember(item.itemCode, item.imageUrl) { mutableStateOf(false) }
-    val finalImageModel: Any? = when {
-        directLocalPath != null -> directLocalPath
-        localItemImage != null -> localItemImage
-        !loadError && !remoteUrl.isNullOrBlank() -> remoteUrl
-        else -> null
-    }
 
     var scale by remember { mutableStateOf(1f) }
 
@@ -1145,29 +1117,27 @@ fun ItemDetailsDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                if (finalImageModel != null) {
-                    Image(
-                        painter = rememberAsyncImagePainter(
-                            model = finalImageModel,
-                            onError = { loadError = true }
-                        ),
-                        contentDescription = "Zoomable Image",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .graphicsLayer(
-                                scaleX = scale,
-                                scaleY = scale
-                            )
-                            .pointerInput(Unit) {
-                                detectTransformGestures { _, _, zoom, _ ->
-                                    scale = (scale * zoom).coerceIn(1f, 5f)
-                                }
+                ProductImageWithAllFallbacks(
+                    imageUrl = item.imageUrl,
+                    itemCode = item.itemCode,
+                    designName = item.design,
+                    baseUrl = baseUrl,
+                    contentDescription = "Zoomable Image",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .graphicsLayer(
+                            scaleX = scale,
+                            scaleY = scale
+                        )
+                        .pointerInput(Unit) {
+                            detectTransformGestures { _, _, zoom, _ ->
+                                scale = (scale * zoom).coerceIn(1f, 5f)
                             }
-                    )
+                        }
+                )
 
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
+                Spacer(modifier = Modifier.height(12.dp))
 
                 InfoRow("Product Name", item.productName)
                 InfoRow("Item Code", item.itemCode)
@@ -1213,59 +1183,50 @@ fun ProductImageWithFallback(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-
-    var loadError by remember(item.itemCode, item.design, item.imageUrl) { mutableStateOf(false) }
-    var localImageFile by remember(item.itemCode, item.design, item.imageUrl) {
-        mutableStateOf(getLocalProductImageFile(context, item.itemCode, item.design))
+    val customApiUrl = remember { UserPreferences.getInstance(context).getCustomApi() }
+    val desktopHost = remember(customApiUrl) { extractHostFromCustomApi(customApiUrl) }
+    val desktopUrls = remember(item.itemCode, item.design, customApiUrl) {
+        buildDesktopProductImageUrls(customApiUrl, item.design, item.itemCode)
     }
+    val primaryDesktopUrl = desktopUrls.firstOrNull().orEmpty()
 
-    val directLocalPath = remember(item.imageUrl) {
-        item.imageUrl
-            ?.trim()
-            ?.trimEnd(',')
-            ?.takeIf { it.startsWith("/") }
-            ?.let { File(it) }
-            ?.takeIf { it.exists() }
-    }
-
-    val remoteUrl = remember(item.imageUrl, baseUrl) {
-        resolveProductImageUrl(item.imageUrl, baseUrl)
-    }
-
-    LaunchedEffect(remoteUrl, item.itemCode) {
-        if (localImageFile == null && !remoteUrl.isNullOrBlank() && !item.itemCode.isNullOrBlank()) {
-            val savedFile = withContext(kotlinx.coroutines.Dispatchers.IO) {
-                saveImageFromUrlToLocal(context, remoteUrl, item.itemCode!!)
-            }
-            if (savedFile != null) {
-                localImageFile = savedFile
-            }
+    LaunchedEffect(item.itemCode, item.design, customApiUrl, primaryDesktopUrl) {
+        Log.d(
+            "DESKTOP_IMAGE_TEST",
+            "itemCode=${item.itemCode}, design=${item.design}, customApi=$customApiUrl, host=$desktopHost"
+        )
+        desktopUrls.forEach { url ->
+            Log.d("DESKTOP_IMAGE_TEST", "Desktop URL: $url")
         }
     }
 
-    val finalModel: Any? = when {
-        directLocalPath != null -> directLocalPath
-        localImageFile != null -> localImageFile
-        !loadError && !remoteUrl.isNullOrBlank() -> remoteUrl
-        else -> null
-    }
-
-    if (finalModel != null) {
-        AsyncImage(
-            model = finalModel,
-            contentDescription = item.itemCode,
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        ProductImageWithAllFallbacks(
+            imageUrl = item.imageUrl,
+            itemCode = item.itemCode,
+            designName = item.design,
+            baseUrl = baseUrl,
             modifier = modifier,
-            onError = {
-                loadError = true
-            }
-        )
-    } else {
-        Icon(
-            imageVector = Icons.Default.Photo,
             contentDescription = item.itemCode,
-            tint = Color.Gray,
-            modifier = modifier
+            cacheRemoteToLocal = true,
         )
+
+        if (primaryDesktopUrl.isNotBlank()) {
+            Text(
+                text = primaryDesktopUrl,
+                fontSize = 7.sp,
+                color = Color(0xFF1565C0),
+                maxLines = 2,
+                lineHeight = 8.sp,
+                fontFamily = poppins,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp),
+            )
+        }
     }
 }
 

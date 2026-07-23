@@ -1,5 +1,6 @@
 package com.loyalstring.rfid.viewmodel
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -8,9 +9,13 @@ import com.loyalstring.rfid.data.model.sampleOut.SampleOutAddRequest
 import com.loyalstring.rfid.data.model.sampleOut.SampleOutAddResponse
 import com.loyalstring.rfid.data.model.sampleOut.SampleOutLastNoReq
 import com.loyalstring.rfid.data.model.sampleOut.SampleOutListRequest
+import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.data.model.sampleOut.SampleOutListResponse
 import com.loyalstring.rfid.data.model.sampleOut.SampleOutUpdateRequest
+import com.loyalstring.rfid.repository.BulkRepository
 import com.loyalstring.rfid.repository.SampleOutRepositoty
+import com.loyalstring.rfid.ui.utils.buildSampleOutItemImages
+import com.loyalstring.rfid.ui.utils.toSampleOutPrintData
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,7 +25,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SampleOutViewModel @Inject constructor(
-    private val repository: SampleOutRepositoty
+    private val repository: SampleOutRepositoty,
+    private val bulkRepository: BulkRepository,
 ) : ViewModel() {
 
     // Sirf list expose kar rahe hain
@@ -263,8 +269,15 @@ class SampleOutViewModel @Inject constructor(
         _updateResult.value = null
     }
 
+    suspend fun buildSampleOutPrintData(
+        context: Context,
+        challan: SampleOutListResponse,
+        cachedBulkItems: List<BulkItem> = emptyList(),
+    ) = challan.toSampleOutPrintData(context, bulkRepository.bulkItemDao, cachedBulkItems)
 
-
-
-
+    suspend fun buildSampleOutItemImages(
+        context: Context,
+        challan: SampleOutListResponse,
+        cachedBulkItems: List<BulkItem> = emptyList(),
+    ) = buildSampleOutItemImages(context, bulkRepository.bulkItemDao, challan, cachedBulkItems)
 }

@@ -1255,9 +1255,12 @@ fun GradientDropdownButton(
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = if (selectedOption.isBlank()) label else selectedOption,
-            color = Color.Gray,
-            fontSize = 12.sp
+            text = if (selectedOption.isBlank() || selectedOption == label) label else selectedOption,
+            color = Color.DarkGray,
+            fontSize = 11.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 6.dp)
         )
     }
 }

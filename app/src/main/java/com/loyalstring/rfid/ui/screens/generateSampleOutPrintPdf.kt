@@ -3,6 +3,7 @@ package com.loyalstring.rfid.ui.screens
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
+import com.itextpdf.io.image.ImageDataFactory
 import com.itextpdf.kernel.colors.ColorConstants
 import com.itextpdf.kernel.geom.PageSize
 import com.itextpdf.kernel.pdf.PdfDocument
@@ -11,28 +12,47 @@ import com.itextpdf.kernel.pdf.canvas.draw.SolidLine
 import com.itextpdf.layout.Document
 import com.itextpdf.layout.borders.Border
 import com.itextpdf.layout.element.Cell
+import com.itextpdf.layout.element.Image
 import com.itextpdf.layout.element.LineSeparator
 import com.itextpdf.layout.element.Paragraph
 import com.itextpdf.layout.element.Table
+import com.itextpdf.layout.properties.HorizontalAlignment
 import com.itextpdf.layout.properties.TextAlignment
 import com.itextpdf.layout.properties.UnitValue
 import com.loyalstring.rfid.data.model.sampleOut.SampleOutPrintData
+import com.loyalstring.rfid.ui.utils.SAMPLE_OUT_ITEM_IMAGES_ENABLED
+import com.loyalstring.rfid.ui.utils.loadProductImageBytes
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
 
-fun generateSampleOutPrintPdf(context: Context, data: SampleOutPrintData) {
+suspend fun generateSampleOutPrintPdf(context: Context, data: SampleOutPrintData) =
+    withContext(Dispatchers.IO) {
 
     val file = File(
         context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS),
         "SampleOut_${data.sampleOutNo.ifBlank { "Print" }}.pdf"
     )
 
+    val itemImages = if (SAMPLE_OUT_ITEM_IMAGES_ENABLED) {
+        data.items.map { item ->
+            loadProductImageBytes(
+                context = context,
+                imageUrl = item.imageUrl,
+                itemCode = item.itemCode,
+                designName = item.designName,
+            )
+        }
+    } else {
+        emptyList()
+    }
+
     val writer = PdfWriter(file)
     val pdf = PdfDocument(writer)
     val doc = Document(pdf, PageSize.A4)
     doc.setMargins(20f, 20f, 20f, 20f)
 
-    // ---- Header (Company Name) ----
     doc.add(
         Paragraph(data.companyName)
             .setTextAlignment(TextAlignment.CENTER)
@@ -40,10 +60,8 @@ fun generateSampleOutPrintPdf(context: Context, data: SampleOutPrintData) {
             .setFontSize(16f)
     )
 
-    // horizontal line
     doc.add(LineSeparator(SolidLine(1f)).setMarginTop(8f).setMarginBottom(12f))
 
-    // Title
     doc.add(
         Paragraph("Sample Out Print")
             .setTextAlignment(TextAlignment.CENTER)
@@ -52,7 +70,6 @@ fun generateSampleOutPrintPdf(context: Context, data: SampleOutPrintData) {
             .setMarginBottom(14f)
     )
 
-    // ---- Info row: Left (customer) / Right (sampleOut info) ----
     val infoTable = Table(UnitValue.createPercentArray(floatArrayOf(1f, 1f)))
         .setWidth(UnitValue.createPercentValue(100f))
         .setBorder(Border.NO_BORDER)
@@ -81,17 +98,30 @@ fun generateSampleOutPrintPdf(context: Context, data: SampleOutPrintData) {
     doc.add(infoTable)
     doc.add(Paragraph("\n"))
 
-    // ---- Main table ----
-    val colWidths = floatArrayOf(
-        0.6f,  // Sr.No
-        2.0f,  // Item Details
-        1.0f,  // Gross
-        1.0f,  // Stone
-        1.0f,  // Diamond
-        1.0f,  // Net
-        0.8f,  // Pieces
-        1.0f   // Status
-    )
+    val colWidths = if (SAMPLE_OUT_ITEM_IMAGES_ENABLED) {
+        floatArrayOf(
+            0.55f,  // Sr.No
+            1.8f,   // Item Details
+            0.9f,   // Gross
+            0.9f,   // Stone
+            0.9f,   // Diamond
+            0.9f,   // Net
+            0.7f,   // Pieces
+            0.9f,   // Status
+            1.0f    // View / Image
+        )
+    } else {
+        floatArrayOf(
+            0.55f,  // Sr.No
+            2.0f,   // Item Details
+            0.9f,   // Gross
+            0.9f,   // Stone
+            0.9f,   // Diamond
+            0.9f,   // Net
+            0.7f,   // Pieces
+            0.9f,   // Status
+        )
+    }
 
     val table = Table(UnitValue.createPercentArray(colWidths))
         .setWidth(UnitValue.createPercentValue(100f))
@@ -109,6 +139,9 @@ fun generateSampleOutPrintPdf(context: Context, data: SampleOutPrintData) {
     table.addHeaderCell(headerCell("Net Wt"))
     table.addHeaderCell(headerCell("Pieces"))
     table.addHeaderCell(headerCell("Status"))
+    if (SAMPLE_OUT_ITEM_IMAGES_ENABLED) {
+        table.addHeaderCell(headerCell("View"))
+    }
 
     fun n(v: String?): Double = v?.toDoubleOrNull() ?: 0.0
     fun fmt(d: Double): String = String.format(Locale.US, "%.3f", d)
@@ -132,13 +165,23 @@ fun generateSampleOutPrintPdf(context: Context, data: SampleOutPrintData) {
         table.addCell(Cell().add(Paragraph(fmt(s)).setFontSize(9f)).setTextAlignment(TextAlignment.CENTER))
         table.addCell(Cell().add(Paragraph(fmt(d)).setFontSize(9f)).setTextAlignment(TextAlignment.CENTER))
         table.addCell(Cell().add(Paragraph(fmt(nw)).setFontSize(9f)).setTextAlignment(TextAlignment.CENTER))
-        table.addCell(Cell().add(Paragraph(totalPieces.toInt().toString()).setFontSize(9f)).setTextAlignment(TextAlignment.CENTER).also {
-            // NOTE: pieces per-row dikhana ho to yaha it.pieces use karo
-        })
+        table.addCell(Cell().add(Paragraph(p.toInt().toString()).setFontSize(9f)).setTextAlignment(TextAlignment.CENTER))
         table.addCell(Cell().add(Paragraph(it.status).setFontSize(9f)).setTextAlignment(TextAlignment.CENTER))
+
+        if (SAMPLE_OUT_ITEM_IMAGES_ENABLED) {
+            val viewCell = Cell().setTextAlignment(TextAlignment.CENTER).setPadding(3f)
+            val imgBytes = itemImages.getOrNull(idx)
+            if (imgBytes != null) {
+                viewCell.add(
+                    Image(ImageDataFactory.create(imgBytes))
+                        .scaleToFit(40f, 40f)
+                        .setHorizontalAlignment(HorizontalAlignment.CENTER)
+                )
+            }
+            table.addCell(viewCell)
+        }
     }
 
-    // ---- Total row ----
     table.addCell(Cell().add(Paragraph("Total").setBold().setFontSize(9f)).setTextAlignment(TextAlignment.CENTER))
     table.addCell(Cell().add(Paragraph("").setFontSize(9f)))
     table.addCell(Cell().add(Paragraph(fmt(totalGross)).setBold().setFontSize(9f)).setTextAlignment(TextAlignment.CENTER))
@@ -147,22 +190,26 @@ fun generateSampleOutPrintPdf(context: Context, data: SampleOutPrintData) {
     table.addCell(Cell().add(Paragraph(fmt(totalNet)).setBold().setFontSize(9f)).setTextAlignment(TextAlignment.CENTER))
     table.addCell(Cell().add(Paragraph(totalPieces.toInt().toString()).setBold().setFontSize(9f)).setTextAlignment(TextAlignment.CENTER))
     table.addCell(Cell().add(Paragraph("").setFontSize(9f)))
+    if (SAMPLE_OUT_ITEM_IMAGES_ENABLED) {
+        table.addCell(Cell().add(Paragraph("").setFontSize(9f)))
+    }
 
     doc.add(table)
     doc.close()
 
-    // ---- Open PDF ----
-    val uri = FileProvider.getUriForFile(
-        context,
-        "${context.packageName}.provider",
-        file
-    )
+    withContext(Dispatchers.Main) {
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.provider",
+            file
+        )
 
-    val intent = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(uri, "application/pdf")
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/pdf")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
+        }
+
+        context.startActivity(Intent.createChooser(intent, "Open PDF with..."))
     }
-
-    context.startActivity(Intent.createChooser(intent, "Open PDF with..."))
 }

@@ -8,6 +8,9 @@ data class SampleOutPrintItem(
     val netWt: String? = "0",
     val pieces: String? = "0",
     val status: String = "Sample Out",
+    val imageUrl: String? = null,
+    val itemCode: String? = null,
+    val designName: String? = null,
 )
 
 data class SampleOutPrintData(

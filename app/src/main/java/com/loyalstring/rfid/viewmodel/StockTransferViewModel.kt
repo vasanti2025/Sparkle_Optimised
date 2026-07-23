@@ -21,6 +21,7 @@ import com.loyalstring.rfid.data.model.stockVerification.AccessibleCompany
 
 import com.loyalstring.rfid.data.remote.data.StockTransferRequest
 import com.loyalstring.rfid.repository.BulkRepositoryImpl
+import com.loyalstring.rfid.repository.SingleProductRepository
 import com.loyalstring.rfid.repository.TransferRepository
 import com.loyalstring.rfid.repository.UserPermissionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -32,13 +33,26 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlin.collections.firstOrNull
+import com.loyalstring.rfid.data.model.stockTransfer.StockTransferLineItem
+import com.loyalstring.rfid.ui.utils.TransferLocationLookups
+import com.loyalstring.rfid.ui.utils.TransferMasterData
+import com.loyalstring.rfid.ui.utils.bulkItemToLabelledStock
+import com.loyalstring.rfid.ui.utils.resolveLabelledItemsFromTransfer
+import com.loyalstring.rfid.ui.utils.resolveTransferFromToNamesAsync
+
+data class TransferDetailSession(
+    val transferId: Int = 0,
+    val requestType: String = "In Request",
+    val selectedTransferType: String = "Transfer Type",
+    val isSelfApproval: Boolean = false
+)
 
 
 @HiltViewModel
 class StockTransferViewModel @Inject constructor(
     private val repository: TransferRepository,
     private val bulkRepository: BulkRepositoryImpl,
+    private val productRepository: SingleProductRepository,
     private val userPermissionRepository: UserPermissionRepository
 ) : ViewModel() {
 
@@ -114,6 +128,155 @@ class StockTransferViewModel @Inject constructor(
     private val _transferPreviewItems = MutableStateFlow<List<BulkItem>>(emptyList())
     val transferPreviewItems: StateFlow<List<BulkItem>> = _transferPreviewItems
 
+    private val _transferDetailSession = MutableStateFlow(TransferDetailSession())
+    val transferDetailSession: StateFlow<TransferDetailSession> = _transferDetailSession.asStateFlow()
+
+    private val _detailLabelItems = MutableStateFlow<List<LabelledStockItems>>(emptyList())
+    val detailLabelItems: StateFlow<List<LabelledStockItems>> = _detailLabelItems.asStateFlow()
+
+    private val _transferCache = MutableStateFlow<Map<Int, StockTransferInOutResponse>>(emptyMap())
+
+    private val _locationLookups = MutableStateFlow(TransferLocationLookups())
+    val locationLookups: StateFlow<TransferLocationLookups> = _locationLookups.asStateFlow()
+
+    private val _masterData = MutableStateFlow(TransferMasterData())
+    val masterData: StateFlow<TransferMasterData> = _masterData.asStateFlow()
+
+    private val _resolvedFromTo = MutableStateFlow<Map<Int, Pair<String, String>>>(emptyMap())
+    val resolvedFromTo: StateFlow<Map<Int, Pair<String, String>>> = _resolvedFromTo.asStateFlow()
+
+    private var pendingFromLocationName: String = ""
+    private var pendingToLocationName: String = ""
+
+    fun setPendingLocationNames(from: String, to: String) {
+        pendingFromLocationName = from.trim()
+        pendingToLocationName = to.trim()
+    }
+
+    fun getPendingFromLocationName(): String = pendingFromLocationName
+    fun getPendingToLocationName(): String = pendingToLocationName
+
+    fun loadLocationLookups() {
+        viewModelScope.launch {
+            try {
+                _locationLookups.value = TransferLocationLookups(
+                    counterPairs = bulkRepository.bulkItemDao.getCounterIdNamePairs(),
+                    boxPairs = bulkRepository.bulkItemDao.getBoxIdNamePairs(),
+                    branchPairs = bulkRepository.bulkItemDao.getBranchIdNamePairs(),
+                    packetPairs = bulkRepository.bulkItemDao.getPacketIdNamePairs()
+                )
+            } catch (e: Exception) {
+                Log.e("StockTransferVM", "Error loading location lookups: ${e.message}")
+            }
+        }
+    }
+
+    fun loadMasterLocationData(clientCode: String) {
+        if (clientCode.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val request = ClientCodeRequest(clientCode)
+                val counters = productRepository.getAllCounters(request).body().orEmpty()
+                val branches = productRepository.getAllBranches(request).body().orEmpty()
+                val boxes = productRepository.getAllBoxes(request).body().orEmpty()
+                val packets = productRepository.getAllPackets(request).body().orEmpty()
+                val lookups = TransferLocationLookups(
+                    counterPairs = bulkRepository.bulkItemDao.getCounterIdNamePairs(),
+                    boxPairs = bulkRepository.bulkItemDao.getBoxIdNamePairs(),
+                    branchPairs = bulkRepository.bulkItemDao.getBranchIdNamePairs(),
+                    packetPairs = bulkRepository.bulkItemDao.getPacketIdNamePairs()
+                )
+                _locationLookups.value = lookups
+                _masterData.value = TransferMasterData(
+                    counters = counters,
+                    branches = branches,
+                    boxes = boxes,
+                    packets = packets,
+                    lookups = lookups
+                )
+                refreshTransferDisplayNames()
+            } catch (e: Exception) {
+                Log.e("StockTransferVM", "Error loading master location data: ${e.message}")
+            }
+        }
+    }
+
+    fun refreshTransferDisplayNames() {
+        viewModelScope.launch {
+            val transfers = _transferCache.value.values.toList()
+            if (transfers.isEmpty()) {
+                _resolvedFromTo.value = emptyMap()
+                return@launch
+            }
+            val master = _masterData.value
+            val resolved = transfers.associate { transfer ->
+                val items = resolveLabelledItemsFromTransfer(transfer)
+                transfer.Id to resolveTransferFromToNamesAsync(
+                    transfer = transfer,
+                    masterData = master,
+                    bulkRepository = bulkRepository,
+                    labelledItems = items
+                )
+            }
+            _resolvedFromTo.value = resolved
+        }
+    }
+
+    fun cacheStockTransfers(transfers: List<StockTransferInOutResponse>) {
+        if (transfers.isEmpty()) return
+        _transferCache.value = _transferCache.value + transfers.associateBy { it.Id }
+        refreshTransferDisplayNames()
+    }
+
+    private suspend fun enrichLabelledItemsFromDatabase(
+        items: List<LabelledStockItems>,
+        lineItems: List<StockTransferLineItem>
+    ): List<LabelledStockItems> {
+        if (items.isEmpty() && lineItems.isEmpty()) return items
+
+        return if (items.isNotEmpty()) {
+            items.map { item ->
+                val stockId = item.Id?.takeIf { it > 0 } ?: return@map item
+                val needsEnrichment = item.ItemCode.isNullOrBlank() && item.CategoryName.isNullOrBlank()
+                if (!needsEnrichment) return@map item
+
+                val bulkItem = bulkRepository.bulkItemDao.getById(stockId) ?: return@map item
+                bulkItemToLabelledStock(
+                    bulkItem = bulkItem,
+                    lineItem = lineItems.firstOrNull { line ->
+                        line.LabelledStockId == stockId || line.StockId == stockId
+                    }
+                ).copy(
+                    TransferItemId = item.TransferItemId,
+                    RequestStatus = item.RequestStatus
+                )
+            }
+        } else {
+            lineItems.mapNotNull { line ->
+                val stockId = line.LabelledStockId?.takeIf { it > 0 }
+                    ?: line.StockId?.takeIf { it > 0 }
+                    ?: return@mapNotNull null
+                val bulkItem = bulkRepository.bulkItemDao.getById(stockId)
+                if (bulkItem != null) {
+                    bulkItemToLabelledStock(bulkItem, line)
+                } else {
+                    com.loyalstring.rfid.ui.utils.lineItemToLabelledStock(line)
+                }
+            }
+        }
+    }
+
+    private suspend fun resolveTransferDetailItems(
+        transferId: Int,
+        fallbackItems: List<LabelledStockItems> = emptyList()
+    ): List<LabelledStockItems> {
+        val transfer = _transferCache.value[transferId]
+        val resolved = fallbackItems.takeIf { it.isNotEmpty() }
+            ?: resolveLabelledItemsFromTransfer(transfer)
+        val lineItems = transfer?.StockTransferItems.orEmpty()
+        return enrichLabelledItemsFromDatabase(resolved, lineItems)
+    }
+
     fun setTransferPreviewItems(items: List<BulkItem>) {
         _transferPreviewItems.value = items
     }
@@ -124,21 +287,20 @@ class StockTransferViewModel @Inject constructor(
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
-    suspend fun loadAllLabelledStock() {
+
+    private fun labelledTransferItems(items: List<BulkItem>): List<BulkItem> =
+        items.filter { !it.itemCode.isNullOrBlank() || !it.rfid.isNullOrBlank() }
+
+    fun loadAllLabelledStock() = viewModelScope.launch {
         try {
-            _isLoading.value = true   // ✅ START LOADER
-            kotlinx.coroutines.delay(500)
-            val labelledItems =
-                allBulkItems.first().filter {
-                    !it.itemCode.isNullOrBlank()
-                }
-
-            _filteredBulkItems.value = labelledItems
-
+            _isLoading.value = true
+            val allItems = bulkRepository.getAllBulkItems().first()
+            _allBulkItems.value = allItems
+            _filteredBulkItems.value = labelledTransferItems(allItems)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("StockTransferVM", "Error loading labelled stock: ${e.message}")
         } finally {
-            _isLoading.value = false  // ✅ STOP LOADER
+            _isLoading.value = false
         }
     }
 
@@ -268,16 +430,18 @@ class StockTransferViewModel @Inject constructor(
 
     fun filterBulkItemsByFrom(fromType: String, selectedValue: String) = viewModelScope.launch {
         val allItems = bulkRepository.getAllBulkItems().first()
-        _allBulkItems.value = allItems // 🔥 Keep full list in memory
+        _allBulkItems.value = allItems
 
-        _filteredBulkItems.value = when (fromType.lowercase()) {
-            "counter" -> allItems.filter { it.counterName.equals(selectedValue, true) }
-            "branch" -> allItems.filter { it.branchName.equals(selectedValue, true) }
-            "box" -> allItems.filter { it.boxName.equals(selectedValue, true) }
-            "packet" -> allItems.filter { it.packetName.equals(selectedValue, true) }
-            "display" -> allItems.filter { it.counterId == 0 || it.counterName.isNullOrEmpty() }
+        val normalizedValue = selectedValue.trim()
+        val filtered = when (fromType.lowercase()) {
+            "counter" -> allItems.filter { it.counterName?.trim().equals(normalizedValue, true) }
+            "branch" -> allItems.filter { it.branchName?.trim().equals(normalizedValue, true) }
+            "box" -> allItems.filter { it.boxName?.trim().equals(normalizedValue, true) }
+            "packet" -> allItems.filter { it.packetName?.trim().equals(normalizedValue, true) }
+            "display" -> allItems.filter { it.counterId == 0 || it.counterName.isNullOrBlank() }
             else -> allItems
         }
+        _filteredBulkItems.value = labelledTransferItems(filtered)
     }
     fun filterItemsByCategory(category: String) {
         viewModelScope.launch {
@@ -399,20 +563,152 @@ class StockTransferViewModel @Inject constructor(
         _stApproveRejectResponse.postValue(null)
     }
 
+    fun setLabelledStockItems(items: List<LabelledStockItems>) {
+        if (items.isNotEmpty()) {
+            _detailLabelItems.value = items
+        }
+        _labelledStockItems.postValue(items)
+    }
 
-    fun getLabelledStockByTransferId(
+    fun openTransferDetail(
+        transferId: Int,
+        requestType: String,
+        selectedTransferType: String,
+        isSelfApproval: Boolean,
+        items: List<LabelledStockItems>
+    ) {
+        _transferDetailSession.value = TransferDetailSession(
+            transferId = transferId,
+            requestType = requestType,
+            selectedTransferType = selectedTransferType,
+            isSelfApproval = isSelfApproval
+        )
+
+        val immediateItems = items.takeIf { it.isNotEmpty() }
+            ?: resolveLabelledItemsFromTransfer(_transferCache.value[transferId])
+        _detailLabelItems.value = immediateItems
+        _labelledStockItems.postValue(immediateItems)
+
+        viewModelScope.launch {
+            val resolvedItems = resolveTransferDetailItems(
+                transferId = transferId,
+                fallbackItems = immediateItems
+            )
+            if (resolvedItems.isNotEmpty()) {
+                _detailLabelItems.value = resolvedItems
+                _labelledStockItems.postValue(resolvedItems)
+            }
+            Log.d(
+                "TransferDetail",
+                "openTransferDetail id=$transferId requestType=$requestType selfApproval=$isSelfApproval items=${resolvedItems.size}"
+            )
+        }
+    }
+
+    private suspend fun fetchTransferLabelItems(
         clientCode: String,
-        mainObjectId: Int, // 👈 renamed for clarity
+        transferId: Int,
         requestType: String,
         userId: Int,
         branchId: Int
+    ): List<LabelledStockItems> {
+        suspend fun fetch(requestTypeValue: String): List<LabelledStockItems> {
+            val request = StockInOutRequest(
+                ClientCode = clientCode,
+                StockType = "labelled",
+                TransferType = null,
+                BranchId = branchId,
+                UserID = userId,
+                RequestType = requestTypeValue
+            )
+            val responseList = repository.getAllStockTransfers(request).getOrNull().orEmpty()
+            cacheStockTransfers(responseList)
+            val transfer = responseList.firstOrNull { it.Id == transferId }
+            return resolveLabelledItemsFromTransfer(transfer)
+        }
+
+        val primaryItems = fetch(requestType)
+        val resolved = if (primaryItems.isNotEmpty()) {
+            primaryItems
+        } else if (requestType == "Out Request") {
+            fetch("In Request")
+        } else {
+            emptyList()
+        }
+
+        return enrichLabelledItemsFromDatabase(
+            items = resolved,
+            lineItems = _transferCache.value[transferId]?.StockTransferItems.orEmpty()
+        )
+    }
+
+    fun loadTransferDetailItems(
+        clientCode: String,
+        userId: Int,
+        branchId: Int,
+        forceRefresh: Boolean = false
+    ) {
+        val session = _transferDetailSession.value
+        if (session.transferId <= 0) return
+
+        viewModelScope.launch {
+            val cachedItems = _detailLabelItems.value
+            if (!forceRefresh && cachedItems.isNotEmpty()) {
+                _labelledStockItems.postValue(cachedItems)
+                return@launch
+            }
+
+            try {
+                val fetchedItems = fetchTransferLabelItems(
+                    clientCode = clientCode,
+                    transferId = session.transferId,
+                    requestType = session.requestType,
+                    userId = userId,
+                    branchId = branchId
+                )
+
+                val enrichedFetched = enrichLabelledItemsFromDatabase(
+                    items = fetchedItems,
+                    lineItems = _transferCache.value[session.transferId]?.StockTransferItems.orEmpty()
+                )
+
+                val resolvedItems = when {
+                    enrichedFetched.isNotEmpty() -> enrichedFetched
+                    cachedItems.isNotEmpty() -> cachedItems
+                    else -> emptyList()
+                }
+
+                if (resolvedItems.isNotEmpty() || cachedItems.isEmpty()) {
+                    _detailLabelItems.value = resolvedItems
+                }
+                _labelledStockItems.postValue(_detailLabelItems.value)
+                Log.d(
+                    "TransferDetail",
+                    "loadTransferDetailItems id=${session.transferId} fetched=${fetchedItems.size} resolved=${resolvedItems.size}"
+                )
+            } catch (e: Exception) {
+                Log.e("TransferDetail", "loadTransferDetailItems failed", e)
+                if (cachedItems.isNotEmpty()) {
+                    _labelledStockItems.postValue(cachedItems)
+                }
+            }
+        }
+    }
+
+    fun getLabelledStockByTransferId(
+        clientCode: String,
+        mainObjectId: Int,
+        requestType: String,
+        userId: Int,
+        branchId: Int,
+        fallbackItems: List<LabelledStockItems> = emptyList()
     ) {
         viewModelScope.launch {
             try {
                 val request = StockInOutRequest(
                     ClientCode = clientCode,
                     StockType = "labelled",
-                    TransferType = 0,
+                    TransferType = null,
                     BranchId = branchId,
                     UserID = userId,
                     RequestType = requestType
@@ -420,23 +716,48 @@ class StockTransferViewModel @Inject constructor(
 
                 val result = repository.getAllStockTransfers(request)
                 val responseList = result.getOrNull() ?: emptyList()
-
-                // ✅ match by main object Id, not TransferTypeId
+                cacheStockTransfers(responseList)
                 val matchedTransfer = responseList.firstOrNull { it.Id == mainObjectId }
+                val apiItems = resolveLabelledItemsFromTransfer(matchedTransfer)
+                var resolvedItems = when {
+                    apiItems.isNotEmpty() -> apiItems
+                    fallbackItems.isNotEmpty() -> fallbackItems
+                    else -> emptyList()
+                }
+
+                if (resolvedItems.isEmpty() && requestType == "Out Request") {
+                    val inRequestItems = fetchTransferLabelItems(
+                        clientCode = clientCode,
+                        transferId = mainObjectId,
+                        requestType = "In Request",
+                        userId = userId,
+                        branchId = branchId
+                    )
+                    if (inRequestItems.isNotEmpty()) {
+                        resolvedItems = inRequestItems
+                    }
+                }
+
+                if (resolvedItems.isNotEmpty()) {
+                    _detailLabelItems.value = resolvedItems
+                }
 
                 if (matchedTransfer != null) {
-                    Log.d("DEBUG_LABELLED", "Matched transfer found: Id=${matchedTransfer.Id}")
-                   // _stockTransferDetail.postValue(matchedTransfer)
-                    _labelledStockItems.postValue(matchedTransfer.LabelledStockItems ?: emptyList())
+                    Log.d(
+                        "DEBUG_LABELLED",
+                        "Matched transfer Id=${matchedTransfer.Id}, apiItems=${apiItems.size}, resolved=${resolvedItems.size}"
+                    )
                 } else {
-                    Log.d("DEBUG_LABELLED", "No transfer found for Id=$mainObjectId")
-                    _stockTransferDetail.postValue(null)
-                    _labelledStockItems.postValue(emptyList())
+                    Log.d(
+                        "DEBUG_LABELLED",
+                        "No transfer found for Id=$mainObjectId, using fallback=${fallbackItems.size}"
+                    )
                 }
+
+                _labelledStockItems.postValue(resolvedItems)
             } catch (e: Exception) {
                 Log.e("DEBUG_LABELLED", "Error fetching transfer details", e)
-                _stockTransferDetail.postValue(null)
-                _labelledStockItems.postValue(emptyList())
+                _labelledStockItems.postValue(fallbackItems)
             }
         }
     }

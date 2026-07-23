@@ -143,7 +143,20 @@ fun buildProductImageLoadCandidates(
 
     addFile(getLocalProductImageFile(context, itemCode, designName))
 
-    addUrl(resolveProductImageUrl(imageUrl, baseUrl))
+    if (!imageUrl.isNullOrBlank()) {
+        imageUrl.trim().trimEnd(',')
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .forEach { part ->
+                addUrl(resolveProductImageUrl(part, baseUrl))
+                if (part.startsWith("http://", ignoreCase = true) ||
+                    part.startsWith("https://", ignoreCase = true)
+                ) {
+                    addUrl(part)
+                }
+            }
+    }
 
     buildDesktopProductImageUrls(customApiUrl, designName, itemCode).forEach { addUrl(it) }
 

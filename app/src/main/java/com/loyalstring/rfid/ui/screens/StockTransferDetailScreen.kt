@@ -68,6 +68,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavHostController
 import com.loyalstring.rfid.R
 import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.data.model.stockTransfer.LabelledStockItems
@@ -83,18 +84,40 @@ import com.loyalstring.rfid.worker.LocaleHelper
 @Composable
 fun StockTransferDetailScreen(
     onBack: () -> Unit,
-    labelItems: List<LabelledStockItems>,
-    requestType: String,
-    selectedTransferType: String,
-    id: Any,
+    navController: NavHostController,
+    labelItems: List<LabelledStockItems> = emptyList(),
+    requestType: String = "In Request",
+    selectedTransferType: String = "Transfer Type",
+    id: Int = 0,
+    isSelfApproval: Boolean = false,
 ) {
     val context = LocalContext.current
-    val viewModel: StockTransferViewModel = hiltViewModel()
+    val parentEntry = remember(navController) {
+        navController.getBackStackEntry("main_graph")
+    }
+    val viewModel: StockTransferViewModel = hiltViewModel(parentEntry)
+    val session by viewModel.transferDetailSession.collectAsState()
+    val detailItems by viewModel.detailLabelItems.collectAsState()
+
+    val effectiveRequestType = session.requestType.ifBlank { requestType }
+    val effectiveTransferId = session.transferId.takeIf { it > 0 } ?: id
+    val effectiveTransferType = session.selectedTransferType.ifBlank { selectedTransferType }
+    val effectiveSelfApproval = session.isSelfApproval || isSelfApproval
+    val items = detailItems.ifEmpty { labelItems }
+
     val employee = remember { UserPreferences.getInstance(context).getEmployee(Employee::class.java) }
-    val items by viewModel.labelledStockItems.observeAsState(initial = labelItems)
+    val allowApprovalActions =
+        effectiveRequestType == "In Request" ||
+            (effectiveRequestType == "Out Request" && effectiveSelfApproval)
+    val showAllDetailItems =
+        effectiveRequestType == "Out Request" && effectiveSelfApproval
 
     var showFilterDialog by remember { mutableStateOf(false) }
-    var selectedStatus by remember { mutableStateOf("Pending") }
+    var selectedStatus by remember {
+        mutableStateOf(
+            if (effectiveRequestType == "Out Request" && effectiveSelfApproval) "All" else "Pending"
+        )
+    }
     val selectedIds = remember { mutableStateListOf<Int>() }
     var selectAll by remember { mutableStateOf(false) }
     val horizontalScrollState = rememberScrollState()
@@ -105,42 +128,66 @@ fun StockTransferDetailScreen(
     var currentActionType by remember { mutableStateOf(0) }
 
     var expanded by remember { mutableStateOf(false) }
-    var selectedTransferType by remember { mutableStateOf(selectedTransferType) }
+    var selectedTransferTypeState by remember { mutableStateOf(effectiveTransferType) }
     val transferTypes by viewModel.transferTypes.collectAsState(initial = emptyList())
     var approvedCount by remember { mutableStateOf(0) }
-
-    // ✅ Refresh API Call
-    fun refreshItems() {
-        val clientCode = employee?.clientCode ?: return
-        viewModel.getLabelledStockByTransferId(
-            clientCode = clientCode,
-            mainObjectId = id as Int,
-            requestType = requestType,
-            userId = employee.id,
-            branchId = 0
-        )
-    }
-
-    val approveRejectResponse by viewModel.stApproveRejectResponse.observeAsState()
-    var isRefreshing by remember { mutableStateOf(false) }
-    LaunchedEffect(approveRejectResponse) {
-        approveRejectResponse?.onSuccess {
-            isRefreshing = true
-            refreshItems()
-            showSuccessDialog = true
-            apiMessage = "Items processed successfully!"
-            selectedIds.clear()
-            selectAll = false
-            viewModel.clearApproveResult()
-            isRefreshing = false
-        }
-    }
 
     val userPreferences = UserPreferences.getInstance(context)
     val savedLang = userPreferences.getAppLanguage().ifBlank { "en" }
     val currentLocales = AppCompatDelegate.getApplicationLocales()
     val currentLang = currentLocales[0]?.language ?: savedLang
     val localizedContext = LocaleHelper.applyLocale(context, currentLang)
+
+    // ✅ Refresh API Call
+    fun refreshItems(forceRefresh: Boolean = false) {
+        val emp = employee ?: return
+        val clientCode = emp.clientCode ?: return
+        val branchId = emp.branchNo
+            ?: UserPreferences.getInstance(context).getBranchID()?.toInt()
+            ?: 0
+        viewModel.loadTransferDetailItems(
+            clientCode = clientCode,
+            userId = emp.id,
+            branchId = branchId,
+            forceRefresh = forceRefresh
+        )
+    }
+
+    LaunchedEffect(effectiveTransferId, effectiveRequestType) {
+        if (effectiveTransferId > 0 && detailItems.isEmpty() && labelItems.isEmpty()) {
+            refreshItems(forceRefresh = false)
+        }
+    }
+
+    val approveRejectResponse by viewModel.stApproveRejectResponse.observeAsState()
+    var isRefreshing by remember { mutableStateOf(false) }
+    LaunchedEffect(approveRejectResponse) {
+        approveRejectResponse?.onSuccess {
+            approvedCount = selectedIds.size
+            isRefreshing = true
+            refreshItems(forceRefresh = true)
+            showSuccessDialog = true
+            selectedStatus = if (showAllDetailItems) "All" else "Pending"
+            apiMessage = when (currentActionType) {
+                1 -> localizedContext.getString(R.string.items_approved_success)
+                2 -> localizedContext.getString(R.string.items_rejected_success)
+                3 -> localizedContext.getString(R.string.items_lost_success)
+                else -> localizedContext.getString(R.string.items_approved_success)
+            }
+            selectedIds.clear()
+            selectAll = false
+            viewModel.clearApproveResult()
+            isRefreshing = false
+        }?.onFailure { error ->
+            Toast.makeText(
+                context,
+                error.message ?: localizedContext.getString(R.string.something_went_wrong),
+                Toast.LENGTH_SHORT
+            ).show()
+            viewModel.clearApproveResult()
+        }
+    }
+
     Scaffold(
         topBar = {
             GradientTopBar(
@@ -154,7 +201,7 @@ fun StockTransferDetailScreen(
             )
         },
         bottomBar = {
-            if (requestType != "Out Request") {
+            if (allowApprovalActions) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -167,20 +214,13 @@ fun StockTransferDetailScreen(
                         onClick = {
                             currentActionType = 1
                             handleDetailAction(
-                                requestType,
-                                1,
-                                context,
-                                selectedIds,
-                                employee,
-                                viewModel
-                            ) {
-                                approvedCount = selectedIds.size
-                                refreshItems()
-                                showSuccessDialog = true
-                                apiMessage = localizedContext.getString(R.string.items_approved_success)
-                                selectedIds.clear()
-                                selectAll = false
-                            }
+                                requestType = effectiveRequestType,
+                                statusType = 1,
+                                context = context,
+                                selectedIds = selectedIds,
+                                employee = employee,
+                                viewModel = viewModel
+                            )
                         },
                         modifier = Modifier
                             .weight(1f)
@@ -196,20 +236,13 @@ fun StockTransferDetailScreen(
                         onClick = {
                             currentActionType = 2
                             handleDetailAction(
-                                requestType,
-                                2,
-                                context,
-                                selectedIds,
-                                employee,
-                                viewModel
-                            ) {
-                                approvedCount = selectedIds.size
-                                refreshItems()
-                                showSuccessDialog = true
-                                apiMessage = localizedContext.getString(R.string.items_rejected_success)
-                                selectedIds.clear()
-                                selectAll = false
-                            }
+                                requestType = effectiveRequestType,
+                                statusType = 2,
+                                context = context,
+                                selectedIds = selectedIds,
+                                employee = employee,
+                                viewModel = viewModel
+                            )
                         },
                         modifier = Modifier
                             .weight(1f)
@@ -225,20 +258,13 @@ fun StockTransferDetailScreen(
                         onClick = {
                             currentActionType = 3
                             handleDetailAction(
-                                requestType,
-                                3,
-                                context,
-                                selectedIds,
-                                employee,
-                                viewModel
-                            ) {
-                                approvedCount = selectedIds.size
-                                refreshItems()
-                                showSuccessDialog = true
-                                apiMessage = localizedContext.getString(R.string.items_lost_success)
-                                selectedIds.clear()
-                                selectAll = false
-                            }
+                                requestType = effectiveRequestType,
+                                statusType = 3,
+                                context = context,
+                                selectedIds = selectedIds,
+                                employee = employee,
+                                viewModel = viewModel
+                            )
                         },
                         modifier = Modifier
                             .weight(1f)
@@ -279,7 +305,7 @@ fun StockTransferDetailScreen(
                             .height(40.dp)
                             .width(220.dp)
                     ) {
-                        Text(selectedTransferType)
+                        Text(selectedTransferTypeState)
                         Icon(Icons.Default.ArrowDropDown, contentDescription = null)
                     }
 
@@ -291,14 +317,14 @@ fun StockTransferDetailScreen(
                         } else {
                             transferTypes.forEach { typeItem ->
                                 DropdownMenuItem(onClick = {
-                                    selectedTransferType = typeItem.TransferType
+                                    selectedTransferTypeState = typeItem.TransferType
                                     expanded = false
                                 }) {
                                     Text(
                                         text = typeItem.TransferType,
-                                        color = if (selectedTransferType == typeItem.TransferType)
+                                        color = if (selectedTransferTypeState == typeItem.TransferType)
                                             Color(0xFF5231A7) else Color.Black,
-                                        fontWeight = if (selectedTransferType == typeItem.TransferType)
+                                        fontWeight = if (selectedTransferTypeState == typeItem.TransferType)
                                             FontWeight.Bold else FontWeight.Normal
                                     )
                                 }
@@ -308,6 +334,20 @@ fun StockTransferDetailScreen(
                 }
                 IconButton(onClick = { showFilterDialog = true }) {
                     Icon(Icons.Default.Tune, contentDescription = "Filter", tint = Color(0xFF3C3C3C))
+                }
+            }
+
+            // --- Filtered List ---
+            val filtered = remember(selectedStatus, items, allowApprovalActions, showAllDetailItems, effectiveRequestType) {
+                if (showAllDetailItems) {
+                    items
+                } else {
+                    filteredItems(
+                        list = items,
+                        selectedStatus = selectedStatus,
+                        treatNullAsPending = allowApprovalActions ||
+                            effectiveRequestType == "Out Request"
+                    )
                 }
             }
 
@@ -348,14 +388,14 @@ fun StockTransferDetailScreen(
                         )
                     }
                 }
-                if (requestType != "Out Request") {
+                if (allowApprovalActions) {
                     Checkbox(
                         checked = selectAll,
                         onCheckedChange = { checked ->
                             selectAll = checked
                             selectedIds.clear()
                             if (checked) selectedIds.addAll(
-                                filteredItems(items, selectedStatus).mapNotNull { it.TransferItemId }
+                                filtered.map { transferSelectionId(it) }
                             )
                         },
                         colors = CheckboxDefaults.colors(
@@ -370,11 +410,20 @@ fun StockTransferDetailScreen(
                 }
             }
 
-            // --- Filtered List ---
-            val filtered = remember(selectedStatus, items) {
-                filteredItems(items, selectedStatus)
-            }
-
+            if (filtered.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (items.isEmpty()) "Loading items..." else "No items for selected status",
+                        color = Color.Gray,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            } else {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -386,9 +435,9 @@ fun StockTransferDetailScreen(
                     LaunchedEffect(selectAll) {
                         checked = selectAll
                         if (selectAll) {
-                            if (!selectedIds.contains(item.TransferItemId ?: 0))
-                                selectedIds.add(item.TransferItemId ?: 0)
-                        } else selectedIds.remove(item.TransferItemId ?: 0)
+                            if (!selectedIds.contains(transferSelectionId(item)))
+                                selectedIds.add(transferSelectionId(item))
+                        } else selectedIds.remove(transferSelectionId(item))
                     }
 
                     Row(
@@ -425,15 +474,15 @@ fun StockTransferDetailScreen(
                                 )
                             }
                         }
-                        if (requestType != "Out Request") {
+                        if (allowApprovalActions) {
                             Checkbox(
                                 checked = checked,
                                 onCheckedChange = { isChecked ->
                                     checked = isChecked
-                                    val id = item.TransferItemId ?: 0
+                                    val itemId = transferSelectionId(item)
                                     if (isChecked) {
-                                        if (!selectedIds.contains(id)) selectedIds.add(id)
-                                    } else selectedIds.remove(id)
+                                        if (!selectedIds.contains(itemId)) selectedIds.add(itemId)
+                                    } else selectedIds.remove(itemId)
                                     selectAll = selectedIds.size == filtered.size
                                 },
                                 colors = CheckboxDefaults.colors(
@@ -447,6 +496,7 @@ fun StockTransferDetailScreen(
                     }
                     Divider(color = Color(0xFFE0E0E0))
                 }
+            }
             }
         }
 
@@ -483,6 +533,7 @@ fun StockTransferDetailScreen(
                         }
 
                         val statusIcons = mapOf(
+                            "All" to R.drawable.schedule,
                             localizedContext.getString(R.string.pending_status) to R.drawable.schedule,
                             localizedContext.getString(R.string.approved_status) to R.drawable.check_circle_gray,
                             localizedContext.getString(R.string.rejected_status) to R.drawable.cancel_gray,
@@ -490,6 +541,7 @@ fun StockTransferDetailScreen(
                         )
 
                         listOf(
+                            "All",
                             localizedContext.getString(R.string.pending_status),
                             localizedContext.getString(R.string.approved_status),
                             localizedContext.getString(R.string.rejected_status),
@@ -772,11 +824,24 @@ fun GradientAnimatedCheckmark() {
 }
 
 
+fun transferSelectionId(item: LabelledStockItems): Int =
+    item.TransferItemId?.takeIf { it > 0 } ?: item.Id ?: 0
+
 // ✅ Filters based on RequestStatus (Int code)
-fun filteredItems(list: List<LabelledStockItems>, selectedStatus: String): List<LabelledStockItems> {
+fun filteredItems(
+    list: List<LabelledStockItems>,
+    selectedStatus: String,
+    treatNullAsPending: Boolean = false
+): List<LabelledStockItems> {
     return list.filter { item ->
-        val status = item.RequestStatus ?: -1
+        val rawStatus = item.RequestStatus
+        val status = when {
+            rawStatus != null -> rawStatus
+            treatNullAsPending -> 0
+            else -> -1
+        }
         when (selectedStatus.lowercase()) {
+            "all" -> true
             "pending" -> status == 0
             "approved" -> status == 1
             "rejected" -> status == 2
@@ -793,7 +858,6 @@ fun handleDetailAction(
     selectedIds: SnapshotStateList<Int>,
     employee: Employee?,
     viewModel: StockTransferViewModel,
-    onSuccess: @Composable () -> Unit
 ) {
     if (selectedIds.isEmpty()) {
         Toast.makeText(context, "Please select at least one item", Toast.LENGTH_SHORT).show()
@@ -801,17 +865,20 @@ fun handleDetailAction(
     }
 
     val items = selectedIds.map { id ->
-        StockTransferItem(Id = id, Approved = true, Status = statusType)
+        StockTransferItem(
+            Id = id,
+            Approved = statusType == 1,
+            Status = statusType
+        )
     }
 
-    /*val request = STApproveRejectRequest(
+    val request = STApproveRejectRequest(
         StockTransferItems = items,
         ClientCode = employee?.clientCode.orEmpty(),
-        UserID = employee?.id.toString(),
+        UserID = employee?.id?.toString().orEmpty(),
         RequestTyp = requestType
     )
 
-    // ✅ Just trigger the ViewModel call — don’t observe here
-    viewModel.stApproveReject(request)*/
+    viewModel.stApproveReject(request)
 }
 

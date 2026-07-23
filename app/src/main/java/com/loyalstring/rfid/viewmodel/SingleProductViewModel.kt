@@ -398,6 +398,7 @@ class SingleProductViewModel @Inject constructor(
             launch { getAllProduct(request) }
             launch { getAllDesign(request) }
             launch { getAllBranches(request) }
+            launch { getAllCounters(request) }
             launch { getAllBoxes(request) }
             launch { getAllPackets(request) }
         }

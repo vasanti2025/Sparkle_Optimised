@@ -67,7 +67,8 @@ data class SampleOutIssueItem(
     val SampleInDate: String?,
     val BranchId: Int?,
     val Customer: SampleOutCustomer?, // yaha JSON me null hai
-    val LabelledStockId: Int
+    val LabelledStockId: Int,
+    val Image: String? = null,
 )
 
 // 🔹 Nested Customer object

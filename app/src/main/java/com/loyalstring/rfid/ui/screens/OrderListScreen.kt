@@ -19,7 +19,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -64,6 +65,8 @@ import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.data.model.order.CustomOrderResponse
 import com.loyalstring.rfid.data.model.order.ItemCodeResponse
 import com.loyalstring.rfid.navigation.GradientTopBar
+import com.loyalstring.rfid.ui.utils.LIST_PAGE_SIZE
+import com.loyalstring.rfid.ui.utils.LazyListLoadMoreEffect
 import com.loyalstring.rfid.ui.utils.NetworkUtils
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
@@ -90,7 +93,7 @@ fun OrderLisrScreen(
 
     val allItems by orderViewModel.getAllOrderList.collectAsState()
     val isLoading by orderViewModel.isLoading.collectAsState(false)
-    var visibleItems by remember { mutableStateOf(7000) }
+    var visibleItems by remember { mutableStateOf(LIST_PAGE_SIZE) }
     var searchQuery by remember { mutableStateOf("") }
 
     val userPreferences = UserPreferences.getInstance(context)
@@ -122,12 +125,15 @@ fun OrderLisrScreen(
         }
     } else allItems
 
-  //  val visibleData = filteredData.sortedByDescending { it.CustomOrderId }
-
-    val visibleData = filteredData.sortedWith(
-        compareByDescending<CustomOrderResponse> { it.CustomOrderId == 0 } // local first (true > false)
-            .thenByDescending { it.CreatedOn } // then latest first
-    )
+    val sortedData = remember(filteredData) {
+        filteredData.sortedWith(
+            compareByDescending<CustomOrderResponse> { it.CustomOrderId == 0 }
+                .thenByDescending { it.CreatedOn }
+        )
+    }
+    val visibleData = remember(sortedData, visibleItems) {
+        sortedData.take(visibleItems)
+    }
 
     val headerTitles = listOf(
         localizedContext.getString(R.string.order_no) ,
@@ -189,7 +195,7 @@ fun OrderLisrScreen(
             value = searchQuery,
             onValueChange = {
                 searchQuery = it
-                visibleItems = 10
+                visibleItems = LIST_PAGE_SIZE
             },
             localizedContext = localizedContext
         )
@@ -199,9 +205,10 @@ fun OrderLisrScreen(
             headerTitles = headerTitles,
             columnWidths=columnWidths,
             data = visibleData,
+            totalCount = sortedData.size,
             onLoadMore = {
-                if (visibleItems < filteredData.size) {
-                    visibleItems += 10
+                if (visibleItems < sortedData.size) {
+                    visibleItems += LIST_PAGE_SIZE
                 }
             },
             isLoading = isLoading,
@@ -275,6 +282,7 @@ fun OrderTableWithPagination(
     headerTitles: List<String>,
     columnWidths: List<Dp>,
     data: List<CustomOrderResponse>,
+    totalCount: Int,
     onLoadMore: () -> Unit,
     isLoading: Boolean,
     context: Context,
@@ -284,8 +292,16 @@ fun OrderTableWithPagination(
 
 ) {
     val sharedScrollState = rememberScrollState()
+    val listState = rememberLazyListState()
     val orderViewModel: OrderViewModel = hiltViewModel()
     var orderToDelete by remember { mutableStateOf<CustomOrderResponse?>(null) }
+
+    LazyListLoadMoreEffect(
+        listState = listState,
+        loadedCount = data.size,
+        totalCount = totalCount,
+        onLoadMore = onLoadMore
+    )
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Updated header layout: scrollable data + fixed "Actions"
@@ -339,8 +355,11 @@ fun OrderTableWithPagination(
             }
         } else {
 
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(data) { row ->
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                itemsIndexed(data) { _, row ->
 
                     // === Calculations ===
                     val totalWt = row.CustomOrderItem.sumOf {

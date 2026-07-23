@@ -159,19 +159,23 @@ fun StockTransferItemCode(
      }
  */
     val filteredResults = remember(debouncedQuery, filteredList) {
-
-        val query = debouncedQuery.trim().lowercase()
-
-        if (query.isEmpty()) emptyList()
-        else {
-
+        val query = debouncedQuery.trim()
+        if (query.isEmpty()) {
+            emptyList()
+        } else {
             filteredList
                 .asSequence()
                 .filter { item ->
-                    val code = item.itemCode?.lowercase() ?: ""
-                    val rfid = item.rfid?.lowercase() ?: ""
-
-                    code.startsWith(query) || rfid.startsWith(query)
+                    item.itemCode.orEmpty().contains(query, ignoreCase = true)
+                }
+                .sortedBy { item ->
+                    val code = item.itemCode.orEmpty()
+                    when {
+                        code.equals(query, ignoreCase = true) -> 0
+                        code.startsWith(query, ignoreCase = true) -> 1
+                        code.contains(query, ignoreCase = true) -> 2
+                        else -> 3
+                    }
                 }
                 .take(100)
                 .toList()
@@ -187,9 +191,7 @@ fun StockTransferItemCode(
     Column(modifier = Modifier.fillMaxWidth()) {
         //   val shouldExpand = showDropdown && query.isNotEmpty() && (isLoading || filteredResults.isNotEmpty())
         val shouldExpand =
-            showDropdown &&
-                    debouncedQuery.isNotEmpty() &&
-                    (isLoading || filteredResults.isNotEmpty())
+            showDropdown && debouncedQuery.isNotEmpty()
         /* val shouldExpand =
              debouncedQuery.isNotEmpty() &&
                      (isLoading || filteredResults.isNotEmpty())*/
@@ -329,7 +331,7 @@ fun StockTransferItemCode(
                         DropdownMenuItem(
                             text = {
                                 Text(
-                                    text="",
+                                    text = localizedContext.getString(R.string.no_results_found),
                                     fontSize = 12.sp,
                                     color = Color.Gray
                                 )
@@ -341,16 +343,12 @@ fun StockTransferItemCode(
                     else -> {
                         filteredResults.forEach { item ->
 
-                            val displayText = when {
-                                item.rfid?.startsWith(query, true) == true -> item.rfid
-                                item.itemCode?.startsWith(query, true) == true -> item.itemCode
-                                else -> item.itemCode ?: item.rfid
-                            }
+                            val displayText = item.itemCode.orEmpty()
 
                             DropdownMenuItem(
                                 text = {
                                     Text(
-                                        text = displayText ?: "",
+                                        text = displayText,
                                         fontSize = 13.sp,
                                         color = Color.Black
                                     )

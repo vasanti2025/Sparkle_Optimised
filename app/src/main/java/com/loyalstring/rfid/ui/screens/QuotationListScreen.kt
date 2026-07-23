@@ -11,6 +11,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -43,6 +44,8 @@ import com.loyalstring.rfid.data.model.quotation.QuotationListResponse
 import com.loyalstring.rfid.data.model.quotation.QuotationPrintData
 import com.loyalstring.rfid.data.model.quotation.QuotationPrintItem
 import com.loyalstring.rfid.navigation.GradientTopBar
+import com.loyalstring.rfid.ui.utils.LIST_PAGE_SIZE
+import com.loyalstring.rfid.ui.utils.LazyListLoadMoreEffect
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.ui.utils.quotationPrintWastagePercent
@@ -74,7 +77,7 @@ fun QuotationListScreen(
     val isLoading by viewModel.loading.collectAsState()
     val error by viewModel.error.collectAsState()
 
-    var visibleItems by remember { mutableStateOf(10) }
+    var visibleItems by remember { mutableStateOf(LIST_PAGE_SIZE) }
     var searchQuery by remember { mutableStateOf("") }
 
     // Fetch once
@@ -94,9 +97,12 @@ fun QuotationListScreen(
         }
     } else challanList
 
-    val visibleData = filteredData
-        .sortedByDescending { it.id }
-        .take(visibleItems)
+    val sortedData = remember(filteredData) {
+        filteredData.sortedByDescending { it.id }
+    }
+    val visibleData = remember(sortedData, visibleItems) {
+        sortedData.take(visibleItems)
+    }
 
     // Scrollable data columns only — Actions stay fixed on the right
     val scrollableHeaderTitles = listOf(
@@ -138,7 +144,7 @@ fun QuotationListScreen(
             value = searchQuery,
             onValueChange = {
                 searchQuery = it
-                visibleItems = 10
+                visibleItems = LIST_PAGE_SIZE
             },
             localizedContext=localizedContext
         )
@@ -148,8 +154,9 @@ fun QuotationListScreen(
             scrollableHeaderTitles = scrollableHeaderTitles,
             scrollableColumnWidths = scrollableColumnWidths,
             data = visibleData,
+            totalCount = sortedData.size,
             onLoadMore = {
-                if (visibleItems < filteredData.size) visibleItems += 10
+                if (visibleItems < sortedData.size) visibleItems += LIST_PAGE_SIZE
             },
             isLoading = isLoading,
             context = context,
@@ -172,15 +179,24 @@ fun QuotationTable(
     scrollableHeaderTitles: List<String>,
     scrollableColumnWidths: List<Dp>,
     data: List<QuotationListResponse>,
+    totalCount: Int,
     onLoadMore: () -> Unit,
     isLoading: Boolean,
     context: Context,
     localizedContext: Context
 ) {
     val sharedScrollState = rememberScrollState()
+    val listState = rememberLazyListState()
     val customerHeader = localizedContext.getString(R.string.header_customer_name)
     val productHeader = localizedContext.getString(R.string.header_product_name)
     val actionHeader = localizedContext.getString(R.string.header_actions)
+
+    LazyListLoadMoreEffect(
+        listState = listState,
+        loadedCount = data.size,
+        totalCount = totalCount,
+        onLoadMore = onLoadMore
+    )
 
     Column(modifier = Modifier.fillMaxSize()) {
 
@@ -237,12 +253,11 @@ fun QuotationTable(
                 CircularProgressIndicator()
             }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize()
+            ) {
                 itemsIndexed(data) { index, challan ->
-
-                    if (index == data.lastIndex) {
-                        onLoadMore()
-                    }
 
                     Row(
                         modifier = Modifier

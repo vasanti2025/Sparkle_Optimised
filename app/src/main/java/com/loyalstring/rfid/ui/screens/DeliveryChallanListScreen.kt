@@ -18,6 +18,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -50,6 +51,7 @@ import androidx.navigation.NavHostController
 import com.loyalstring.rfid.R
 import com.loyalstring.rfid.data.model.ClientCodeRequest
 import com.loyalstring.rfid.data.model.deliveryChallan.DeliveryChallanItemPrint
+import com.loyalstring.rfid.data.model.deliveryChallan.DeliveryChallanListRow
 import com.loyalstring.rfid.data.model.deliveryChallan.DeliveryChallanPrintData
 import com.loyalstring.rfid.data.model.deliveryChallan.DeliveryChallanResponseList
 import com.loyalstring.rfid.data.model.login.Employee
@@ -57,6 +59,9 @@ import com.loyalstring.rfid.data.remote.data.CompanyDetails
 import com.loyalstring.rfid.data.remote.resource.Resource
 import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.navigation.Screens
+import com.loyalstring.rfid.ui.utils.DeliveryChallanListCache
+import com.loyalstring.rfid.ui.utils.LIST_PAGE_SIZE
+import com.loyalstring.rfid.ui.utils.LazyListLoadMoreEffect
 import com.loyalstring.rfid.ui.utils.PrinterManager
 import com.loyalstring.rfid.ui.utils.resolvePrintHeader
 import com.loyalstring.rfid.ui.utils.UserPreferences
@@ -96,25 +101,48 @@ fun DeliveryChallanListScreen(
     val error by viewModel.error.collectAsState()
     var companyName by rememberSaveable { mutableStateOf("") }
 
-    var visibleItems by remember { mutableStateOf(10) }
+    var visibleItems by remember { mutableStateOf(LIST_PAGE_SIZE) }
     var searchQuery by remember { mutableStateOf("") }
     var showPrintDialog by remember { mutableStateOf(false) }
     var selectedPrintData by remember { mutableStateOf<DeliveryChallanPrintData?>(null) }
-    // Fetch Challans once
+
+    val bootstrapRows = remember(employee?.clientCode, employee?.branchNo) {
+        employee?.let { emp ->
+            DeliveryChallanListCache.readMemoryRows(
+                clientCode = emp.clientCode.orEmpty(),
+                branchId = emp.branchNo ?: 0,
+            )
+        }.orEmpty()
+    }
+    val listForUi = if (challanList.isNotEmpty()) challanList else bootstrapRows
+
     LaunchedEffect(Unit) {
-        employee?.let {
-            viewModel.fetchAllChallans(it.clientCode ?: "", it.branchNo ?: 0)
+        employee?.let { emp ->
+            val clientCode = emp.clientCode ?: return@let
+            val branchId = emp.branchNo ?: 0
+            if (bootstrapRows.isNotEmpty()) {
+                viewModel.seedRowsIfEmpty(bootstrapRows)
+            }
+            viewModel.fetchAllChallans(clientCode, branchId)
         }
     }
 
-    val filteredData = if (searchQuery.isNotEmpty()) {
-        challanList.filter {
-            it.ChallanNo.orEmpty().contains(searchQuery, true) ||
-                    it.CustomerName.orEmpty().contains(searchQuery, true)
+    val filteredData by remember {
+        derivedStateOf {
+            if (searchQuery.isNotEmpty()) {
+                listForUi.filter {
+                    it.ChallanNo.orEmpty().contains(searchQuery, true) ||
+                            it.CustomerName.orEmpty().contains(searchQuery, true)
+                }
+            } else {
+                listForUi
+            }
         }
-    } else challanList
+    }
 
-    val visibleData = filteredData.sortedByDescending { it.Id }
+    val visibleData = remember(filteredData, visibleItems) {
+        filteredData.take(visibleItems)
+    }
 
     // 🔹 Localized table headers
     val headerTitles = listOf(
@@ -160,27 +188,14 @@ fun DeliveryChallanListScreen(
 
     val companyDetailsState: Resource<List<CompanyDetails>>? by
     loginViewModel.companyDetailsResponse.observeAsState()
-    when (val result = companyDetailsState) {
-        is Resource.Loading<*> -> {
-            Log.d("COMPANY_DEBUG", "Loading")
-        }
 
-        is Resource.Success<*> -> {
-            Log.d("COMPANY_DEBUG", "Success hit")
-            Log.d("COMPANY_DEBUG", "raw data = ${result.data}")
-
-            companyName = result.data?.get(0)?.compName.orEmpty()
-
-            Log.d("COMPANY_DEBUG", "companyName = $companyName")
-        }
-
-        is Resource.Error<*> -> {
-            Log.d("COMPANY_DEBUG", "Error = ${result.message}")
-            companyName = ""
-        }
-
-        null -> {
-            Log.d("COMPANY_DEBUG", "State is null")
+    LaunchedEffect(companyDetailsState) {
+        when (val result = companyDetailsState) {
+            is Resource.Success<*> -> {
+                companyName = (result.data as? List<CompanyDetails>)?.firstOrNull()?.compName.orEmpty()
+            }
+            is Resource.Error<*> -> companyName = ""
+            else -> Unit
         }
     }
 
@@ -203,7 +218,7 @@ fun DeliveryChallanListScreen(
             value = searchQuery,
             onValueChange = {
                 searchQuery = it
-                visibleItems = 10
+                visibleItems = LIST_PAGE_SIZE
             },
             localizedContext=localizedContext
 
@@ -214,11 +229,12 @@ fun DeliveryChallanListScreen(
             navController = navController,
             headerTitles = headerTitles,
             columnWidths = columnWidths,
-            data = visibleData.take(visibleItems),
+            data = visibleData,
+            totalCount = filteredData.size,
             onLoadMore = {
-                if (visibleItems < filteredData.size) visibleItems += 10
+                if (visibleItems < filteredData.size) visibleItems += LIST_PAGE_SIZE
             },
-            isLoading = isLoading,
+            isLoading = isLoading && listForUi.isEmpty(),
             context = context,
             localizedContext=localizedContext,
             selectedPrintData = selectedPrintData,
@@ -244,7 +260,8 @@ fun DeliveryChallanTable(
     navController: NavHostController,
     headerTitles: List<String>,
     columnWidths: List<Dp>,
-    data: List<DeliveryChallanResponseList>,
+    data: List<DeliveryChallanListRow>,
+    totalCount: Int,
     onLoadMore: () -> Unit,
     isLoading: Boolean,
     context: Context,
@@ -256,6 +273,7 @@ fun DeliveryChallanTable(
 
 ) {
     val sharedScrollState = rememberScrollState()
+    val listState = rememberLazyListState()
     val viewModel: DeliveryChallanViewModel = hiltViewModel()
     val employee = remember {
         UserPreferences.getInstance(context).getEmployee(Employee::class.java)
@@ -277,7 +295,15 @@ fun DeliveryChallanTable(
 
     var bondedDevices by remember { mutableStateOf<List<android.bluetooth.BluetoothDevice>>(emptyList()) }
     var showDeviceList by remember { mutableStateOf(false) }
-    var challanToDelete by remember { mutableStateOf<DeliveryChallanResponseList?>(null) }
+    var challanToDelete by remember { mutableStateOf<DeliveryChallanListRow?>(null) }
+
+    LazyListLoadMoreEffect(
+        listState = listState,
+        loadedCount = data.size,
+        totalCount = totalCount,
+        onLoadMore = onLoadMore
+    )
+
     Column(modifier = Modifier.fillMaxSize()) {
         // Header Row
         Row(
@@ -330,13 +356,14 @@ fun DeliveryChallanTable(
                 CircularProgressIndicator()
             }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                itemsIndexed(data) { index, challan ->
-
-                    // Auto load more effect
-                    if (index == data.lastIndex) {
-                        onLoadMore()
-                    }
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                itemsIndexed(
+                    items = data,
+                    key = { _, challan -> challan.Id }
+                ) { index, challan ->
 
                     Row(
                         modifier = Modifier
@@ -418,8 +445,17 @@ fun DeliveryChallanTable(
                             // ✏️ Print Button (middle icon)
 
                             IconButton(onClick = {
-                                onSelectedPrintDataChange(challan.toDeliveryChallanPrintData(context))
-                                onShowPrintDialogChange(true)
+                                val fullChallan = viewModel.getFullChallan(challan.Id)
+                                if (fullChallan != null) {
+                                    onSelectedPrintDataChange(fullChallan.toDeliveryChallanPrintData(context))
+                                    onShowPrintDialogChange(true)
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        localizedContext.getString(R.string.error_loading_challans),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
                             }, modifier = Modifier.size(26.dp)) {
                                 Icon(
                                     painter = painterResource(id = R.drawable.print_svg),

@@ -14,6 +14,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -47,6 +48,8 @@ import com.loyalstring.rfid.data.model.sampleOut.SampleOutListResponse
 import com.loyalstring.rfid.data.model.sampleOut.SampleOutPrintData
 import com.loyalstring.rfid.data.model.sampleOut.SampleOutPrintItem
 import com.loyalstring.rfid.navigation.GradientTopBar
+import com.loyalstring.rfid.ui.utils.LIST_PAGE_SIZE
+import com.loyalstring.rfid.ui.utils.LazyListLoadMoreEffect
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.poppins
 import com.loyalstring.rfid.viewmodel.SampleInViewModel
@@ -75,7 +78,7 @@ fun SampleInListScreen(
     val isLoading by viewModel.loading.collectAsState()
     val error by viewModel.error.collectAsState()
 
-    var visibleItems by remember { mutableStateOf(10) }
+    var visibleItems by remember { mutableStateOf(LIST_PAGE_SIZE) }
     var searchQuery by remember { mutableStateOf("") }
 
     // Fetch once
@@ -92,9 +95,12 @@ fun SampleInListScreen(
         }
     } else challanList
 
-    val visibleData = filteredData
-        .sortedByDescending { it.sampleOutNo }
-        .take(visibleItems)
+    val sortedData = remember(filteredData) {
+        filteredData.sortedByDescending { it.sampleOutNo }
+    }
+    val visibleData = remember(sortedData, visibleItems) {
+        sortedData.take(visibleItems)
+    }
 
     // ✅ Localized column headers
     val headerTitles = listOf(
@@ -137,7 +143,7 @@ fun SampleInListScreen(
             value = searchQuery,
             onValueChange = {
                 searchQuery = it
-                visibleItems = 10
+                visibleItems = LIST_PAGE_SIZE
             },
             localizedContext=localizedContext
         )
@@ -147,8 +153,9 @@ fun SampleInListScreen(
             headerTitles = headerTitles,
             columnWidths = columnWidths,
             data = visibleData,
+            totalCount = sortedData.size,
             onLoadMore = {
-                if (visibleItems < filteredData.size) visibleItems += 10
+                if (visibleItems < sortedData.size) visibleItems += LIST_PAGE_SIZE
             },
             isLoading = isLoading,
             context = context,
@@ -171,12 +178,21 @@ fun SampleInTable(
     headerTitles: List<String>,
     columnWidths: List<Dp>,
     data: List<SampleInResponse>,
+    totalCount: Int,
     onLoadMore: () -> Unit,
     isLoading: Boolean,
     context: Context,
     localizedContext: Context
 ) {
     val sharedScrollState = rememberScrollState()
+    val listState = rememberLazyListState()
+
+    LazyListLoadMoreEffect(
+        listState = listState,
+        loadedCount = data.size,
+        totalCount = totalCount,
+        onLoadMore = onLoadMore
+    )
 
     Column(modifier = Modifier.fillMaxSize()) {
 
@@ -230,13 +246,11 @@ fun SampleInTable(
                 CircularProgressIndicator()
             }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize()
+            ) {
                 itemsIndexed(data) { index, challan ->
-
-                    // 🔹 Trigger auto load more when reaching last item
-                    if (index == data.lastIndex) {
-                        onLoadMore()
-                    }
 
                     Row(
                         modifier = Modifier

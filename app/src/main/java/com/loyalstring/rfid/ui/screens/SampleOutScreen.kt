@@ -73,6 +73,7 @@ import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.ui.utils.isBulkItemAlreadyInSampleOutList
+import com.loyalstring.rfid.ui.utils.SampleOutImageCache
 import com.loyalstring.rfid.ui.utils.resolveProductImageUrl
 import com.loyalstring.rfid.ui.utils.stopBulkScan
 import com.loyalstring.rfid.ui.utils.toggleBulkScan
@@ -918,7 +919,8 @@ fun SampleOutScreen(
                     CustomerName = customerName,
                     SampleInDate = sampleInDate,
                     CreatedOn = sampleInDate,
-                    Customer = null
+                    Customer = null,
+                    Image = challan.Image.takeIf { it.isNotBlank() },
                 )
             }
         )
@@ -952,6 +954,12 @@ fun SampleOutScreen(
         viewModel.syncItems(context)
 
         productListViewModel.refrshProductList()
+
+        SampleOutImageCache.saveAll(
+            context,
+            productList.map { it.ItemCode to it.Image },
+        )
+
         // ✅ 1) Build data for PDF (use your current UI values / productList)
         val sampleNo = result.SampleOutNo ?: SampleOutNo ?: ""   // ✅ apne response field ke hisab se
         val date = productList.firstOrNull()?.Date ?: ""
@@ -966,7 +974,9 @@ fun SampleOutScreen(
                 netWt = it.NetWt,
                 pieces = it.Pieces,
                 status = "Sample Out",
-               // imageUrl = it.Image // optional
+                imageUrl = it.Image.takeIf { img -> img.isNotBlank() },
+                itemCode = it.ItemCode,
+                designName = it.DesignName,
             )
         }
 
@@ -1537,7 +1547,8 @@ fun SampleOutScreen(
                                     CustomerName = customerName,
                                     SampleInDate = getCurrentUtcDateTime(),
                                     CreatedOn = getCurrentUtcDateTime(),
-                                    Customer = null
+                                    Customer = null,
+                                    Image = challan.Image.takeIf { it.isNotBlank() },
                                 )
                             }
                         )

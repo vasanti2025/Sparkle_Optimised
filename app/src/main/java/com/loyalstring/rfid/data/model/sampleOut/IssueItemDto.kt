@@ -39,5 +39,7 @@ data class IssueItemDto( val ItemCode: String,
                          val Customer: SampleCustomerDto?, // currently null, but structure ready
                          val LabelledStockId: Int,
                          val RFIDCode: String,
-                         val TIDNumber: String
+                         val TIDNumber: String,
+                         val Image: String? = null,
+                         val Images: String? = null,
 )

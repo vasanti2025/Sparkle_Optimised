@@ -124,7 +124,8 @@ class PrinterManager(private val context: Context) {
     }
 
     private fun divider(): String {
-        return "━".repeat(24)
+        // ASCII only — Xprinter firmware prints Unicode box-drawing as '?'
+        return "--------------------------------"
     }
 
     private fun cleanAmount(value: String?): String {

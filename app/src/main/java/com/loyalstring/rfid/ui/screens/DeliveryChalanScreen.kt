@@ -189,49 +189,40 @@ fun DeliveryChalanScreen(
     LaunchedEffect(challanId) {
         if (challanId != null && challanId != 0) {
             isEditMode = true
-
-            // ✅ Step 1: Load challan list if not already loaded
             employee?.let {
                 deliveryChallanViewModel.fetchAllChallans(it.clientCode ?: "", it.branchNo ?: 0)
             }
+        }
+    }
 
-            // ✅ Step 2: Observe challan list and find the matching one
-            deliveryChallanViewModel.challanList.collect { challans ->
-                val selected = challans.firstOrNull { it.Id == challanId }
-                if (selected != null) {
-                    deliveryChallanViewModel.setSelectedChallan(selected)
+    val fullDataVersion by deliveryChallanViewModel.fullDataVersion.collectAsState()
+    LaunchedEffect(challanId, fullDataVersion) {
+        if (challanId == null || challanId == 0) return@LaunchedEffect
+        val selected = deliveryChallanViewModel.getFullChallan(challanId) ?: return@LaunchedEffect
+        deliveryChallanViewModel.setSelectedChallan(selected)
 
-                    // ✅ Step 3: Prefill UI fields
-                    customerName = selected.CustomerName.toString()
-                    customerId = selected.CustomerId
-                    Log.d("@@","customerName"+customerName+" "+customerId)
-                    productList.clear()
-                   // selected.ChallanDetails?.let { productList.addAll(it) }
-                    selected.ChallanDetails?.forEach { item ->
-                        val newItem = item   // same object reference
+        customerName = selected.CustomerName.toString()
+        customerId = selected.CustomerId
+        Log.d("@@", "customerName$customerName $customerId")
+        productList.clear()
+        selected.ChallanDetails?.forEach { item ->
+            val newItem = item
 
-                        newItem.CustomerName = customerName
-                        newItem.CustomerId = customerId!!
-                        // copy other common fields if needed
-                        // newItem.BranchId = selected.BranchId
+            newItem.CustomerName = customerName
+            newItem.CustomerId = customerId!!
 
-                        val alreadyExists = productList.any {
-                            (!newItem.ItemCode.isNullOrBlank() &&
-                                    it.ItemCode.equals(newItem.ItemCode, ignoreCase = true)) ||
-                                    (!newItem.RFIDCode.isNullOrBlank() &&
-                                            it.RFIDCode.equals(newItem.RFIDCode, ignoreCase = true)) ||
-                                    (!newItem.tid.isNullOrBlank() &&
-                                            it.tid.equals(newItem.tid, ignoreCase = true))
-                        }
-                        if (!alreadyExists) {
-                            productList.add(newItem)
-                        } else {
-                            Toast.makeText(context, "Item already added", Toast.LENGTH_SHORT).show()
-                        }
-
-                    }
-
-                }
+            val alreadyExists = productList.any {
+                (!newItem.ItemCode.isNullOrBlank() &&
+                        it.ItemCode.equals(newItem.ItemCode, ignoreCase = true)) ||
+                        (!newItem.RFIDCode.isNullOrBlank() &&
+                                it.RFIDCode.equals(newItem.RFIDCode, ignoreCase = true)) ||
+                        (!newItem.tid.isNullOrBlank() &&
+                                it.tid.equals(newItem.tid, ignoreCase = true))
+            }
+            if (!alreadyExists) {
+                productList.add(newItem)
+            } else {
+                Toast.makeText(context, "Item already added", Toast.LENGTH_SHORT).show()
             }
         }
     }

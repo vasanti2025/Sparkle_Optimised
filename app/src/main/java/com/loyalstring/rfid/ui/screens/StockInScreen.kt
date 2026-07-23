@@ -37,9 +37,15 @@ import androidx.navigation.NavHostController
 import com.loyalstring.rfid.R
 import com.loyalstring.rfid.data.model.ClientCodeRequest
 import com.loyalstring.rfid.data.model.login.Employee
+import com.loyalstring.rfid.data.model.stockTransfer.LabelledStockItems
+import com.loyalstring.rfid.data.model.stockTransfer.StockTransferInOutResponse
 import com.loyalstring.rfid.data.model.stockTransfer.StockInOutRequest
 import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.ui.utils.UserPreferences
+import com.loyalstring.rfid.ui.utils.isSelfApprovalTransfer
+import com.loyalstring.rfid.ui.utils.resolveLabelledItemsFromTransfer
+import com.loyalstring.rfid.ui.utils.stockTransferListStatusText
+import com.loyalstring.rfid.viewmodel.SingleProductViewModel
 import com.loyalstring.rfid.viewmodel.StockTransferViewModel
 import java.io.Serializable
 
@@ -50,9 +56,15 @@ fun StockInScreen(
     requestType: String
 ) {
     val context = LocalContext.current
-    val viewModel: StockTransferViewModel = hiltViewModel()
+    val parentEntry = remember(navController) {
+        navController.getBackStackEntry("main_graph")
+    }
+    val viewModel: StockTransferViewModel = hiltViewModel(parentEntry)
+    val singleProductViewModel: SingleProductViewModel = hiltViewModel()
     val employee =
         remember { UserPreferences.getInstance(context).getEmployee(Employee::class.java) }
+
+    val resolvedFromTo by viewModel.resolvedFromTo.collectAsState()
 
     var shouldNavigateBack by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
@@ -62,7 +74,35 @@ fun StockInScreen(
 
     val horizontalScrollState = rememberScrollState()
     val transferTypes by viewModel.transferTypes.collectAsState(initial = emptyList())
-    val stockTransfers = remember { mutableStateListOf<StockTransfer>() }
+    var rawTransfers by remember { mutableStateOf<List<StockTransferInOutResponse>>(emptyList()) }
+
+    val stockTransfers = remember(
+        rawTransfers,
+        resolvedFromTo
+    ) {
+        rawTransfers.map { transfer ->
+            val selfApproval = isSelfApprovalTransfer(transfer)
+            val resolvedItems = resolveLabelledItemsFromTransfer(transfer)
+            val (fromName, toName) = resolvedFromTo[transfer.Id] ?: ("-" to "-")
+            StockTransfer(
+                id = transfer.Id,
+                type = transfer.StockTransferTypeName ?: "Branch To Branch",
+                from = fromName,
+                to = toName,
+                gWt = safeNumber(resolvedItems.firstOrNull()?.GrossWt),
+                nWt = safeNumber(resolvedItems.firstOrNull()?.NetWt),
+                pending = transfer.Pending,
+                approved = transfer.Approved,
+                rejected = transfer.Rejected,
+                lost = transfer.Lost,
+                transferBy = transfer.TransferByEmployee ?: "-",
+                transferTo = transfer.TransferToEmployee ?: transfer.TransferedToBranch ?: "-",
+                transferType = transfer.StockTransferTypeName ?: "-",
+                labelledItems = resolvedItems,
+                isSelfApproval = selfApproval
+            )
+        }
+    }
 
     val isLoading = remember { mutableStateOf(false) }
     val errorMessage = remember { mutableStateOf<String?>(null) }
@@ -105,27 +145,8 @@ fun StockInScreen(
             viewModel.getAllStockTransfers(request) { result ->
                 isLoading.value = false
                 result.onSuccess { responseList ->
-                    stockTransfers.clear()
-                    stockTransfers.addAll(
-                        responseList.map {
-                            StockTransfer(
-                                id = it.Id ?: 0,
-                                type = it.StockTransferTypeName ?: "Branch To Branch",
-                                from = it.SourceName ?: "-",
-                                to = it.DestinationName ?: "-",
-                                gWt = safeNumber(it.LabelledStockItems?.firstOrNull()?.GrossWt),
-                                nWt = safeNumber(it.LabelledStockItems?.firstOrNull()?.NetWt),
-                                pending = it.Pending ?: 0,
-                                approved = it.Approved ?: 0,
-                                rejected = it.Rejected ?: 0,
-                                lost = it.Lost ?: 0,
-                                transferBy = it.TransferByEmployee ?: "-",
-                                transferTo = it.TransferedToBranch ?: "-",
-                                transferType = it.StockTransferTypeName ?: "-",
-                                fulldata = it.LabelledStockItems ?: "-"
-                            )
-                        }
-                    )
+                    viewModel.cacheStockTransfers(responseList)
+                    rawTransfers = responseList
                 }.onFailure { e ->
                     errorMessage.value = e.message ?: "Something went wrong."
                 }
@@ -134,8 +155,15 @@ fun StockInScreen(
     }
 
     LaunchedEffect(employee?.clientCode) {
-        employee?.clientCode?.let {
-            viewModel.loadTransferTypes(ClientCodeRequest(it))
+        employee?.clientCode?.let { clientCode ->
+            viewModel.loadTransferTypes(ClientCodeRequest(clientCode))
+            viewModel.loadMasterLocationData(clientCode)
+            singleProductViewModel.fetchAllStockTransferData(ClientCodeRequest(clientCode))
+        }
+    }
+
+    LaunchedEffect(employee?.clientCode, transferTypes.size) {
+        if (employee?.clientCode != null) {
             fetchStockTransfers()
         }
     }
@@ -177,7 +205,7 @@ fun StockInScreen(
         onDispose { lifecycle?.removeObserver(observer) }
     }
 
-    val filteredTransfers = remember(selectedTransferType, selectedStatus, stockTransfers) {
+    val filteredTransfers = remember(selectedTransferType, selectedStatus, stockTransfers, requestType) {
         stockTransfers.filter {
             val matchesType =
                 selectedTransferType == "Transfer Type" || it.type.equals(selectedTransferType, true)
@@ -188,7 +216,9 @@ fun StockInScreen(
                 "Lost" -> it.lost > 0
                 else -> true
             }
-            matchesType && matchesStatus
+            val matchesApprovalFlow =
+                requestType != "In Request" || !it.isSelfApproval
+            matchesType && matchesStatus && matchesApprovalFlow
         }
     }
 
@@ -337,22 +367,14 @@ fun StockInScreen(
                                     )
                                     .padding(vertical = 4.dp)
                                     .clickable {
-                                        val transferData = item.fulldata
-                                        if (transferData != null) {
-                                            navController.currentBackStackEntry?.savedStateHandle?.apply {
-                                                set("labelItems", transferData)
-                                                set("requestType", requestType)
-                                                set("selectedTransferType", selectedTransferType)
-                                                set("Id", item.id)
-                                            }
-                                            navController.navigate("stock_transfer_detail")
-                                        } else {
-                                            Toast.makeText(
-                                                context,
-                                                context.getString(R.string.transfer_details_not_found),
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
+                                        viewModel.openTransferDetail(
+                                            transferId = item.id,
+                                            requestType = requestType,
+                                            selectedTransferType = selectedTransferType,
+                                            isSelfApproval = item.isSelfApproval,
+                                            items = item.labelledItems
+                                        )
+                                        navController.navigate("stock_transfer_detail")
                                     },
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -380,7 +402,7 @@ fun StockInScreen(
                                     }
                                 }
 
-                                if (requestType == "Out Request") {
+                                if (requestType == "Out Request" && !item.isSelfApproval) {
                                     IconButton(
                                         onClick = {
                                             deleteItem = item
@@ -396,13 +418,17 @@ fun StockInScreen(
                                         )
                                     }
                                 } else {
-                                    val displayText = when (selectedStatus) {
-                                        localizedContext.getString(R.string.pending_status) -> "P: ${item.pending}"
-                                        localizedContext.getString(R.string.approved_status) -> "A: ${item.approved}"
-                                        localizedContext.getString(R.string.rejected_status) -> "R: ${item.rejected}"
-                                        localizedContext.getString(R.string.lost_status) -> "L: ${item.lost}"
-                                        else -> "P:${item.pending}"
-                                    }
+                                    val displayText = stockTransferListStatusText(
+                                        pending = item.pending,
+                                        approved = item.approved,
+                                        rejected = item.rejected,
+                                        lost = item.lost,
+                                        selectedStatus = selectedStatus,
+                                        pendingLabel = localizedContext.getString(R.string.pending_status),
+                                        approvedLabel = localizedContext.getString(R.string.approved_status),
+                                        rejectedLabel = localizedContext.getString(R.string.rejected_status),
+                                        lostLabel = localizedContext.getString(R.string.lost_status)
+                                    )
 
                                     Text(
                                         displayText, color = Color.Black,
@@ -543,5 +569,6 @@ data class StockTransfer(
     val transferBy: String,
     val transferTo: String,
     val transferType: String,
-    val fulldata: Any
+    val labelledItems: List<LabelledStockItems> = emptyList(),
+    val isSelfApproval: Boolean = false
 ) : Serializable

@@ -42,6 +42,7 @@ import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,13 +65,15 @@ import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.data.model.stockTransfer.BranchSelection
 import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.navigation.Screens
-import com.loyalstring.rfid.ui.utils.UserPreferences
+import com.loyalstring.rfid.ui.utils.parseTransferEndpointTypes
+import kotlinx.coroutines.launch
 import com.loyalstring.rfid.viewmodel.StockTransferViewModel
 
 import com.loyalstring.rfid.data.model.stockTransfer.StockTransferItem
 import com.loyalstring.rfid.data.model.stockVerification.AccessibleCompany
 import com.loyalstring.rfid.data.remote.data.StockTransferItemData
 import com.loyalstring.rfid.data.remote.data.StockTransferRequest
+import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.viewmodel.UserPermissionViewModel
 import com.loyalstring.rfid.worker.LocaleHelper
 
@@ -117,6 +120,7 @@ fun StockTransferPreviewScreen(
     val sourceBranchId by viewModel.transferSourceBranchId.collectAsState()
     val destinationBranchId by viewModel.transferDestinationBranchId.collectAsState()
     val allEmployees by userPermissionViewModel.allEmployees.observeAsState(emptyList())
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         employee?.let {
@@ -350,74 +354,78 @@ fun StockTransferPreviewScreen(
                 onRemarkChange = { remark = it },
                 onDismiss = { showTransferPopup = false },
                 onOk = {
-
-                    // Validation
                     if (isBranchToBranch && (transferredTo == "Select Emp" || transferredTo.isBlank())) {
                         Toast.makeText(context,localizedContext.getString(R.string.select_employee_error), Toast.LENGTH_SHORT).show()
                         return@TransferDetailsDialogNew
                     }
 
-                    val clientCode = employee?.clientCode.orEmpty()
-                    val transferByEmployee = employee?.employeeId?.toString().orEmpty()
+                    coroutineScope.launch {
+                        val clientCode = employee?.clientCode.orEmpty()
+                        val transferByEmployee = employee?.employeeId?.toString().orEmpty()
+                        val transferTypeId = viewModel.getTransferTypeId(selectedTransferType ?: "")
+                        val transferTypeName = selectedTransferType ?: ""
+                        val (fromType, toType) = parseTransferEndpointTypes(transferTypeName)
 
-                    val transferTypeId = viewModel.getTransferTypeId(selectedTransferType ?: "")
-                    val transferTypeName = selectedTransferType ?: ""
+                        val sourceBranch = UserPreferences.getInstance(context)
+                            .getBranchID()?.toInt() ?: 0
 
-                    // Source branch
-                    val sourceBranch = UserPreferences.getInstance(context)
-                        .getBranchID()?.toInt() ?: 0
+                        var transferToEmployee = transferByEmployee
+                        var destinationBranch = sourceBranch
+                        var transferToBranch = sourceBranch.toString()
 
-                    // Default values (when NOT branch to branch)
-                    var transferToEmployee = transferByEmployee
-                    var destinationBranch = sourceBranch
-                    var transferToBranch = sourceBranch.toString()
+                        if (isBranchToBranch) {
+                            transferToEmployee = transferredTo
+                            destinationBranch = destinationBranchId ?: sourceBranch
+                            transferToBranch = destinationBranch.toString()
+                        }
 
-                    // If Branch → Branch transfer
-                    if (isBranchToBranch) {
+                        val fromName = viewModel.getPendingFromLocationName()
+                        val toName = viewModel.getPendingToLocationName()
 
-                        // selected employee id from dropdown
-                        transferToEmployee = transferredTo
+                        val sourceId = when {
+                            isBranchToBranch -> sourceBranch
+                            fromName.isNotBlank() && !fromType.isNullOrBlank() ->
+                                viewModel.getEntityIdByName(fromType, fromName)
+                            else -> sourceBranch
+                        }
 
-                        // destination branch from screen selection
-                        destinationBranch = destinationBranchId ?: sourceBranch
+                        val destinationId = when {
+                            isBranchToBranch -> destinationBranch
+                            toName.isNotBlank() && !toType.isNullOrBlank() ->
+                                viewModel.getEntityIdByName(toType, toName)
+                            else -> sourceBranch
+                        }
 
-                        transferToBranch = destinationBranch.toString()
+                        val today = java.text.SimpleDateFormat(
+                            "dd-MM-yyyy",
+                            java.util.Locale.getDefault()
+                        ).format(java.util.Date())
+
+                        val items = previewItems.mapNotNull { item ->
+                            val stockId = item.bulkItemId ?: item.itemCode?.toIntOrNull()
+                            stockId?.let { StockTransferItemData(it) }
+                        }
+
+                        val request = StockTransferRequest(
+                            ClientCode = clientCode,
+                            StockTransferItems = items,
+                            StockType = "labelled",
+                            StockTransferTypeName = transferTypeName,
+                            TransferTypeId = transferTypeId,
+                            TransferByEmployee = transferByEmployee,
+                            TransferedToBranch = transferToBranch,
+                            TransferToEmployee = transferToEmployee,
+                            TransferedBranch = sourceBranch.toString(),
+                            Source = sourceId,
+                            Destination = destinationId,
+                            Remarks = remark,
+                            StockTransferDate = today,
+                            ReceivedByEmployee = ""
+                        )
+
+                        Log.d("StockTransferRequest", request.toString())
+                        viewModel.submitStockTransfer(request)
                     }
-
-                    // Current date
-                    val today = java.text.SimpleDateFormat(
-                        "dd-MM-yyyy",
-                        java.util.Locale.getDefault()
-                    ).format(java.util.Date())
-
-                    // Prepare stock items
-                    val items = previewItems.mapNotNull { item ->
-                        val stockId = item.bulkItemId ?: item.itemCode?.toIntOrNull()
-                        stockId?.let { StockTransferItemData(it) }
-                    }
-
-                    // Build request
-                    val request = StockTransferRequest(
-                        ClientCode = clientCode,
-                        StockTransferItems = items,
-                        StockType = "labelled",
-                        StockTransferTypeName = transferTypeName,
-                        TransferTypeId = transferTypeId,
-                        TransferByEmployee = transferByEmployee,
-                        TransferedToBranch = transferToBranch,
-                        TransferToEmployee = transferToEmployee,
-                        TransferedBranch = sourceBranch.toString(),
-                        Source = sourceBranch,
-                        Destination = destinationBranch,
-                        Remarks = remark,
-                        StockTransferDate = today,
-                        ReceivedByEmployee = ""
-                    )
-
-                    Log.d("StockTransferRequest", request.toString())
-
-                    // Call API
-                    viewModel.submitStockTransfer(request)
                 }
             )
         }

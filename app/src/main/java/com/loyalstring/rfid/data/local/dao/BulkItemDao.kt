@@ -53,6 +53,21 @@ interface BulkItemDao {
     @Query("SELECT * FROM bulk_items WHERE epc = :epc LIMIT 1")
     suspend fun getItemByEpc(epc: String): BulkItem?
 
+    @Query("""
+        SELECT * FROM bulk_items
+        WHERE TRIM(itemCode) = TRIM(:itemCode)
+           OR UPPER(TRIM(itemCode)) = UPPER(TRIM(:itemCode))
+        LIMIT 1
+    """)
+    suspend fun getItemByItemCode(itemCode: String): BulkItem?
+
+    @Query("""
+        SELECT * FROM bulk_items
+        WHERE itemCode = :code OR rfid = :code OR epc = :code
+        LIMIT 1
+    """)
+    suspend fun getItemByItemCodeOrRfid(code: String): BulkItem?
+
     //  DISTINCT FIELD NAMES
 
     @Query("SELECT DISTINCT counterName FROM bulk_items WHERE counterName IS NOT NULL AND counterName != ''")

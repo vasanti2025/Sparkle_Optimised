@@ -242,14 +242,21 @@ fun AppNavigation(
                 val Id = previousEntry
                     ?.savedStateHandle
                     ?.get<Int>("Id")
-                    ?: "0"
+                    ?: 0
+
+                val isSelfApproval = previousEntry
+                    ?.savedStateHandle
+                    ?.get<Boolean>("isSelfApproval")
+                    ?: false
 
                 StockTransferDetailScreen(
                     onBack = { navController.popBackStack() },
+                    navController = navController,
                     labelItems = labelItems,
                     requestType = requestType,
-                    selectedTransferType =selectedTransferType,
-                    id =Id
+                    selectedTransferType = selectedTransferType,
+                    id = Id,
+                    isSelfApproval = isSelfApproval
                 )
             }
             // PERF-FIX: Removed duplicate "stock_transfer_detail" composable that was registered

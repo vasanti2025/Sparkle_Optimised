@@ -47,6 +47,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.loyalstring.rfid.R
+import com.loyalstring.rfid.data.local.entity.BulkItem
 import com.loyalstring.rfid.data.model.ClientCodeRequest
 import com.loyalstring.rfid.data.model.login.Employee
 import com.loyalstring.rfid.data.remote.resource.Resource
@@ -54,7 +55,6 @@ import com.loyalstring.rfid.navigation.GradientTopBar
 import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.viewmodel.BulkViewModel
-import com.loyalstring.rfid.viewmodel.OrderViewModel
 import com.loyalstring.rfid.viewmodel.SingleProductViewModel
 import com.loyalstring.rfid.viewmodel.StockTransferViewModel
 import com.loyalstring.rfid.viewmodel.UserPermissionViewModel
@@ -68,6 +68,12 @@ private const val COL_GWT = 1.2f
 private const val COL_NWT = 1.2f
 private const val COL_ACTION = 1.2f
 
+private fun stockTransferItemKey(item: BulkItem): String =
+    item.itemCode?.takeIf { it.isNotBlank() }
+        ?: item.rfid?.takeIf { it.isNotBlank() }
+        ?: item.bulkItemId.takeIf { it > 0 }?.toString()
+        ?: ""
+
 @Composable
 fun StockTransferScreenNew(
     onBack: () -> Unit,
@@ -75,7 +81,6 @@ fun StockTransferScreenNew(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val bulkViewModel: BulkViewModel = hiltViewModel()
-    val orderViewModel: OrderViewModel = hiltViewModel()
     var isScanning by remember { mutableStateOf(false) }
     var isBulkScanning by remember { mutableStateOf(false) }
 
@@ -101,7 +106,6 @@ fun StockTransferScreenNew(
     val scannedTags by bulkViewModel.scannedTags.collectAsState()
 
     var itemCode by remember { mutableStateOf(TextFieldValue("")) }
-    val isLoading by orderViewModel.isItemCodeLoading.collectAsState()
     var showDropdownItemcode by remember { mutableStateOf(false) }
     val viewModel: StockTransferViewModel = hiltViewModel(parentEntry)
     val singleProductViewModel: SingleProductViewModel = hiltViewModel()
@@ -109,6 +113,7 @@ fun StockTransferScreenNew(
 
     val transferTypes by viewModel.transferTypes.collectAsState()
     val filteredStockItems by viewModel.filteredBulkItems.collectAsState()
+    val counterNames by viewModel.counterNames.collectAsState()
 
     val counters by remember { derivedStateOf { singleProductViewModel.counters } }
     val boxes by remember { derivedStateOf { singleProductViewModel.boxes } }
@@ -190,7 +195,9 @@ fun StockTransferScreenNew(
         }
     }
 
-    LaunchedEffect(branches) {
+    LaunchedEffect(branches, selectedTransferType) {
+        if (viewModel.getTransferTypeId(selectedTransferType) != 15) return@LaunchedEffect
+
         val branchId = UserPreferences.getInstance(context)
             .getBranchID()
             ?.toInt()
@@ -221,8 +228,7 @@ fun StockTransferScreenNew(
             }
 
             matchedItem?.let { item ->
-
-                val key = item.itemCode ?: item.rfid ?: ""
+                val key = stockTransferItemKey(item)
 
                 if (key.isNotEmpty() && !checkedKeys.contains(key)) {
                     checkedKeys.add(key)
@@ -240,18 +246,27 @@ fun StockTransferScreenNew(
 
     val transferTypeId = viewModel.getTransferTypeId(selectedTransferType)
 
+    val counterOptions = remember(counters, counterNames) {
+        val apiCounterNames = counters.mapNotNull { it.CounterName.takeIf { name -> name.isNotBlank() } }
+        if (apiCounterNames.isNotEmpty()) {
+            apiCounterNames.distinct()
+        } else {
+            counterNames.filter { it.isNotBlank() }.distinct()
+        }
+    }
+
     val fromOptions = remember(
         transferTypeId,
         fromType,
         accessibleBranches.toList(),
-        counters,
+        counterOptions,
         boxes,
         packets,
         branches
     ) {
         when {
             transferTypeId == 15 && fromType == "branch" -> accessibleBranches.toList()
-            fromType == "counter" -> counters.map { it.CounterName }
+            fromType == "counter" -> counterOptions
             fromType == "box" -> boxes.map { it.BoxName }
             fromType == "packet" -> packets.map { it.PacketName }
             fromType == "branch" -> branches.map { it.BranchName }
@@ -264,14 +279,14 @@ fun StockTransferScreenNew(
         toType,
         selectedFrom,
         accessibleBranches.toList(),
-        counters,
+        counterOptions,
         boxes,
         packets,
         branches
     ) {
         when {
             transferTypeId == 15 && toType == "branch" -> accessibleBranches.toList()
-            toType == "counter" -> counters.map { it.CounterName }
+            toType == "counter" -> counterOptions
             toType == "box" -> boxes.map { it.BoxName }
             toType == "packet" -> packets.map { it.PacketName }
             toType == "branch" -> branches.map { it.BranchName }
@@ -292,11 +307,14 @@ fun StockTransferScreenNew(
 
     val availableItems = remember(filteredStockItems) { filteredStockItems }
 
+    val searchQuery = itemCode.text.trim()
+
     val displayItems = remember(
         availableItems,
         appliedCategory,
         appliedProduct,
-        appliedDesign
+        appliedDesign,
+        searchQuery
     ) {
         availableItems.filter { item ->
             val categoryMatch =
@@ -311,24 +329,23 @@ fun StockTransferScreenNew(
                 appliedDesign == null ||
                         item.design.equals(appliedDesign, ignoreCase = true)
 
-            categoryMatch && productMatch && designMatch
+            val searchMatch = searchQuery.isEmpty() ||
+                    item.itemCode.orEmpty().contains(searchQuery, ignoreCase = true)
+
+            categoryMatch && productMatch && designMatch && searchMatch
         }
     }
 
     LaunchedEffect(itemCode.text) {
-
-        if (itemCode.text.isNotBlank()) {
-
+        val query = itemCode.text.trim()
+        if (query.isNotBlank()) {
             val matchedItem = filteredStockItems.firstOrNull {
-                it.itemCode.equals(itemCode.text, ignoreCase = true) ||
-                        it.rfid.equals(itemCode.text, ignoreCase = true)
+                it.itemCode.orEmpty().equals(query, ignoreCase = true)
             }
 
             matchedItem?.let { item ->
-
-                val key = item.itemCode ?: item.rfid ?: ""
-
-                if (!checkedKeys.contains(key)) {
+                val key = stockTransferItemKey(item)
+                if (key.isNotEmpty() && !checkedKeys.contains(key)) {
                     checkedKeys.add(key)
                 }
             }
@@ -337,8 +354,7 @@ fun StockTransferScreenNew(
 
     val selectedItems = remember(displayItems, checkedKeys.toList()) {
         displayItems.filter { item ->
-            val key = item.itemCode ?: item.rfid ?: ""
-            checkedKeys.contains(key)
+            checkedKeys.contains(stockTransferItemKey(item))
         }
     }
 
@@ -348,8 +364,7 @@ fun StockTransferScreenNew(
     val selectedNetWeight = selectedItems.sumOf { it.netWeight?.toDoubleOrNull() ?: 0.0 }
     val selectAllChecked = displayItems.isNotEmpty() &&
             displayItems.all { item ->
-                val key = item.itemCode ?: item.rfid ?: ""
-                checkedKeys.contains(key)
+                checkedKeys.contains(stockTransferItemKey(item))
             }
 
   /*  Scaffold(
@@ -375,6 +390,10 @@ fun StockTransferScreenNew(
                     bulkViewModel.barcodeReader.close()
                     if (selectedItems.isNotEmpty()) {
                         viewModel.setTransferPreviewItems(selectedItems)
+                        viewModel.setPendingLocationNames(
+                            from = if (selectedFrom == "From") "" else selectedFrom,
+                            to = if (selectedTo == "To") "" else selectedTo
+                        )
                         Log.d("@@", "selectedItems = $selectedItems")
                         navController.navigate(Screens.StockTransferPreviewScreen.route)
                     }
@@ -456,12 +475,12 @@ fun StockTransferScreenNew(
                             },
                             onClearClicked = { itemCode = TextFieldValue("") },
                             filteredList = filteredStockItems,
-                            isLoading = isLoading,
+                            isLoading = false,
                             onItemSelected = { item ->
-                                val code = item.itemCode ?: item.rfid ?: ""
+                                val code = item.itemCode.orEmpty()
                                 itemCode = TextFieldValue(code)
 
-                                val key = item.itemCode ?: item.rfid ?: ""
+                                val key = stockTransferItemKey(item)
                                 if (!checkedKeys.contains(key)) {
                                     checkedKeys.add(key)
                                 }
@@ -491,7 +510,7 @@ fun StockTransferScreenNew(
                     checkedKeys.clear()
                     if (checked) {
                         displayItems.forEach { item ->
-                            val key = item.itemCode ?: item.rfid ?: ""
+                            val key = stockTransferItemKey(item)
                             checkedKeys.add(key)
                         }
                     }
@@ -506,15 +525,15 @@ fun StockTransferScreenNew(
             ) {
                 itemsIndexed(
                     items = displayItems,
-                    key = { index, item -> item.itemCode ?: item.rfid ?: index.toString() }
+                    key = { index, item -> stockTransferItemKey(item).ifBlank { index.toString() } }
                 ) { index, item ->
 
-                    val rowKey = item.itemCode ?: item.rfid ?: index.toString()
+                    val rowKey = stockTransferItemKey(item).ifBlank { index.toString() }
 
                     StockTransferRow(
                         sr = index + 1,
                         productName = item.productName ?: "",
-                        label = item.rfid ?: item.itemCode ?: "",
+                        label = item.itemCode.orEmpty(),
                         grossWt = item.grossWeight ?: "0",
                         netWt = item.netWeight ?: "0",
                         checked = checkedKeys.contains(rowKey),
@@ -563,6 +582,10 @@ fun StockTransferScreenNew(
                     bulkViewModel.barcodeReader.close()
                     if (selectedItems.isNotEmpty()) {
                         viewModel.setTransferPreviewItems(selectedItems)
+                        viewModel.setPendingLocationNames(
+                            from = if (selectedFrom == "From") "" else selectedFrom,
+                            to = if (selectedTo == "To") "" else selectedTo
+                        )
                         Log.d("@@", "selectedItems = $selectedItems")
                         navController.navigate(Screens.StockTransferPreviewScreen.route)
                     }
@@ -649,12 +672,12 @@ fun StockTransferScreenNew(
                                 },
                                 onClearClicked = { itemCode = TextFieldValue("") },
                                 filteredList = filteredStockItems,
-                                isLoading = isLoading,
+                                isLoading = false,
                                 onItemSelected = { item ->
-                                    val code = item.itemCode ?: item.rfid ?: ""
+                                    val code = item.itemCode.orEmpty()
                                     itemCode = TextFieldValue(code)
 
-                                    val key = item.itemCode ?: item.rfid ?: ""
+                                    val key = stockTransferItemKey(item)
                                     if (!checkedKeys.contains(key)) {
                                         checkedKeys.add(key)
                                     }
@@ -683,7 +706,7 @@ fun StockTransferScreenNew(
                         checkedKeys.clear()
                         if (checked) {
                             displayItems.forEach { item ->
-                                val key = item.itemCode ?: item.rfid ?: ""
+                                val key = stockTransferItemKey(item)
                                 checkedKeys.add(key)
                             }
                         }
@@ -698,15 +721,15 @@ fun StockTransferScreenNew(
                 ) {
                     itemsIndexed(
                         items = displayItems,
-                        key = { index, item -> item.itemCode ?: item.rfid ?: index.toString() }
+                        key = { index, item -> stockTransferItemKey(item).ifBlank { index.toString() } }
                     ) { index, item ->
 
-                        val rowKey = item.itemCode ?: item.rfid ?: index.toString()
+                        val rowKey = stockTransferItemKey(item).ifBlank { index.toString() }
 
                         StockTransferRow(
                             sr = index + 1,
                             productName = item.productName ?: "",
-                            label = item.rfid ?: item.itemCode ?: "",
+                            label = item.itemCode.orEmpty(),
                             grossWt = item.grossWeight ?: "0",
                             netWt = item.netWeight ?: "0",
                             checked = checkedKeys.contains(rowKey),

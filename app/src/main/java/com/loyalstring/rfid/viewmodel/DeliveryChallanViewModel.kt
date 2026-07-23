@@ -12,27 +12,39 @@ import com.loyalstring.rfid.data.model.deliveryChallan.DeleteDeliveryChallanRequ
 import com.loyalstring.rfid.data.model.deliveryChallan.DeleteDeliveryChallanResponse
 import com.loyalstring.rfid.data.model.deliveryChallan.DeliveryChallanItemPrint
 import com.loyalstring.rfid.data.model.deliveryChallan.DeliveryChallanPrintData
+import com.loyalstring.rfid.data.model.deliveryChallan.DeliveryChallanListRow
 import com.loyalstring.rfid.data.model.deliveryChallan.DeliveryChallanRequestList
 import com.loyalstring.rfid.data.model.deliveryChallan.DeliveryChallanResponseList
 import com.loyalstring.rfid.data.model.deliveryChallan.UpdateDeliveryChallanRequest
+import com.loyalstring.rfid.data.model.deliveryChallan.toListRow
 import com.loyalstring.rfid.repository.DeliveryChallanRepository
 import com.loyalstring.rfid.ui.screens.generateDeliveryChallanPdf
 import com.loyalstring.rfid.ui.screens.openPdfPreview
+import com.loyalstring.rfid.ui.utils.DeliveryChallanListCache
 
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 @HiltViewModel
 class DeliveryChallanViewModel @Inject constructor(
-    private val repository: DeliveryChallanRepository
+    private val repository: DeliveryChallanRepository,
+    @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
-    private val _challanList = MutableStateFlow<List<DeliveryChallanResponseList>>(emptyList())
-    val challanList: StateFlow<List<DeliveryChallanResponseList>> = _challanList.asStateFlow()
+    private val _challanList = MutableStateFlow<List<DeliveryChallanListRow>>(emptyList())
+    val challanList: StateFlow<List<DeliveryChallanListRow>> = _challanList.asStateFlow()
+
+    private val fullChallanById = ConcurrentHashMap<Int, DeliveryChallanResponseList>()
+    private val _fullDataVersion = MutableStateFlow(0)
+    val fullDataVersion: StateFlow<Int> = _fullDataVersion.asStateFlow()
 
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
@@ -59,27 +71,88 @@ class DeliveryChallanViewModel @Inject constructor(
     }
 
 
+    fun getFullChallan(id: Int): DeliveryChallanResponseList? = fullChallanById[id]
+
+    fun seedRowsIfEmpty(rows: List<DeliveryChallanListRow>) {
+        if (_challanList.value.isEmpty() && rows.isNotEmpty()) {
+            _challanList.value = rows.sortedByDescending { it.Id }
+            _loading.value = false
+        }
+    }
+
+    private fun indexFullChallans(list: List<DeliveryChallanResponseList>) {
+        fullChallanById.clear()
+        list.forEach { fullChallanById[it.Id] = it }
+        _fullDataVersion.value++
+    }
+
+    private fun toSortedRows(list: List<DeliveryChallanResponseList>): List<DeliveryChallanListRow> =
+        list.map { it.toListRow() }.sortedByDescending { it.Id }
+
+    private fun rowsChanged(
+        current: List<DeliveryChallanListRow>,
+        updated: List<DeliveryChallanListRow>,
+    ): Boolean {
+        if (current.size != updated.size) return true
+        return current.indices.any { current[it] != updated[it] }
+    }
+
     fun fetchAllChallans(clientCode: String, branchId: Any) {
-        viewModelScope.launch {
-            val hasCached = _challanList.value.isNotEmpty()
-            if (!hasCached) {
-                _loading.value = true
+        val branch = branchId as Int
+
+        DeliveryChallanListCache.readMemoryRows(clientCode, branch)?.let { memRows ->
+            if (_challanList.value.isEmpty()) {
+                _challanList.value = memRows
+                _loading.value = false
             }
-            _error.value = null
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            if (_challanList.value.isEmpty()) {
+                val cachedRows = DeliveryChallanListCache.loadRows(appContext, clientCode, branch)
+                if (cachedRows.isNotEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        _challanList.value = cachedRows.sortedByDescending { it.Id }
+                        _loading.value = false
+                    }
+                    launch {
+                        indexFullChallans(
+                            DeliveryChallanListCache.loadFull(appContext, clientCode, branch)
+                        )
+                    }
+                } else {
+                    withContext(Dispatchers.Main) { _loading.value = true }
+                }
+            }
+
+            withContext(Dispatchers.Main) { _error.value = null }
             try {
-                val request = DeliveryChallanRequestList(clientCode, branchId as Int)
+                val request = DeliveryChallanRequestList(clientCode, branch)
                 val response = repository.getAllDeliveryChallans(request)
                 if (response.isSuccessful && response.body() != null) {
-                    _challanList.value = response.body()!!
-                } else if (!hasCached) {
-                    _error.value = response.message()
+                    val fullList = response.body()!!
+                    indexFullChallans(fullList)
+                    val rows = toSortedRows(fullList)
+                    withContext(Dispatchers.Main) {
+                        if (_challanList.value.isEmpty() || rowsChanged(_challanList.value, rows)) {
+                            _challanList.value = rows
+                        }
+                    }
+                    DeliveryChallanListCache.saveRows(appContext, clientCode, branch, rows)
+                    launch { DeliveryChallanListCache.saveFull(appContext, clientCode, branch, fullList) }
+                } else if (_challanList.value.isEmpty()) {
+                    withContext(Dispatchers.Main) { _error.value = response.message() }
                 }
             } catch (e: Exception) {
-                if (!hasCached) {
-                    _error.value = e.message
+                if (_challanList.value.isEmpty()) {
+                    withContext(Dispatchers.Main) { _error.value = e.message }
                 }
             } finally {
-                _loading.value = false
+                withContext(Dispatchers.Main) {
+                    if (_challanList.value.isEmpty()) {
+                        _loading.value = false
+                    }
+                }
             }
         }
     }
@@ -178,24 +251,33 @@ class DeliveryChallanViewModel @Inject constructor(
     }
 
     fun deleteDeliveryChallan(clientCode: String, id: Int, onResult: (Boolean) -> Unit) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                _loading.value = true
                 val request = DeleteDeliveryChallanRequest(ClientCode = clientCode, Id = id)
                 val response = repository.deleteDeliveryChallan(request)
                 if (response.isSuccessful) {
-                    _challanList.value = _challanList.value.filterNot { it.Id == id }
-                    onResult(true)
+                    val branchId = fullChallanById[id]?.BranchId
+                        ?: _challanList.value.firstOrNull { it.Id == id }?.BranchId
+                        ?: 0
+                    fullChallanById.remove(id)
+                    val remainingRows = _challanList.value.filterNot { it.Id == id }
+                    val remainingFull = fullChallanById.values.toList()
+                    withContext(Dispatchers.Main) { _challanList.value = remainingRows }
+                    DeliveryChallanListCache.saveRows(appContext, clientCode, branchId, remainingRows)
+                    DeliveryChallanListCache.saveFull(appContext, clientCode, branchId, remainingFull)
+                    withContext(Dispatchers.Main) { onResult(true) }
                 } else {
-                    _error.value = "Failed: ${response.message()}"
-                    onResult(false)
+                    withContext(Dispatchers.Main) {
+                        _error.value = "Failed: ${response.message()}"
+                        onResult(false)
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                _error.value = e.localizedMessage ?: "Unknown error"
-                onResult(false)
-            } finally {
-                _loading.value = false
+                withContext(Dispatchers.Main) {
+                    _error.value = e.localizedMessage ?: "Unknown error"
+                    onResult(false)
+                }
             }
         }
     }

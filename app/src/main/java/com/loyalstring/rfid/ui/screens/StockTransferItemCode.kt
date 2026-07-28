@@ -166,14 +166,18 @@ fun StockTransferItemCode(
             filteredList
                 .asSequence()
                 .filter { item ->
-                    item.itemCode.orEmpty().contains(query, ignoreCase = true)
+                    item.itemCode.orEmpty().contains(query, ignoreCase = true) ||
+                    item.rfid.orEmpty().contains(query, ignoreCase = true) ||
+                    item.epc.orEmpty().contains(query, ignoreCase = true)
                 }
                 .sortedBy { item ->
                     val code = item.itemCode.orEmpty()
+                    val rfid = item.rfid.orEmpty()
+                    val epc = item.epc.orEmpty()
                     when {
-                        code.equals(query, ignoreCase = true) -> 0
-                        code.startsWith(query, ignoreCase = true) -> 1
-                        code.contains(query, ignoreCase = true) -> 2
+                        code.equals(query, ignoreCase = true) || rfid.equals(query, ignoreCase = true) || epc.equals(query, ignoreCase = true) -> 0
+                        code.startsWith(query, ignoreCase = true) || rfid.startsWith(query, ignoreCase = true) || epc.startsWith(query, ignoreCase = true) -> 1
+                        code.contains(query, ignoreCase = true) || rfid.contains(query, ignoreCase = true) || epc.contains(query, ignoreCase = true) -> 2
                         else -> 3
                     }
                 }

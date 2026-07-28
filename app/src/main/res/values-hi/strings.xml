@@ -471,6 +471,8 @@
     <string name="select_design">डिज़ाइन चुनें</string>
     <string name="select_from">से चुनें</string>
     <string name="select_to">तक चुनें</string>
+    <string name="select_from_error">कृपया से स्थान चुनें</string>
+    <string name="select_to_error">कृपया तक स्थान चुनें</string>
     <string name="choose_transfer_type">ट्रांसफर प्रकार चुनें</string>
 
     <string name="loading_stock">स्टॉक लोड हो रहा है...</string>

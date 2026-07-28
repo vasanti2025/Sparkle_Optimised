@@ -2,6 +2,7 @@ package com.loyalstring.rfid.ui.screens
 
 import android.content.Context
 import android.util.Log
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,11 +23,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
+import com.loyalstring.rfid.MainActivity
+import com.loyalstring.rfid.data.reader.ScanKeyListener
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -91,6 +95,34 @@ fun StockTransferScreenNew(
             UserPreferences.KEY_STOCK_TRANSFER_COUNT,
             10
         )
+    }
+
+    val activity = context as? MainActivity
+    DisposableEffect(Unit) {
+        val listener = object : ScanKeyListener {
+            override fun onBarcodeKeyPressed() {
+                bulkViewModel.startBarcodeScanning(context)
+            }
+
+            override fun onRfidKeyPressed() {
+                if (isBulkScanning) {
+                    bulkViewModel.stopScanning()
+                    isBulkScanning = false
+                } else {
+                    bulkViewModel.stopScanning()
+                    bulkViewModel.startScanning(selectedPower)
+                    isBulkScanning = true
+                    isScanning = false
+                }
+            }
+        }
+        activity?.registerScanKeyListener(listener)
+
+        onDispose {
+            activity?.unregisterScanKeyListener()
+            bulkViewModel.stopScanning()
+            isBulkScanning = false
+        }
     }
 
 
@@ -180,6 +212,8 @@ fun StockTransferScreenNew(
 
 
     LaunchedEffect(Unit) {
+        viewModel.clearTransferStatus()
+        viewModel.clearApproveResult()
         employee?.clientCode?.let { clientCode ->
             viewModel.loadTransferTypes(ClientCodeRequest(clientCode))
             viewModel.fetchCounterNames()
@@ -220,20 +254,43 @@ fun StockTransferScreenNew(
     }
 
     LaunchedEffect(scannedTags) {
-
         scannedTags.forEach { scannedTid ->
+            val scannedEpc = scannedTid.getEPC()
+                ?.trim()
+                ?.uppercase()
+                ?.replace(" ", "")
+                ?: ""
 
-            val matchedItem = filteredStockItems.firstOrNull {
-                it.rfid.equals(scannedTid.toString(), ignoreCase = true)
-            }
+            if (scannedEpc.isNotEmpty()) {
+                val matchedItem = filteredStockItems.firstOrNull { item ->
+                    val itemEpc = item.epc
+                        ?.trim()
+                        ?.uppercase()
+                        ?.replace(" ", "")
+                        ?: ""
+                    val itemRfid = item.rfid
+                        ?.trim()
+                        ?.uppercase()
+                        ?.replace(" ", "")
+                        ?: ""
+                    itemEpc == scannedEpc || itemRfid == scannedEpc
+                }
 
-            matchedItem?.let { item ->
-                val key = stockTransferItemKey(item)
-
-                if (key.isNotEmpty() && !checkedKeys.contains(key)) {
-                    checkedKeys.add(key)
+                matchedItem?.let { item ->
+                    val key = stockTransferItemKey(item)
+                    if (key.isNotEmpty() && !checkedKeys.contains(key)) {
+                        checkedKeys.add(key)
+                    }
                 }
             }
+        }
+    }
+
+    LaunchedEffect(bulkViewModel.rfidInput.value) {
+        val code = bulkViewModel.rfidInput.value.trim()
+        if (code.isNotBlank()) {
+            itemCode = androidx.compose.ui.text.input.TextFieldValue(code)
+            bulkViewModel.rfidInput.value = ""
         }
     }
 
@@ -330,17 +387,23 @@ fun StockTransferScreenNew(
                         item.design.equals(appliedDesign, ignoreCase = true)
 
             val searchMatch = searchQuery.isEmpty() ||
-                    item.itemCode.orEmpty().contains(searchQuery, ignoreCase = true)
+                    item.itemCode.orEmpty().contains(searchQuery, ignoreCase = true) ||
+                    item.rfid.orEmpty().contains(searchQuery, ignoreCase = true) ||
+                    item.epc.orEmpty().contains(searchQuery, ignoreCase = true)
 
             categoryMatch && productMatch && designMatch && searchMatch
         }
     }
 
     LaunchedEffect(itemCode.text) {
-        val query = itemCode.text.trim()
+        val query = itemCode.text.trim().uppercase().replace(" ", "")
         if (query.isNotBlank()) {
-            val matchedItem = filteredStockItems.firstOrNull {
-                it.itemCode.orEmpty().equals(query, ignoreCase = true)
+            val matchedItem = filteredStockItems.firstOrNull { item ->
+                val itemCodeClean = item.itemCode.orEmpty().trim().uppercase().replace(" ", "")
+                val itemEpcClean = item.epc.orEmpty().trim().uppercase().replace(" ", "")
+                val itemRfidClean = item.rfid.orEmpty().trim().uppercase().replace(" ", "")
+
+                itemCodeClean == query || itemEpcClean == query || itemRfidClean == query
             }
 
             matchedItem?.let { item ->
@@ -572,7 +635,15 @@ fun StockTransferScreenNew(
                         )
                     }
                 },
-                selectedCount = 0,
+                showCounter = true,
+                selectedCount = selectedPower,
+                onCountSelected = {
+                    selectedPower = it
+                    UserPreferences.getInstance(context).saveInt(
+                        UserPreferences.KEY_STOCK_TRANSFER_COUNT,
+                        it
+                    )
+                },
                 titleTextSize = 20.sp
             )
         },
@@ -580,11 +651,19 @@ fun StockTransferScreenNew(
             ScanBottomBar(
                 onSave = {
                     bulkViewModel.barcodeReader.close()
+                    if (selectedFrom == "From" || selectedFrom.isBlank()) {
+                        Toast.makeText(context, localizedContext.getString(R.string.select_from_error), Toast.LENGTH_SHORT).show()
+                        return@ScanBottomBar
+                    }
+                    if (selectedTo == "To" || selectedTo.isBlank()) {
+                        Toast.makeText(context, localizedContext.getString(R.string.select_to_error), Toast.LENGTH_SHORT).show()
+                        return@ScanBottomBar
+                    }
                     if (selectedItems.isNotEmpty()) {
                         viewModel.setTransferPreviewItems(selectedItems)
                         viewModel.setPendingLocationNames(
-                            from = if (selectedFrom == "From") "" else selectedFrom,
-                            to = if (selectedTo == "To") "" else selectedTo
+                            from = selectedFrom,
+                            to = selectedTo
                         )
                         Log.d("@@", "selectedItems = $selectedItems")
                         navController.navigate(Screens.StockTransferPreviewScreen.route)
@@ -609,6 +688,7 @@ fun StockTransferScreenNew(
                     try {
                         bulkViewModel.stopBarcodeScanner()
                         bulkViewModel.resetProductScanResults()
+                        checkedKeys.clear()
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }

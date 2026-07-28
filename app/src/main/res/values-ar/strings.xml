@@ -464,6 +464,8 @@
     <string name="select_design">اختر التصميم</string>
     <string name="select_from">اختر من</string>
     <string name="select_to">اختر إلى</string>
+    <string name="select_from_error">يرجى اختيار الموقع المرسل منه</string>
+    <string name="select_to_error">يرجى اختيار الموقع المرسل إليه</string>
     <string name="choose_transfer_type">اختر نوع النقل</string>
 
     <string name="loading_stock">جارٍ تحميل المخزون...</string>

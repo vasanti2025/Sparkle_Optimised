@@ -75,6 +75,7 @@ import com.loyalstring.rfid.data.model.stockTransfer.LabelledStockItems
 import com.loyalstring.rfid.data.model.stockTransfer.STApproveRejectRequest
 import com.loyalstring.rfid.data.model.stockTransfer.StockTransferItem
 import com.loyalstring.rfid.navigation.GradientTopBar
+import com.loyalstring.rfid.navigation.Screens
 import com.loyalstring.rfid.ui.utils.GradientButtonIcon
 import com.loyalstring.rfid.ui.utils.UserPreferences
 import com.loyalstring.rfid.viewmodel.StockTransferViewModel
@@ -166,8 +167,6 @@ fun StockTransferDetailScreen(
             approvedCount = selectedIds.size
             isRefreshing = true
             refreshItems(forceRefresh = true)
-            showSuccessDialog = true
-            selectedStatus = if (showAllDetailItems) "All" else "Pending"
             apiMessage = when (currentActionType) {
                 1 -> localizedContext.getString(R.string.items_approved_success)
                 2 -> localizedContext.getString(R.string.items_rejected_success)
@@ -178,6 +177,16 @@ fun StockTransferDetailScreen(
             selectAll = false
             viewModel.clearApproveResult()
             isRefreshing = false
+
+            if (effectiveRequestType == "Out Request" && currentActionType == 1) {
+                Toast.makeText(context, apiMessage, Toast.LENGTH_SHORT).show()
+                navController.navigate(Screens.StockTransferScreenNew.route) {
+                    popUpTo(Screens.StockTransferScreenNew.route) { inclusive = true }
+                }
+            } else {
+                showSuccessDialog = true
+                selectedStatus = if (showAllDetailItems) "All" else "Pending"
+            }
         }?.onFailure { error ->
             Toast.makeText(
                 context,

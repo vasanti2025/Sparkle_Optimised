@@ -415,7 +415,7 @@ fun SettingsScreen(
         ),
         SettingsMenuItem(
             UserPreferences.KEY_STOCK_TRANSFER_COUNT,
-            localizedContext.getString(R.string.stock_transfer),
+            localizedContext.getString(R.string.stock_transfer_title),
             Icons.Default.Settings,
             SettingType.Counter,
             10

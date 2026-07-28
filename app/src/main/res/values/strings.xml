@@ -488,6 +488,8 @@
     <string name="select_design">Select Design</string>
     <string name="select_from">Select From</string>
     <string name="select_to">Select To</string>
+    <string name="select_from_error">Please select From location</string>
+    <string name="select_to_error">Please select To location</string>
     <string name="choose_transfer_type">Choose Transfer Type</string>
 
     <string name="loading_stock">Loading stock...</string>

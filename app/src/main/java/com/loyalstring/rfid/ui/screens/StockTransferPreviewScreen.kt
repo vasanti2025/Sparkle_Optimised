@@ -189,7 +189,8 @@ fun StockTransferPreviewScreen(
 
             showTransferPopup = false
             removeCheckedKeys.clear()
-
+            viewModel.setTransferPreviewItems(emptyList())
+            viewModel.clearTransferStatus()
             viewModel.clearApproveResult()
 
         } else {
@@ -200,6 +201,7 @@ fun StockTransferPreviewScreen(
                 Toast.LENGTH_SHORT
             ).show()
 
+            viewModel.clearTransferStatus()
             viewModel.clearApproveResult()
         }
     }

@@ -563,6 +563,10 @@ class StockTransferViewModel @Inject constructor(
         _stApproveRejectResponse.postValue(null)
     }
 
+    fun clearTransferStatus() {
+        _transferStatus.value = null
+    }
+
     fun setLabelledStockItems(items: List<LabelledStockItems>) {
         if (items.isNotEmpty()) {
             _detailLabelItems.value = items

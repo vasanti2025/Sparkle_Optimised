@@ -1720,33 +1720,45 @@ fun ScanDisplayScreen(onBack: () -> Unit, navController: NavHostController) {
                             currentLevel = "DesignItems"
                             bulkViewModel.clearStickyUnmatched()
                         }
-                        "Search (Unmatched)" -> {
+                        // In ScanDisplayScreen
+                        localizedContext.getString(R.string.search) -> {
                             scope.launch {
                                 bulkViewModel.setLoading(true)
+                                // Remove artificial delay
+                                // delay(1000)
+
                                 val unmatchedBulkItems = withContext(Dispatchers.Default) {
+                                    // toBulkItem() mapping stays on Default — keeps main thread free
                                     scannedItemsSequence
                                         .filter { it.currentScannedStatus.equals("Unmatched", true) }
                                         .distinctBy { it.epc?.trim()?.uppercase() }
                                         .map { it.toBulkItem() }
                                         .toList()
                                 }
-                                navController.currentBackStackEntry?.savedStateHandle?.set(
-                                    "unmatchedItems",
-                                    ArrayList(unmatchedBulkItems)
-                                )
-                                navController.navigate("search_screen/unmatched") {
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                                bulkViewModel.setLoading(false)
-                            }
-                        }
 
-                        "Search (All Items)" -> {
-                            navController.navigate("search_screen/normal") {
-                                launchSingleTop = true
-                                restoreState = true
+                                if (unmatchedBulkItems.isNotEmpty()) {
+                                    navController.currentBackStackEntry?.savedStateHandle?.set(
+                                        "unmatchedItems",
+                                        ArrayList(unmatchedBulkItems)
+                                    )
+                                    navController.navigate("search_screen/unmatched") {
+                                        // This is the callback from SearchScreen
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                } else {
+                                    navController.navigate("search_screen/normal") {
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+
+
+                                }
+                                //delay(1000)
+                                bulkViewModel.setLoading(false)
+                                //showToast(context, "End")
                             }
+
                         }
 
                        /* "Resume Scan"->{
@@ -2506,8 +2518,7 @@ fun VerticalMenu(localizedContext:Context,
         MenuItem(localizedContext.getString(R.string.unmatched_items), R.drawable.ic_list_unmatched, unmatchedCount),
         MenuItem(localizedContext.getString(R.string.unlabelled_items), R.drawable.ic_list_unlabelled, totalCount),
         MenuItem(localizedContext.getString(R.string.resume_scan), R.drawable.ic_resume_scan, null),
-        MenuItem("Search (Unmatched)", R.drawable.search_gr_svg, unmatchedCount),
-        MenuItem("Search (All Items)", R.drawable.search_gr_svg, null)
+        MenuItem(localizedContext.getString(R.string.search), R.drawable.search_gr_svg, unmatchedCount)
     )
 
     Column(
